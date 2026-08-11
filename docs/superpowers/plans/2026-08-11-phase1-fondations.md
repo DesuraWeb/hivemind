@@ -3564,8 +3564,29 @@ Cela couvre les critères J1 et J2 du brief, à une substitution près : `docker
 - **Les tokens DA réels** → à l'arrivée du kit Claude Design
 - **`usage()` réel** → J12, si et seulement si une source de données existe
 
-## Points ouverts à trancher avant la Phase 2
+## Deux constats de la Task 10 qui portent au-delà de la Phase 1
 
-1. **`usage()`** : si le Step 1 de la Task 10 conclut que le SDK n'expose pas les fenêtres 5 h / 7 j, le scheduler de budget de J12 n'a pas de source. Décider alors entre (a) suivi interne par cumul des `cost_tokens` avec un plafond configuré à la main, et (b) abandon du gating automatique au profit d'une simple jauge informative. Ne pas trancher maintenant.
+**1. `allowedTools` n'est pas une frontière de sécurité — `tools` l'est.**
+
+Découvert empiriquement pendant le smoke test, pas en lisant les types : avec une `ToolPolicy` à `bash: false`, l'agent a quand même appelé `Bash` avec succès. `options.allowedTools` **dispense les outils listés du prompt de permission** ; il ne retire rien de la surface disponible, qui reste par défaut l'ensemble des outils Claude Code. Pour qu'un outil soit réellement hors de portée, il faut le retirer de `options.tools`.
+
+Le `ClaudeAdapter` passe donc les deux : `tools` (surface réelle) et `allowedTools` (dispense de prompt).
+
+**Conséquence directe sur la DoD §14** (« les 3 gates structurels infranchissables même en mode auto ») : le test dédié qui vérifiera ces gates doit prouver qu'un rôle **ne peut pas** appeler un outil hors politique, pas seulement qu'il ne le fait pas spontanément. Concrètement, à écrire en Phase 2 :
+- le communicant avec `mcp: ['gmail_draft']` ne doit pas pouvoir envoyer, seulement créer un brouillon ;
+- le juge avec `fs: 'read'` ne doit pas pouvoir écrire ;
+- le garant avec `bash: false` ne doit pas pouvoir exécuter de commande.
+
+Un test qui se contente d'observer le comportement passerait alors même que la barrière est absente.
+
+**2. La consommation 5 h / 7 j existe, mais seulement en flux.**
+
+Le SDK n'expose aucune fonction interrogeable à froid, mais il pousse un `SDKRateLimitEvent` **pendant** une session : `rate_limit_info: { rateLimitType: 'five_hour' | 'seven_day' | …, utilization?: number, resetsAt?: number }`.
+
+C'est la réponse à la question ouverte sur `usage()`, et elle change l'option retenue pour J12 : plutôt que d'abandonner le gating ou de cumuler les `cost_tokens` à la main, **capter `rate_limit_event` pendant les `send()` et mémoriser la dernière utilisation vue par fenêtre** (dans `usage_windows`, table déjà prévue). `usage()` renvoie alors la dernière mesure connue avec son horodatage, et `available: false` tant qu'aucune session n'a encore tourné.
+
+Cette approche a une limite à assumer : la mesure est fraîche seulement si des runs ont eu lieu récemment. Après une longue période d'inactivité, le scheduler repart d'une information périmée — d'où l'intérêt de dater la mesure et de la considérer comme non disponible au-delà d'un certain âge.
+
+## Points ouverts à trancher avant la Phase 2
 2. **Kit DA Claude Design** : les prototypes et tokens mentionnés au §12 du brief n'existent pas encore dans le dépôt. Ils deviennent bloquants à J7 (inbox UI), pas avant.
 3. **Dépôt pilote** : à nommer avant la Task 4 de la Phase 2 (J4, première PR réelle).
