@@ -1598,8 +1598,16 @@ test('une autre clé ne peut pas déchiffrer', async () => {
 test('un chiffré altéré est rejeté', async () => {
   const box = await createSecretBox(generateMasterKey())
   const sealed = box.encryptJson({ a: 1 })
-  const tampered = `${sealed.slice(0, -4)}AAAA`
 
+  // Altération déterministe : on flippe un bit du dernier octet des données
+  // décodées. Substituer des caractères base64 serait un no-op si le chiffré
+  // se terminait déjà par la valeur de remplacement.
+  const raw = Buffer.from(sealed, 'base64')
+  const last = raw.length - 1
+  raw[last] = (raw[last] as number) ^ 0x01
+  const tampered = raw.toString('base64')
+
+  expect(tampered).not.toBe(sealed)
   expect(() => box.decryptJson(tampered)).toThrow(/déchiffrement/i)
 })
 
