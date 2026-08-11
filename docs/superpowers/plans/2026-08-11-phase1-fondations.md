@@ -254,8 +254,8 @@ NODE_ENV=development
 MASTER_KEY=REMPLACER_32_OCTETS_BASE64
 SESSION_SECRET=REMPLACER_32_OCTETS_BASE64
 
-# --- Agents ---
-RUNTIME_ADAPTER=claude          # claude | fake
+# --- Agents (RUNTIME_ADAPTER : claude | fake) ---
+RUNTIME_ADAPTER=claude
 WORKTREES_ROOT=./worktrees
 ARTIFACTS_ROOT=./artifacts
 
@@ -441,7 +441,32 @@ git add -A && git commit -m "chore: scripts de setup et de reset de la base loca
 `apps/server/src/env.ts` :
 
 ```ts
+import { readFileSync } from 'node:fs'
 import { z } from 'zod'
+
+/**
+ * Charge `.env` dans process.env si le fichier existe, sans jamais écraser une
+ * variable déjà définie — l'environnement réel (CI, prod) garde la main.
+ * Fait ici plutôt que via un flag de lancement : dev, prod et tests passent
+ * tous par `loadEnv()`, donc un seul endroit à connaître.
+ */
+function loadDotEnvFile(path = '.env'): void {
+  let raw: string
+  try {
+    raw = readFileSync(path, 'utf8')
+  } catch {
+    return // absent : normal en CI, tout vient de l'environnement du job
+  }
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eq = trimmed.indexOf('=')
+    if (eq === -1) continue
+    const key = trimmed.slice(0, eq).trim()
+    if (process.env[key] !== undefined) continue
+    process.env[key] = trimmed.slice(eq + 1).trim()
+  }
+}
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -465,8 +490,9 @@ const schema = z.object({
 
 export type Env = z.infer<typeof schema>
 
-export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
-  const parsed = schema.safeParse(source)
+export function loadEnv(source?: NodeJS.ProcessEnv): Env {
+  if (!source) loadDotEnvFile()
+  const parsed = schema.safeParse(source ?? process.env)
   if (!parsed.success) {
     const details = parsed.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`).join('\n')
     throw new Error(`Configuration invalide :\n${details}`)
@@ -528,38 +554,15 @@ export type Database = {}
 - [ ] **Step 2 : écrire `vitest.config.ts` à la racine**
 
 ```ts
-import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vitest/config'
-
-/**
- * Vitest ne charge pas `.env` tout seul, et `loadEnv()` lève si MASTER_KEY,
- * SESSION_SECRET ou DATABASE_URL manquent. On lit donc `.env` ici — sans
- * écraser ce qui est déjà dans l'environnement, pour que la CI garde la main.
- */
-function dotenv(): Record<string, string> {
-  const out: Record<string, string> = {}
-  let raw: string
-  try {
-    raw = readFileSync('.env', 'utf8')
-  } catch {
-    return out // en CI, tout vient des variables d'environnement du job
-  }
-  for (const line of raw.split('\n')) {
-    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/)
-    const key = match?.[1]
-    if (key && process.env[key] === undefined) {
-      out[key] = (match?.[2] ?? '').trim()
-    }
-  }
-  return out
-}
 
 export default defineConfig({
   test: {
     environment: 'node',
     include: ['apps/server/tests/**/*.test.ts'],
+    // `.env` est chargé par loadEnv() lui-même ; on ne force ici que ce qui
+    // doit différer en test.
     env: {
-      ...dotenv(),
       NODE_ENV: 'test',
       // Aucun test n'appelle un vrai modèle : la suite ne consomme pas de tokens.
       RUNTIME_ADAPTER: 'fake',
@@ -570,7 +573,32 @@ export default defineConfig({
 })
 ```
 
-> Ce fichier est écrit ici parce que la Task 3 est la première à lancer `vitest`, mais il concerne toute la suite. Les Tasks 7 et suivantes en dépendent : `buildApp()` appelle `loadEnv()`, qui lève si `MASTER_KEY` ou `SESSION_SECRET` manquent.
+Un test rapide de `loadDotEnvFile` mérite d'exister — ajouter à `apps/server/tests/env.test.ts` :
+
+```ts
+import { expect, test } from 'vitest'
+import { databaseUrl, loadEnv } from '../src/env'
+
+test('loadEnv lit .env et fournit les clés requises', () => {
+  const env = loadEnv()
+  expect(env.MASTER_KEY.length).toBeGreaterThan(0)
+  expect(env.SESSION_SECRET.length).toBeGreaterThan(0)
+})
+
+test('databaseUrl bascule sur la base de test en NODE_ENV=test', () => {
+  const env = loadEnv()
+  expect(env.NODE_ENV).toBe('test')
+  expect(databaseUrl(env)).toContain('hivemind_test')
+})
+
+test('une source explicite court-circuite .env et rejette une config invalide', () => {
+  expect(() => loadEnv({ NODE_ENV: 'test' } as NodeJS.ProcessEnv)).toThrow(/DATABASE_URL/)
+})
+```
+
+> **Deux pièges que ce dispositif évite**, découverts en exécutant la Task 2 :
+> — `vitest` ne charge pas `.env`, mais **`tsx` non plus** : sans chargement dans `loadEnv()`, `pnpm dev` planterait sur `MASTER_KEY` manquant à la Task 7.
+> — Le parser ne retire **pas** les commentaires en fin de ligne, pour ne pas corrompre un secret contenant `#`. C'est pourquoi `.env.example` ne doit contenir que des commentaires en ligne entière.
 
 - [ ] **Step 3 : écrire le test qui échoue**
 
