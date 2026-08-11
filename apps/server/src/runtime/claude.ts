@@ -1,14 +1,179 @@
-import type { RuntimeAdapter } from './types'
+import { randomUUID } from 'node:crypto'
+import { query } from '@anthropic-ai/claude-agent-sdk'
+import type {
+  AgentResult,
+  AgentSession,
+  CreateSessionOptions,
+  RuntimeAdapter,
+  ToolPolicy,
+  UsageSnapshot,
+} from './types'
 
 /**
- * Bouchon temporaire : la vraie implémentation arrive en Task 10.
+ * Notes de vérification (Task 10, Step 1) contre
+ * `@anthropic-ai/claude-agent-sdk@0.3.227` — lu dans
+ * `node_modules/@anthropic-ai/claude-agent-sdk/sdk.d.ts` (7457 lignes) avant
+ * d'écrire ce fichier. Les marqueurs `⚠ vérifier` du plan sont tous confirmés
+ * conformes — aucune divergence de nom de champ avec le squelette du plan :
  *
- * Ce fichier existe uniquement pour que `tsc` puisse résoudre l'import
- * dynamique de `./claude` dans `runtime/index.ts` (`moduleResolution:
- * "bundler"` exige que le module existe pour être type-checké, même quand
- * l'import est dynamique). Tant que `RUNTIME_ADAPTER=fake`, ce code n'est
- * jamais chargé ni exécuté. La Task 10 remplace ce fichier en entier.
+ * 1. `query({ prompt, options }): Query`, où `Query extends
+ *    AsyncGenerator<SDKMessage, void>` — on peut faire `for await (const msg
+ *    of stream)` directement, sans champ `.messages` ou `.stream`
+ *    intermédiaire. Sur `Options` : `cwd?: string`, `systemPrompt?: string |
+ *    string[] | { type: 'preset'; ... }` (une simple string passe),
+ *    `model?: string`, `allowedTools?: string[]`, `permissionMode?:
+ *    PermissionMode`, `resume?: string` existent tous tels quels. Les noms
+ *    d'outils canoniques confirmés dans la doc de `tools`/`allowedTools`
+ *    (ex. `['Bash', 'Read', 'Edit']`) et dans les commentaires internes du
+ *    SDK : `Bash`, `Read`, `Write`, `Edit`, `Glob`, `Grep`. Une spec MCP au
+ *    niveau serveur s'écrit `mcp__<serveur>` (documenté explicitement).
+ *
+ * 2. `session_id` est un champ top-level sur *tous* les variants de
+ *    `SDKMessage` (`SDKAssistantMessage`, `SDKSystemMessage`,
+ *    `SDKResultMessage`, etc.), pas niché sous `message`. Les blocs de
+ *    contenu d'un message `assistant` sont `msg.message.content:
+ *    BetaContentBlock[]` (type réexporté du SDK Messages standard) — un bloc
+ *    texte est `{ type: 'text'; text: string }`, un appel d'outil est `{
+ *    type: 'tool_use'; id; name; input }`. Sur le message final (`type ===
+ *    'result'`, union `SDKResultSuccess | SDKResultError`) : `usage:
+ *    NonNullableUsage` avec `input_tokens`/`output_tokens` non-nullables,
+ *    `total_cost_usd: number`, `is_error: boolean` — tous typés directement,
+ *    sans cast nécessaire une fois le type narrowed sur `msg.type ===
+ *    'result'`.
+ *
+ * 3. Il n'existe **aucune fonction exportée** pour interroger la consommation
+ *    par fenêtre en dehors d'une session active (`query`, `startup`,
+ *    `listSessions`, etc. — aucune ne renvoie de pourcentage 5h/7j). Le SDK
+ *    expose un type `SDKRateLimitEvent` (`type: 'rate_limit_event'`) avec
+ *    `rate_limit_info: { status; rateLimitType: 'five_hour' | 'seven_day' |
+ *    ...; utilization?: number; resetsAt?: number }`, mais ce n'est qu'un
+ *    évènement poussé *pendant* une conversation en cours — il n'y a pas
+ *    d'API de type `getUsage()` indépendante qu'on pourrait appeler à froid.
+ *    Comme `RuntimeAdapter.usage()` doit pouvoir répondre sans session
+ *    active, on ne peut pas s'appuyer dessus honnêtement pour l'instant :
+ *    `usage()` retourne `{ fiveHourPct: 0, sevenDayPct: 0, available: false
+ *    }`, conformément au plan. (Piste pour plus tard, hors scope Task 10 :
+ *    capter opportunément `rate_limit_event` pendant les `send()` actifs et
+ *    mémoriser le dernier percentage vu par fenêtre, plutôt que de l'exposer
+ *    comme une vraie requête à la demande.)
+ *
+ * Constat additionnel du smoke test (Step 5) qui a forcé un correctif : passer
+ * uniquement `allowedTools` ne suffit pas à faire respecter `ToolPolicy`.
+ * `allowedTools` ne fait que dispenser les outils listés du prompt de
+ * permission — le `tools` (ensemble de base des outils *disponibles*) garde sa
+ * valeur par défaut (tous les outils Claude Code, `Bash` compris) tant qu'on
+ * ne le restreint pas explicitement. Constaté en direct : avec `tools: {
+ * bash: false, ... }` côté politique, l'agent a quand même appelé `Bash`
+ * (`pwd`) avec succès, faute de restriction de `options.tools`. Correctif :
+ * on calcule aussi la liste des outils *natifs* autorisés et on la passe dans
+ * `options.tools` pour retirer les outils hors politique de la surface
+ * disponible au modèle, pas seulement de l'écran de permission. Les entrées
+ * MCP (`mcp__<serveur>`) restent uniquement dans `allowedTools` : `tools` ne
+ * documente que les outils natifs, et aucun `mcpServers` n'est câblé par cette
+ * tâche (portée Task 10).
  */
+
+/** Outils natifs Claude Code (hors MCP) que la politique autorise. */
+function builtinTools(policy: ToolPolicy): string[] {
+  const tools: string[] = []
+  if (policy.bash) tools.push('Bash')
+  if (policy.fs !== 'none') tools.push('Read', 'Glob', 'Grep')
+  if (policy.fs === 'write') tools.push('Write', 'Edit')
+  return tools
+}
+
+/** Traduit notre politique d'outils en allowlist SDK (natifs + MCP). */
+function allowedTools(policy: ToolPolicy): string[] {
+  return [...builtinTools(policy), ...policy.mcp.map((name) => `mcp__${name}`)]
+}
+
+interface Live {
+  session: AgentSession
+  options: CreateSessionOptions
+}
+
 export function createClaudeAdapter(): RuntimeAdapter {
-  throw new Error('ClaudeAdapter non implémenté (Task 10)')
+  const live = new Map<string, Live>()
+
+  return {
+    async createSession(options) {
+      const session: AgentSession = {
+        id: `claude-${randomUUID()}`,
+        roleKey: options.roleKey,
+        cwd: options.cwd,
+      }
+      live.set(session.id, { session, options })
+      return session
+    },
+
+    async send(session, message): Promise<AgentResult> {
+      const entry = live.get(session.id)
+      if (!entry) throw new Error(`Session inconnue : ${session.id}`)
+      const { options } = entry
+
+      let text = ''
+      let costTokens = 0
+      let isError = false
+
+      const stream = query({
+        prompt: message,
+        options: {
+          cwd: options.cwd,
+          systemPrompt: options.systemPrompt,
+          ...(options.model ? { model: options.model } : {}),
+          // `tools` restreint la surface d'outils *disponibles* pour le modèle ;
+          // `allowedTools` dispense en plus les outils listés du prompt de
+          // permission. Les deux sont nécessaires — voir le constat en tête de
+          // fichier.
+          tools: builtinTools(options.tools),
+          allowedTools: allowedTools(options.tools),
+          // Reprend la conversation quand le SDK nous a déjà donné un identifiant.
+          ...(session.sdkSessionId ? { resume: session.sdkSessionId } : {}),
+        },
+      })
+
+      for await (const msg of stream) {
+        // Confirmé Step 1 (point 2) : `session_id` est top-level sur tous les
+        // variants de SDKMessage.
+        if (msg.session_id) {
+          session.sdkSessionId = msg.session_id
+        }
+
+        if (msg.type === 'assistant') {
+          for (const block of msg.message.content) {
+            if (block.type === 'text') {
+              text += block.text
+              options.onEvent({ type: 'text', text: block.text })
+            } else if (block.type === 'tool_use') {
+              options.onEvent({ type: 'tool_use', name: block.name, input: block.input })
+            }
+          }
+        }
+
+        if (msg.type === 'result') {
+          // Confirmé Step 1 (point 2) : `usage.input_tokens`/`output_tokens`
+          // et `is_error` sont typés directement sur SDKResultMessage, pas de
+          // cast nécessaire.
+          costTokens = msg.usage.input_tokens + msg.usage.output_tokens
+          isError = msg.is_error
+          options.onEvent({ type: 'cost', tokens: costTokens })
+        }
+      }
+
+      return { text, costTokens, isError }
+    },
+
+    async resume(sessionId) {
+      return live.get(sessionId)?.session ?? null
+    },
+
+    async usage(): Promise<UsageSnapshot> {
+      // Confirmé Step 1 (point 3) : le SDK n'expose aucune API de consultation
+      // à froid des fenêtres 5h/7j (seulement un évènement poussé pendant une
+      // session active). Tant que ce n'est pas le cas, on se déclare
+      // indisponible plutôt que d'alimenter le scheduler de budget avec des
+      // chiffres inventés.
+      return { fiveHourPct: 0, sevenDayPct: 0, available: false }
+    },
+  }
 }
