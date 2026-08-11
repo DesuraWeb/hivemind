@@ -1,0 +1,23 @@
+{
+  "name": "hivemind",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "pnpm --filter @hivemind/server dev",
+    "dev:web": "pnpm --filter @hivemind/web dev",
+    "typecheck": "tsc --noEmit -p apps/server && tsc --noEmit -p packages/shared",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "test": "vitest run",
+    "db:migrate": "pnpm --filter @hivemind/server db:migrate",
+    "db:seed": "pnpm --filter @hivemind/server db:seed",
+    "db:reset": "./scripts/db-reset.sh"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
