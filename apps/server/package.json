@@ -12,6 +12,7 @@
   "dependencies": {
     "@fastify/cookie": "^11.0.1",
     "@hivemind/shared": "workspace:*",
+    "@node-rs/argon2": "^2.0.2",
     "fastify": "^5.2.0",
     "kysely": "^0.27.5",
     "libsodium-wrappers": "^0.8.4",
