@@ -1122,7 +1122,10 @@ export interface ArtifactsTable {
 
 export interface SettingsTable {
   key: string
-  value: JSONColumnType<unknown>
+  // Un réglage peut valoir n'importe quel JSON, y compris un scalaire (70) —
+  // pas seulement un objet. D'où `unknown` en lecture plutôt que
+  // JSONColumnType, qui contraindrait à `object | null`.
+  value: ColumnType<unknown, string, string>
   updated_at: Generated<Timestamp>
 }
 
@@ -1155,7 +1158,10 @@ import { afterAll, beforeAll, expect, test } from 'vitest'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
 
-const pool = createPool(process.env.DATABASE_URL_TEST as string)
+// `.env` n'est chargé dans process.env que via loadEnv() (voir src/env.ts).
+// Passer par databaseUrl() plutôt qu'une URL en dur : sinon un changement de
+// configuration ferait tourner les tests contre une autre base sans le dire.
+const pool = createPool(databaseUrl(loadEnv()))
 const db = createDb(pool)
 
 beforeAll(async () => {
@@ -1422,7 +1428,10 @@ import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
 import { seedRoleTemplates } from '../src/db/seed'
 
-const pool = createPool(process.env.DATABASE_URL_TEST as string)
+// `.env` n'est chargé dans process.env que via loadEnv() (voir src/env.ts).
+// Passer par databaseUrl() plutôt qu'une URL en dur : sinon un changement de
+// configuration ferait tourner les tests contre une autre base sans le dire.
+const pool = createPool(databaseUrl(loadEnv()))
 const db = createDb(pool)
 
 beforeAll(async () => {
@@ -1710,7 +1719,10 @@ import { createUser } from '../src/auth/users'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
 
-const pool = createPool(process.env.DATABASE_URL_TEST as string)
+// `.env` n'est chargé dans process.env que via loadEnv() (voir src/env.ts).
+// Passer par databaseUrl() plutôt qu'une URL en dur : sinon un changement de
+// configuration ferait tourner les tests contre une autre base sans le dire.
+const pool = createPool(databaseUrl(loadEnv()))
 const db = createDb(pool)
 const app = await buildApp({ db })
 
@@ -2103,7 +2115,10 @@ import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
 import { createSettingsStore } from '../src/settings/store'
 
-const pool = createPool(process.env.DATABASE_URL_TEST as string)
+// `.env` n'est chargé dans process.env que via loadEnv() (voir src/env.ts).
+// Passer par databaseUrl() plutôt qu'une URL en dur : sinon un changement de
+// configuration ferait tourner les tests contre une autre base sans le dire.
+const pool = createPool(databaseUrl(loadEnv()))
 const db = createDb(pool)
 
 beforeAll(async () => {
@@ -2916,7 +2931,10 @@ import type { Mail, Mailer } from '../src/integrations/mailer'
 import { createFakeAdapter } from '../src/runtime/fake'
 import type { RuntimeAdapter } from '../src/runtime/types'
 
-const pool = createPool(process.env.DATABASE_URL_TEST as string)
+// `.env` n'est chargé dans process.env que via loadEnv() (voir src/env.ts).
+// Passer par databaseUrl() plutôt qu'une URL en dur : sinon un changement de
+// configuration ferait tourner les tests contre une autre base sans le dire.
+const pool = createPool(databaseUrl(loadEnv()))
 const db = createDb(pool)
 
 function fakeMailer(): Mailer {

@@ -145,7 +145,10 @@ export interface ArtifactsTable {
 
 export interface SettingsTable {
   key: string
-  value: JSONColumnType<Record<string, unknown>>
+  // Un réglage peut valoir n'importe quel JSON, y compris un scalaire (70) —
+  // pas seulement un objet. D'où `unknown` en lecture plutôt que
+  // JSONColumnType, qui contraindrait à `object | null`.
+  value: ColumnType<unknown, string, string>
   updated_at: Generated<Timestamp>
 }
 

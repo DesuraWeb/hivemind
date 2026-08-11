@@ -2,9 +2,12 @@ import { sql } from 'kysely'
 import { afterAll, beforeAll, expect, test } from 'vitest'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
+import { databaseUrl, loadEnv } from '../src/env'
 
-const url = process.env.DATABASE_URL_TEST ?? 'postgres://localhost:5432/hivemind_test'
-const pool = createPool(url)
+// `.env` n'est chargé dans process.env que via loadEnv() (voir src/env.ts).
+// Passer par databaseUrl() plutôt qu'une URL en dur : sinon un changement de
+// configuration ferait tourner les tests contre une autre base sans le dire.
+const pool = createPool(databaseUrl(loadEnv()))
 const db = createDb(pool)
 
 beforeAll(async () => {

@@ -2,13 +2,12 @@ import { sql } from 'kysely'
 import { afterAll, beforeAll, expect, test } from 'vitest'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
-import { loadEnv } from '../src/env'
+import { databaseUrl, loadEnv } from '../src/env'
 
-// `.env` n'est chargé dans process.env que via loadEnv() (voir src/env.ts) ;
-// sans cet appel, DATABASE_URL_TEST serait undefined à ce stade.
-loadEnv()
-
-const pool = createPool(process.env.DATABASE_URL_TEST as string)
+// `.env` n'est chargé dans process.env que via loadEnv() (voir src/env.ts).
+// Passer par databaseUrl() plutôt qu'une URL en dur : sinon un changement de
+// configuration ferait tourner les tests contre une autre base sans le dire.
+const pool = createPool(databaseUrl(loadEnv()))
 const db = createDb(pool)
 
 beforeAll(async () => {
