@@ -2597,7 +2597,9 @@ export async function createRuntimeAdapter(env: Env): Promise<RuntimeAdapter> {
 export type * from './types'
 ```
 
-> `createRuntimeAdapter` importe `./claude` en dynamique : tant que la Task 10 n'est pas faite, `RUNTIME_ADAPTER=fake` fonctionne sans que le SDK soit installé.
+> `createRuntimeAdapter` importe `./claude` en dynamique : à l'exécution, `RUNTIME_ADAPTER=fake` ne charge jamais le SDK.
+>
+> **Mais `tsc` résout aussi les imports dynamiques** (`TS2307: Cannot find module './claude'`) — il faut donc créer dès cette tâche un bouchon `apps/server/src/runtime/claude.ts` qui exporte `createClaudeAdapter(): RuntimeAdapter` et lève `Error('ClaudeAdapter non implémenté (Task 10)')`. La Task 10 le remplace intégralement. L'alternative — masquer l'import derrière une variable pour échapper à la résolution statique — typerait `createClaudeAdapter` en `any` et ferait perdre la vérification à la Task 10 : ne pas la prendre.
 
 - [ ] **Step 5 : relancer**
 
