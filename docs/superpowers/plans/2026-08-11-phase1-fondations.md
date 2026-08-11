@@ -441,8 +441,27 @@ git add -A && git commit -m "chore: scripts de setup et de reset de la base loca
 `apps/server/src/env.ts` :
 
 ```ts
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join, parse } from 'node:path'
 import { z } from 'zod'
+
+/**
+ * Remonte depuis `from` jusqu'au répertoire contenant `pnpm-workspace.yaml`.
+ *
+ * Le `.env` vit à la racine du monorepo, mais le cwd dépend de l'invocation :
+ * `pnpm db:migrate` délègue via `pnpm --filter`, ce qui place le cwd dans
+ * `apps/server`. Résoudre par rapport au cwd rendrait le chargement dépendant
+ * de l'endroit d'où on lance la commande.
+ */
+function findRepoRoot(from = process.cwd()): string | undefined {
+  let dir = from
+  const { root } = parse(dir)
+  while (true) {
+    if (existsSync(join(dir, 'pnpm-workspace.yaml'))) return dir
+    if (dir === root) return undefined
+    dir = dirname(dir)
+  }
+}
 
 /**
  * Charge `.env` dans process.env si le fichier existe, sans jamais écraser une
@@ -450,10 +469,12 @@ import { z } from 'zod'
  * Fait ici plutôt que via un flag de lancement : dev, prod et tests passent
  * tous par `loadEnv()`, donc un seul endroit à connaître.
  */
-function loadDotEnvFile(path = '.env'): void {
+function loadDotEnvFile(path?: string): void {
+  const root = findRepoRoot()
+  const resolved = path ?? (root ? join(root, '.env') : '.env')
   let raw: string
   try {
-    raw = readFileSync(path, 'utf8')
+    raw = readFileSync(resolved, 'utf8')
   } catch {
     return // absent : normal en CI, tout vient de l'environnement du job
   }
@@ -663,7 +684,7 @@ const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'migrations
  * échoue laisse les précédentes en place et n'est pas marquée comme appliquée.
  * Un verrou consultatif empêche deux process de migrer en même temps.
  */
-export async function runMigrations(db: Kysely<unknown>): Promise<string[]> {
+export async function runMigrations<DB>(db: Kysely<DB>): Promise<string[]> {
   await sql`
     create table if not exists schema_migrations (
       name text primary key,
