@@ -630,9 +630,12 @@ import { sql } from 'kysely'
 import { afterAll, beforeAll, expect, test } from 'vitest'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
+import { databaseUrl, loadEnv } from '../src/env'
 
-const url = process.env.DATABASE_URL_TEST ?? 'postgres://localhost:5432/hivemind_test'
-const pool = createPool(url)
+// `.env` n'est chargé dans process.env que via loadEnv() (voir src/env.ts).
+// Passer par databaseUrl() plutôt qu'une URL en dur : sinon un changement de
+// configuration ferait tourner les tests contre une autre base sans le dire.
+const pool = createPool(databaseUrl(loadEnv()))
 const db = createDb(pool)
 
 beforeAll(async () => {
@@ -1157,6 +1160,7 @@ import { sql } from 'kysely'
 import { afterAll, beforeAll, expect, test } from 'vitest'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
+import { databaseUrl, loadEnv } from '../src/env'
 
 // `.env` n'est chargé dans process.env que via loadEnv() (voir src/env.ts).
 // Passer par databaseUrl() plutôt qu'une URL en dur : sinon un changement de
@@ -1426,6 +1430,7 @@ import { sql } from 'kysely'
 import { afterAll, beforeAll, expect, test } from 'vitest'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
+import { databaseUrl, loadEnv } from '../src/env'
 import { seedRoleTemplates } from '../src/db/seed'
 
 // `.env` n'est chargé dans process.env que via loadEnv() (voir src/env.ts).
@@ -1726,6 +1731,7 @@ import { buildApp } from '../src/app'
 import { createUser } from '../src/auth/users'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
+import { databaseUrl, loadEnv } from '../src/env'
 
 // `.env` n'est chargé dans process.env que via loadEnv() (voir src/env.ts).
 // Passer par databaseUrl() plutôt qu'une URL en dur : sinon un changement de
@@ -2121,6 +2127,7 @@ import { afterAll, beforeAll, expect, test } from 'vitest'
 import { createSecretBox, generateMasterKey } from '../src/crypto/secrets'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
+import { databaseUrl, loadEnv } from '../src/env'
 import { createSettingsStore } from '../src/settings/store'
 
 // `.env` n'est chargé dans process.env que via loadEnv() (voir src/env.ts).
@@ -2934,6 +2941,7 @@ import { sql } from 'kysely'
 import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
+import { databaseUrl, loadEnv } from '../src/env'
 import { runAuthHealthcheck } from '../src/health/auth-check'
 import type { Mail, Mailer } from '../src/integrations/mailer'
 import { createFakeAdapter } from '../src/runtime/fake'
@@ -3501,15 +3509,13 @@ createRoot(document.getElementById('root') as HTMLElement).render(
 
 - [ ] **Step 4 : créer l'utilisateur local**
 
+Le script `apps/server/scripts/create-user.ts` a été créé à la Task 7 :
+
 ```bash
-pnpm --filter @hivemind/server exec tsx -e "
-import { getDb, closeDb } from './src/db/client'
-import { createUser } from './src/auth/users'
-await createUser(getDb(), 'florian', process.env.HM_PASSWORD ?? 'change-moi')
-await closeDb()
-console.log('utilisateur créé')
-"
+pnpm --filter @hivemind/server exec tsx scripts/create-user.ts florian <mot-de-passe>
 ```
+
+> **N'utilise pas `tsx -e "…"`** pour ça : `tsx` compile le code passé en `-e` au format CJS, qui refuse le `await` de premier niveau — la commande échoue avec `Top-level await is currently not supported with the "cjs" output format`. D'où un vrai fichier de script.
 
 - [ ] **Step 5 : vérifier de bout en bout dans le navigateur**
 
