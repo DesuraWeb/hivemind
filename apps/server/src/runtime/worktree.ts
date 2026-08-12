@@ -17,10 +17,10 @@ export interface DisposableWorktree {
  * dépôt arrivent en Phase 2 avec le moteur de boucles.
  */
 export async function createThrowawayRepo(): Promise<DisposableWorktree> {
-  const path = await mkdtemp(join(tmpdir(), 'hivemind-smoke-'))
+  const path = await mkdtemp(join(tmpdir(), 'chapo-smoke-'))
   await run('git', ['init', '-b', 'main'], { cwd: path })
-  await run('git', ['config', 'user.email', 'hivemind@local'], { cwd: path })
-  await run('git', ['config', 'user.name', 'hivemind'], { cwd: path })
+  await run('git', ['config', 'user.email', 'chapo@local'], { cwd: path })
+  await run('git', ['config', 'user.name', 'chapo'], { cwd: path })
   await run('git', ['commit', '--allow-empty', '-m', 'init'], { cwd: path })
   return {
     path,

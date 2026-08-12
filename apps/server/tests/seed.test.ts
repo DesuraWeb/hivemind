@@ -1,4 +1,4 @@
-import { ROLE_KEYS } from '@hivemind/shared'
+import { ROLE_KEYS } from '@chapo/shared'
 import { sql } from 'kysely'
 import { afterAll, beforeAll, expect, test } from 'vitest'
 import { createDb, createPool } from '../src/db/client'

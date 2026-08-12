@@ -91,7 +91,7 @@ async function raiseAlert(deps: AuthHealthcheckDeps, error: string): Promise<voi
 
   await deps.mailer.send({
     to: deps.alertTo,
-    subject: '[hivemind] Authentification agent indisponible',
+    subject: '[chapo] Authentification agent indisponible',
     text: [
       "Le healthcheck n'a pas pu ouvrir de session agent.",
       '',

@@ -1,7 +1,7 @@
 // Vérifie que le healthcheck détecte réellement l'état de l'authentification.
 // Consomme quelques tokens (un échange minimal).
 //
-//   pnpm --filter @hivemind/server exec tsx scripts/smoke-healthcheck.ts [timeoutMs]
+//   pnpm --filter @chapo/server exec tsx scripts/smoke-healthcheck.ts [timeoutMs]
 //
 // L'appel est borné : un runtime injoignable fait pendre le SDK au lieu
 // d'échouer. Pour le constater, forcer une adresse morte :

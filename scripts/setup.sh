@@ -20,8 +20,8 @@ if [ ! -f .env ]; then
   echo "→ .env créé avec des clés fraîches."
 fi
 
-createdb hivemind 2>/dev/null || echo "→ base 'hivemind' déjà présente"
-createdb hivemind_test 2>/dev/null || echo "→ base 'hivemind_test' déjà présente"
+createdb chapo 2>/dev/null || echo "→ base 'chapo' déjà présente"
+createdb chapo_test 2>/dev/null || echo "→ base 'chapo_test' déjà présente"
 
 pnpm db:migrate
 pnpm db:seed

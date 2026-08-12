@@ -1,5 +1,5 @@
 {
-  "name": "@hivemind/web",
+  "name": "@chapo/web",
   "version": "0.0.0",
   "private": true,
   "type": "module",

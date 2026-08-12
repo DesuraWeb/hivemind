@@ -1,7 +1,7 @@
 /**
  * Vérification manuelle de la Task 10 : un agent réel écrit un fichier
  * dans un dépôt jetable, et on constate le résultat sur le disque.
- * Consomme des tokens. Lancer avec : pnpm --filter @hivemind/server exec tsx scripts/smoke-agent.ts
+ * Consomme des tokens. Lancer avec : pnpm --filter @chapo/server exec tsx scripts/smoke-agent.ts
  */
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -26,14 +26,14 @@ const session = await adapter.createSession({
 
 const result = await adapter.send(
   session,
-  "Crée un fichier BONJOUR.md contenant exactement la ligne « hivemind est vivant ». Puis réponds 'fait'.",
+  "Crée un fichier BONJOUR.md contenant exactement la ligne « chapo est vivant ». Puis réponds 'fait'.",
 )
 
 console.log(`\n--- Résultat : isError=${result.isError}, coût=${result.costTokens}`)
 console.log(`--- sdkSessionId : ${session.sdkSessionId ?? '(non fourni)'}`)
 
 const content = await readFile(join(repo.path, 'BONJOUR.md'), 'utf8').catch(() => null)
-if (content?.includes('hivemind est vivant')) {
+if (content?.includes('chapo est vivant')) {
   console.log('✅ Le fichier a bien été écrit dans le worktree.')
 } else {
   console.error('❌ BONJOUR.md absent ou incorrect. Contenu lu :', content)

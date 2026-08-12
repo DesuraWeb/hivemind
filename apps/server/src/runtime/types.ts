@@ -1,4 +1,4 @@
-import type { RoleKey } from '@hivemind/shared'
+import type { RoleKey } from '@chapo/shared'
 
 /** Ce qu'un rôle a le droit de faire. Traduit en options SDK par l'adapter. */
 export interface ToolPolicy {

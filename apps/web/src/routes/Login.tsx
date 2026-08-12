@@ -30,7 +30,7 @@ export function Login({ onSuccess }: { onSuccess: (me: Me) => void }) {
       onSubmit={submit}
       style={{ maxWidth: 320, margin: '15vh auto', display: 'grid', gap: 12 }}
     >
-      <h1 style={{ margin: 0, fontSize: 20 }}>hivemind</h1>
+      <h1 style={{ margin: 0, fontSize: 20 }}>chapo</h1>
       <input
         aria-label="Identifiant"
         value={login}
