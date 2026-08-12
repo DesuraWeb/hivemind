@@ -62,6 +62,8 @@ export async function readRunMessages(
     kind: r.kind,
     body: r.body,
     meta: r.meta as Record<string, unknown>,
-    createdAt: r.created_at as Date,
+    // `Timestamp` est un ColumnType : à la lecture le driver rend un Date,
+    // mais le type déclaré couvre aussi les formes acceptées à l'écriture.
+    createdAt: new Date(r.created_at as unknown as string),
   }))
 }
