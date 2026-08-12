@@ -44,6 +44,8 @@ export interface ProjectsTable {
   default_branch: Generated<string>
   staging_url: string | null
   context: string | null
+  /** Technologie du projet : Laravel, PrestaShop, WordPress… */
+  stack: string | null
   /** Teinte du projet dans l'orbe et les listes. Distincte de globes.color. */
   tint: string | null
   /** Ligne de synthèse rédigée par Hive, jamais calculée par le front. */

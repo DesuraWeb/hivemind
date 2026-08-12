@@ -33,6 +33,11 @@ Elle n'entre **pas** dans cette phase. C'est un sous-système backend de l'ordre
 | `agent` | `INBOX[]` | Le rôle qui a levé l'item (« garant », « dev », « communicant », « boucle dev »). `inbox_items` n'a que `project_id` et `run_id`. → **`inbox_items.from_role text`** |
 | `conso` en euros | `PROJECTS[]` | « 14,2 k tokens · 2,10 € ». On stocke `cost_tokens`, aucun taux. → **`settings['pricing.eur_per_mtok']`**, converti à l'affichage, jamais stocké en base |
 
+**Deux manques de plus, trouvés en implémentant la Task 4** — l'audit ci-dessus n'en avait vu que quatre :
+
+- **`stack`** (« Laravel », « PrestaShop », « WordPress ») est un vrai attribut projet, déclaré à la création et utilisé par Hive pour challenger la stack au cadrage. → **`projects.stack text`** (migration 0004).
+- **`nodes`** n'est **pas** à stocker : `orb.js` s'en sert comme *poids relatif* pour dimensionner les clusters (`p.nodes / totalW`, repli à 200 s'il manque). Il se dérivera de l'activité du projet à J13, quand l'orbe existera.
+
 Deux champs sont **dérivés** et ne doivent surtout pas être stockés :
 
 - **`loop`** (`run` | `wait` | `fail` | `done` | `pause`) est un statut *projet*, agrégé depuis l'état du run courant. Le stocker créerait deux sources de vérité qui divergeraient au premier crash.

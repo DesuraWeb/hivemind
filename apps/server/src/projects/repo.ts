@@ -22,12 +22,11 @@ export interface ProjectView {
   name: string
   client: string | null
   /**
-   * Aucune colonne ne porte la stack technique du projet — gap non repéré
-   * par l'audit du plan Phase 3 (qui n'en liste que quatre : tint, synth,
-   * agent, conso). `null` en attendant une colonne dédiée ; cf. rapport
-   * Task 4.
+   * Technologie du projet (Laravel, PrestaShop, WordPress…). Colonne ajoutée
+   * par la migration 0004 : ce manque n'avait pas été repéré par l'audit
+   * initial de data.js, qui n'en listait que quatre.
    */
-  stack: null
+  stack: string | null
   step: [number, number]
   loop: LoopStatus
   role: string | null
@@ -52,6 +51,7 @@ interface ProjectRow {
   slug: string
   name: string
   client_name: string | null
+  stack: string | null
   tint: string | null
   synth: string | null
   staging_url: string | null
@@ -75,6 +75,7 @@ function projectRowQuery(db: Kysely<Database>) {
       'projects.slug as slug',
       'projects.name as name',
       'clients.name as client_name',
+      'projects.stack as stack',
       'projects.tint as tint',
       'projects.synth as synth',
       'projects.staging_url as staging_url',
@@ -187,7 +188,7 @@ async function toProjectView(
     id: row.slug,
     name: row.name,
     client: row.client_name,
-    stack: null,
+    stack: row.stack,
     step,
     loop,
     role,
