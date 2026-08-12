@@ -44,10 +44,25 @@ export async function seedRoleTemplates(db: Kysely<Database>): Promise<void> {
   }
 }
 
+/**
+ * Taux de conversion tokens → euros, affiché dans les listes de projets
+ * (« 14,2 k tokens · 2,10 € »). Valeur d'ordre de grandeur, pas de
+ * facturation : elle est destinée à donner une échelle, pas un montant exact.
+ * Modifiable dans les réglages sans redéploiement.
+ */
+export async function seedDefaultSettings(db: Kysely<Database>): Promise<void> {
+  await db
+    .insertInto('settings')
+    .values({ key: 'pricing.eur_per_mtok', value: JSON.stringify(15) })
+    .onConflict((oc) => oc.column('key').doNothing())
+    .execute()
+}
+
 // Point d'entrée CLI : `pnpm db:seed`
 if (import.meta.url === `file://${process.argv[1]}`) {
   const { getDb, closeDb } = await import('./client')
   await seedRoleTemplates(getDb())
+  await seedDefaultSettings(getDb())
   console.log(`${ROLE_KEYS.length} templates de rôle seedés.`)
   await closeDb()
 }

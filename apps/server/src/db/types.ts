@@ -44,6 +44,10 @@ export interface ProjectsTable {
   default_branch: Generated<string>
   staging_url: string | null
   context: string | null
+  /** Teinte du projet dans l'orbe et les listes. Distincte de globes.color. */
+  tint: string | null
+  /** Ligne de synthèse rédigée par Hive, jamais calculée par le front. */
+  synth: string | null
   autonomy_default: Generated<AutonomyMode>
   budget_weight: Generated<number>
   status: Generated<string>
@@ -130,6 +134,8 @@ export interface InboxItemsTable {
   project_id: string | null
   run_id: string | null
   title: string
+  /** Rôle qui a levé l'item : l'UI l'affiche à côté du titre. */
+  from_role: string | null
   payload: JSONColumnType<Record<string, unknown>>
   status: Generated<InboxStatus>
   human_response: JSONColumnType<Record<string, unknown>> | null
