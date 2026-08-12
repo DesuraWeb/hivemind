@@ -3,6 +3,7 @@ import { sql } from 'kysely'
 import type { PgBoss } from 'pg-boss'
 import type { Database } from '../db/types'
 import { type RunContext, decide } from '../domain/run-state'
+import { eventBus } from '../events/bus'
 import { RUN_STEP_QUEUE, type RunStepJobData } from '../jobs/run-step'
 import { appendMessage } from '../loop/bus'
 import { type InboxItemRow, toInboxItemRow } from './repo'
@@ -101,6 +102,16 @@ export async function resolveInboxItem(
       runIdToResume,
     }
   })
+
+  // Diffusion SSE après le commit de la transaction ci-dessus (jamais
+  // pendant) : un abonné ne doit jamais apprendre une résolution qu'un
+  // rollback pourrait encore annuler. `run.state`, lui, n'est PAS republié
+  // ici : la reprise du run passe par `resumeRunIfBlocked`, qui duplique
+  // volontairement la plomberie d'`applyEvent` sans son point de diffusion
+  // (cf. le commentaire de cette fonction et le point ouvert 4 du plan Phase
+  // 3 — un écart connu, pas un oubli). Le prochain passage du job dans
+  // `applyEvent` republiera `run.state` à la transition suivante.
+  eventBus.publish({ type: 'inbox.resolved', id: item.id, projectId: item.projectId })
 
   if (runIdToResume) {
     await boss.send(RUN_STEP_QUEUE, { runId: runIdToResume } satisfies RunStepJobData)

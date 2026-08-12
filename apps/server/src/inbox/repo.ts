@@ -2,6 +2,7 @@ import type { InboxStatus, InboxType } from '@silithid/shared'
 import type { Kysely, Selectable } from 'kysely'
 import { sql } from 'kysely'
 import type { Database, InboxItemsTable } from '../db/types'
+import { eventBus } from '../events/bus'
 
 /**
  * Forme exposée hors DB. Volontairement pas d'`age`/`ageMin` ici : ce sont
@@ -133,5 +134,10 @@ export async function createInboxItem(
     .returningAll()
     .executeTakeFirstOrThrow()
 
-  return toInboxItemRow(row)
+  const item = toInboxItemRow(row)
+  // Publié une fois l'insert acquitté par Postgres (pas de transaction ici à
+  // attendre : une requête `INSERT ... RETURNING` seule commite dès qu'elle
+  // répond).
+  eventBus.publish({ type: 'inbox.new', id: item.id, projectId: item.projectId })
+  return item
 }

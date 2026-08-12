@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify'
 import type { Kysely } from 'kysely'
+import { eventsRoutes } from './api/events'
 import { authRoutes } from './api/routes/auth'
 import { healthRoutes } from './api/routes/health'
 import { settingsRoutes } from './api/routes/settings'
@@ -43,6 +44,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   })
   await app.register(authRoutes, { db: deps.db })
   await app.register(settingsRoutes, { settings })
+  await app.register(eventsRoutes)
 
   return app
 }

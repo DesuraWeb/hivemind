@@ -8,6 +8,7 @@ import {
   type RunContext,
   decide,
 } from '../domain/run-state'
+import { eventBus } from '../events/bus'
 import { appendMessage } from './bus'
 
 /**
@@ -38,13 +39,22 @@ export interface ApplyEventResult {
  * relue au début de la transaction — c'est la garde. Un job pg-boss rejoué
  * sur un run déjà avancé retrouve un état qui n'accepte plus l'événement
  * qu'il rejoue ; `decide()` renvoie `invalid`, rien n'est écrit.
+ *
+ * Diffusion SSE (plan Phase 3, Task 3) : publiée après le `return` de
+ * `db.transaction().execute(...)`, donc après le commit — jamais pendant. Un
+ * abonné ne doit jamais apprendre un état qu'un rollback pourrait encore
+ * annuler.
  */
 export async function applyEvent(
   db: Kysely<Database>,
   runId: string,
   event: LoopEvent,
 ): Promise<ApplyEventResult> {
-  return db.transaction().execute(async (trx) => {
+  // Remplis pendant la transaction, lus après son commit — voir le
+  // commentaire de fonction ci-dessus.
+  const openedInboxItems: Array<{ id: string; projectId: string | null }> = []
+
+  const { result, projectId } = await db.transaction().execute(async (trx) => {
     const run = await trx
       .selectFrom('runs')
       .innerJoin('steps', 'steps.id', 'runs.step_id')
@@ -100,7 +110,7 @@ export async function applyEvent(
     }
 
     for (const effect of decision.effects) {
-      await applyEffect(trx, { runId, projectId: run.projectId }, effect)
+      await applyEffect(trx, { runId, projectId: run.projectId }, effect, openedInboxItems)
     }
 
     // Brief §7 : toute transition (ou tout `stay`, qui reste une décision
@@ -118,18 +128,31 @@ export async function applyEvent(
       meta: { event, decision },
     })
 
-    return { state: nextState, decision }
+    return { result: { state: nextState, decision }, projectId: run.projectId }
   })
+
+  // Diffusion SSE après le commit (cf. commentaire de fonction). `run.state`
+  // seulement sur une vraie transition — un `stay` ne change rien que le
+  // front doive recharger.
+  if (result.decision.kind === 'transition') {
+    eventBus.publish({ type: 'run.state', runId, projectId })
+  }
+  for (const item of openedInboxItems) {
+    eventBus.publish({ type: 'inbox.new', id: item.id, projectId: item.projectId })
+  }
+
+  return result
 }
 
 async function applyEffect(
   trx: Transaction<Database>,
   ctx: { runId: string; projectId: string },
   effect: Effect,
+  openedInboxItems: Array<{ id: string; projectId: string | null }>,
 ): Promise<void> {
   switch (effect.type) {
-    case 'open_inbox_item':
-      await trx
+    case 'open_inbox_item': {
+      const row = await trx
         .insertInto('inbox_items')
         .values({
           type: effect.itemType,
@@ -139,8 +162,11 @@ async function applyEffect(
           title: effect.reason,
           payload: JSON.stringify({ reason: effect.reason }),
         })
-        .execute()
+        .returning('id')
+        .executeTakeFirstOrThrow()
+      openedInboxItems.push({ id: row.id, projectId: ctx.projectId })
       return
+    }
 
     case 'increment_iteration':
       await trx
