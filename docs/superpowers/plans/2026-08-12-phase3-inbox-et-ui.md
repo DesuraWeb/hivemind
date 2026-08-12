@@ -181,6 +181,24 @@ Traiter un item d'inbox **dans le navigateur** relance réellement une boucle, e
 
 Conscience collective (phase dédiée) · juge visuel J8 · verdict et itérations J9 · communicant J10 · staging et gate prod J11 · budget J12 · orbe v2 complète avec focus J13 · les 15 autres écrans du pack.
 
+## Auto-amélioration par Hive — à arbitrer par le garant
+
+Question posée le 12/08. Réponse courte : c'est la pente naturelle du système, et l'architecture a déjà la bonne primitive — le gate d'inbox. L'auto-amélioration est sûre exactement dans la mesure où chaque changement y passe.
+
+**Trois niveaux, du plus utile au plus risqué :**
+
+1. **Silithid comme projet dans Silithid.** Son dépôt est un dépôt comme un autre. Chaque amélioration de la boucle serait testée en utilisant la boucle. Faisable sans une ligne de code nouvelle, dès que la boucle est prouvée sur le sandbox.
+2. **Hive apprend des items résolus** — c'est déjà la conscience collective. La même question posée trois fois devient un savoir, et les agents consultent avant de demander.
+3. **Les prompts évoluent depuis les résultats.** Le schéma le permet déjà : `role_templates` est versionné, `roles` en est une copie éditable. Hive pourrait proposer un garant v2 pour les projets PrestaShop qui produisent les mêmes écarts. **Proposé en inbox, jamais appliqué en silence.**
+
+**La ligne à ne pas franchir :** un agent qui modifie sa propre politique d'outils, la machine à états, ou `tools.ts`. Ce sont les fichiers qui *sont* la frontière de sécurité — et on a constaté deux fois dans ce projet qu'une frontière qu'on croit posée ne l'est pas (`allowedTools` en Phase 1, `strictMcpConfig` en Phase 2).
+
+**Proposition concrète : un quatrième gate structurel.** Une PR qui touche `src/domain/run-state.ts`, `src/runtime/tools.ts` ou la colonne `roles.tools` lève un item d'inbox distinct, plus bruyant qu'une validation de step ordinaire. Pas une interdiction — juste l'impossibilité que ça passe dans le flux normal. Sa place est avec les trois autres gates, au moment du test de DoD, pas dans cette phase.
+
+**Les quatre métriques sans lesquelles c'est du brassage** (à instrumenter avec la conscience) : questions par run · itérations par step · tokens par step validé · taux de KO du reviewer. Si ces courbes ne descendent pas, l'auto-amélioration est une histoire qu'on se raconte.
+
+---
+
 ## Points ouverts
 
 1. **Org GitHub `desura` n'appartient pas à Florian** — bloquant à J11 pour le dépôt pilote.
