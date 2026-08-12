@@ -73,6 +73,45 @@ interface Live {
   options: CreateSessionOptions
 }
 
+/**
+ * Dernière conso observée. Le SDK pousse `rate_limit_event` pendant une session
+ * active ; il n'existe aucun moyen de l'interroger à froid, donc la mesure est
+ * conservée en mémoire du process et datée.
+ *
+ * `rateLimitType` a six valeurs possibles, pas deux : `five_hour`, `seven_day`,
+ * `seven_day_opus`, `seven_day_sonnet`, `seven_day_overage_included`,
+ * `overage`. On replie toutes les variantes hebdomadaires sur `sevenDayPct` en
+ * gardant le MAXIMUM : sous-estimer la conso ferait tourner le scheduler de
+ * budget trop longtemps, la surestimer ne coûte qu'une pause prématurée.
+ */
+const lastUsage: { fiveHourPct: number; sevenDayPct: number; sampledAt?: Date } = {
+  fiveHourPct: 0,
+  sevenDayPct: 0,
+}
+
+function captureRateLimit(msg: unknown): void {
+  const event = msg as { type?: string; rate_limit_info?: RateLimitInfo }
+  if (event.type !== 'rate_limit_event' || !event.rate_limit_info) return
+
+  const { rateLimitType, utilization } = event.rate_limit_info
+  if (typeof utilization !== 'number' || !rateLimitType) return
+
+  const pct = utilization <= 1 ? utilization * 100 : utilization
+  if (rateLimitType === 'five_hour') {
+    lastUsage.fiveHourPct = pct
+  } else if (rateLimitType.startsWith('seven_day')) {
+    lastUsage.sevenDayPct = Math.max(lastUsage.sevenDayPct, pct)
+  } else {
+    return // `overage` : hors des deux fenêtres suivies par le brief
+  }
+  lastUsage.sampledAt = new Date()
+}
+
+interface RateLimitInfo {
+  rateLimitType?: string
+  utilization?: number
+}
+
 export function createClaudeAdapter(): RuntimeAdapter {
   const live = new Map<string, Live>()
 
@@ -82,6 +121,8 @@ export function createClaudeAdapter(): RuntimeAdapter {
       // abouti. On le garde minimal : pas d'outils, un mot en réponse. À la
       // cadence du cron (15 min) le coût est négligeable devant le risque
       // d'une panne d'authentification passée inaperçue.
+      const startedAt = Date.now()
+      const elapsed = () => Date.now() - startedAt
       try {
         const { sdkOptions } = resolveToolPolicy({ bash: false, fs: 'none', mcp: [] })
         const stream = query({
@@ -89,15 +130,24 @@ export function createClaudeAdapter(): RuntimeAdapter {
           options: { ...sdkOptions, maxTurns: 1 },
         })
         for await (const msg of stream) {
+          captureRateLimit(msg)
           if (msg.type === 'result') {
             return msg.is_error
-              ? { ok: false, error: 'Le runtime a répondu en erreur.' }
-              : { ok: true }
+              ? { ok: false, latencyMs: elapsed(), error: 'Le runtime a répondu en erreur.' }
+              : { ok: true, latencyMs: elapsed() }
           }
         }
-        return { ok: false, error: 'Le runtime n a produit aucun résultat.' }
+        return {
+          ok: false,
+          latencyMs: elapsed(),
+          error: 'Le runtime n a produit aucun résultat.',
+        }
       } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+        return {
+          ok: false,
+          latencyMs: elapsed(),
+          error: err instanceof Error ? err.message : String(err),
+        }
       }
     },
 
@@ -136,6 +186,7 @@ export function createClaudeAdapter(): RuntimeAdapter {
       })
 
       for await (const msg of stream) {
+        captureRateLimit(msg)
         // Confirmé Step 1 (point 2) : `session_id` est top-level sur tous les
         // variants de SDKMessage.
         if (msg.session_id) {
@@ -171,12 +222,17 @@ export function createClaudeAdapter(): RuntimeAdapter {
     },
 
     async usage(): Promise<UsageSnapshot> {
-      // Confirmé Step 1 (point 3) : le SDK n'expose aucune API de consultation
-      // à froid des fenêtres 5h/7j (seulement un évènement poussé pendant une
-      // session active). Tant que ce n'est pas le cas, on se déclare
-      // indisponible plutôt que d'alimenter le scheduler de budget avec des
-      // chiffres inventés.
-      return { fiveHourPct: 0, sevenDayPct: 0, available: false }
+      // Le SDK n'expose aucune API de consultation à froid : la conso n'arrive
+      // que poussée pendant une session active (voir captureRateLimit).
+      // Tant qu'aucun échange n'a eu lieu, on se déclare indisponible plutôt
+      // que d'alimenter le scheduler de budget avec des chiffres inventés.
+      if (!lastUsage.sampledAt) return { fiveHourPct: 0, sevenDayPct: 0, available: false }
+      return {
+        fiveHourPct: lastUsage.fiveHourPct,
+        sevenDayPct: lastUsage.sevenDayPct,
+        available: true,
+        sampledAt: lastUsage.sampledAt,
+      }
     },
   }
 }

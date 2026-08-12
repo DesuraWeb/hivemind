@@ -60,7 +60,27 @@ test('usage se déclare indisponible par défaut', async () => {
   })
 })
 
-test('usage renvoie les valeurs injectées', async () => {
+test('usage renvoie les valeurs injectées, datées', async () => {
   const adapter = createFakeAdapter({ usage: { fiveHourPct: 80, sevenDayPct: 12 } })
-  expect(await adapter.usage()).toEqual({ fiveHourPct: 80, sevenDayPct: 12, available: true })
+  const usage = await adapter.usage()
+
+  expect(usage).toMatchObject({ fiveHourPct: 80, sevenDayPct: 12, available: true })
+  // Une mesure disponible est toujours datée : le scheduler (J12) en a besoin
+  // pour appliquer sa règle de péremption à 90 minutes.
+  expect(usage.sampledAt).toBeInstanceOf(Date)
+})
+
+test('une mesure indisponible n est jamais datée', async () => {
+  const usage = await createFakeAdapter().usage()
+  expect(usage.available).toBe(false)
+  expect(usage.sampledAt).toBeUndefined()
+})
+
+test('healthcheck rapporte une latence dans les deux issues', async () => {
+  expect(await createFakeAdapter().healthcheck()).toMatchObject({ ok: true, latencyMs: 0 })
+  expect(await createFakeAdapter({ healthcheckError: 'boom' }).healthcheck()).toMatchObject({
+    ok: false,
+    latencyMs: 0,
+    error: 'boom',
+  })
 })

@@ -29,8 +29,10 @@ export function createFakeAdapter(opts: FakeAdapterOptions = {}): RuntimeAdapter
 
   return {
     async healthcheck() {
-      if (opts.healthcheckError) return { ok: false, error: opts.healthcheckError }
-      return { ok: true }
+      if (opts.healthcheckError) {
+        return { ok: false, latencyMs: 0, error: opts.healthcheckError }
+      }
+      return { ok: true, latencyMs: 0 }
     },
 
     async createSession(options) {
@@ -60,7 +62,7 @@ export function createFakeAdapter(opts: FakeAdapterOptions = {}): RuntimeAdapter
 
     async usage(): Promise<UsageSnapshot> {
       if (!opts.usage) return { fiveHourPct: 0, sevenDayPct: 0, available: false }
-      return { ...opts.usage, available: true }
+      return { ...opts.usage, available: true, sampledAt: new Date(0) }
     },
   }
 }

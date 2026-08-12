@@ -522,6 +522,10 @@ Ne pas anticiper, même si l'occasion se présente : Playwright et le juge visue
 
 ## Points ouverts
 
+0. **`rate_limit_event` n'a jamais été observé** (constat P2-3, 12/08). La capture est implémentée et conforme à la forme documentée (`SDKRateLimitEvent.rate_limit_info.{rateLimitType, utilization}`), mais un échange réel de healthcheck n'en a produit aucun — le SDK le décrit comme émis « quand l'information de limite change », pour les comptes d'abonnement. **Conséquence pour J12 : il se peut que le scheduler de budget n'ait jamais de mesure.** La règle du garant (jauge « inconnu » + majoration de 10 points, jamais de tokens dépensés pour mesurer) devient alors le comportement nominal, pas le cas dégradé. À revérifier lors d'une session longue (Task 10/11, qui consomment réellement).
+
+   Note annexe : `rateLimitType` a **six** valeurs (`five_hour`, `seven_day`, `seven_day_opus`, `seven_day_sonnet`, `seven_day_overage_included`, `overage`), pas deux. Les variantes hebdomadaires sont repliées sur `sevenDayPct` en gardant le **maximum** — sous-estimer ferait tourner le scheduler trop longtemps, surestimer ne coûte qu'une pause prématurée.
+
 1. **Conscience collective : contradiction à trancher.** `BRIEF-RETOUR.md` §6 la décrit comme centrale ; le brief v0.2 §2 l'exclut. Le brief fait foi, donc rien n'est implémenté — mais `Inbox.dc.html` contient vraisemblablement des items « validation · savoir » et un badge CONFLIT sans source de données. **À trancher avant J6.**
 2. **Après 3 allers-retours dev↔reviewer** : décision A appliquée (`awaiting_human` + `alert`). À confirmer.
 3. **Dépôt sandbox** : `desura/chapo-sandbox` à créer, ou nom au choix du garant.

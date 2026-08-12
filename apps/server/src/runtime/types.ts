@@ -51,10 +51,22 @@ export interface UsageSnapshot {
   fiveHourPct: number
   sevenDayPct: number
   available: boolean
+  /**
+   * Date de la dernière mesure observée. `undefined` tant qu'aucun `send()`
+   * n'a produit d'évènement de limite de débit.
+   *
+   * La règle de péremption (fraîche ≤ 90 min, sinon jauge « inconnu » et
+   * majoration de 10 points) appartient au scheduler de budget (J12) : ici on
+   * se contente de dater honnêtement la mesure.
+   */
+  sampledAt?: Date
 }
 
 export interface HealthcheckResult {
   ok: boolean
+  /** Durée de l'échange de vérification. Sert à repérer une dégradation. */
+  latencyMs: number
+  /** Cause de l'échec — affichée dans l'item d'inbox et l'email d'alerte. */
   error?: string
 }
 
