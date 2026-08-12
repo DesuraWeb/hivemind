@@ -1,0 +1,80 @@
+/*
+ * Reset de base repris des prototypes .dc.html (Dashboard, Inbox, ...) :
+ * fond jamais blanc par défaut, liens et scrollbars alignés sur les tokens.
+ * Le placeholder précédent le faisait via des variables --hm-* disparues ;
+ * ce fichier reprend le même rôle avec les vraies variables du pack DA.
+ */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg-0);
+  color: var(--text-hi);
+  font-family: var(--font-sans);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--text-hi);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-low);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(151, 173, 204, 0.18);
+  border-radius: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(151, 173, 204, 0.18) transparent;
+}
+
+/* Rail nav : hover discret sur les icônes inactives (repris du pack DA). */
+.rail-nav-link:hover {
+  background: rgba(214, 228, 247, 0.05);
+  color: var(--text-hi);
+}
+
+/* HiveStrip : micro rond et champ pilule (états hover/focus repris de
+   MajordomeStrip.dc.html, portés en classes faute de style inline JS). */
+.hive-mic-btn:hover {
+  filter: brightness(1.12);
+}
+
+.hive-input:focus {
+  border-color: color-mix(in oklab, var(--accent) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 12%, transparent);
+}
+
+/* Pastille pulsée d'une boucle active (indicateur d'état flottant, Task 7/8). */
+@keyframes chapoPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--accent-glow);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 0 5px transparent;
+    opacity: 0.7;
+  }
+}

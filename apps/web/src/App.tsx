@@ -1,7 +1,13 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { RouterProvider } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { api } from './lib/api'
 import type { Me } from './lib/api'
+import { AuthContext } from './lib/auth-context'
+import { router } from './router'
 import { Login } from './routes/Login'
+
+const queryClient = new QueryClient()
 
 export function App() {
   const [me, setMe] = useState<Me | null>(null)
@@ -18,17 +24,15 @@ export function App() {
   if (!checked) return null
   if (!me) return <Login onSuccess={setMe} />
 
+  function logout() {
+    void api.logout().then(() => setMe(null))
+  }
+
   return (
-    <main style={{ padding: 24 }}>
-      <p>Connecté en tant que {me.login}.</p>
-      <button
-        type="button"
-        onClick={() => {
-          void api.logout().then(() => setMe(null))
-        }}
-      >
-        Se déconnecter
-      </button>
-    </main>
+    <QueryClientProvider client={queryClient}>
+      <AuthContext.Provider value={{ me, logout }}>
+        <RouterProvider router={router} />
+      </AuthContext.Provider>
+    </QueryClientProvider>
   )
 }

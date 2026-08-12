@@ -1,0 +1,90 @@
+/* ==========================================================
+   CHAPO — DESIGN TOKENS v1 (lot 1)
+   Dark only. « Mission control adouci » — fond noir bleuté,
+   verre en couche flottante, accent à trancher (A/B/C).
+   Variante d'accent : attribut data-accent sur le conteneur
+   racine — "cyan" (défaut) | "glacier" | "ambre".
+   ========================================================== */
+:root {
+  /* --- Fonds (jamais noir pur) --- */
+  --bg-0: #0A0E14;            /* fond de page */
+  --bg-1: #0D1420;            /* panneaux, cartes */
+  --bg-2: #121B2A;            /* surfaces hautes, pistes */
+  --line: rgba(151, 173, 204, 0.10);        /* bordures */
+  --line-strong: rgba(151, 173, 204, 0.20); /* bordures actives */
+
+  /* --- Texte (AA minimum, AAA sur items d'inbox) --- */
+  --text-hi: #E9EEF6;         /* titres, items d'inbox (AAA) */
+  --text-mid: #A6B4C8;        /* corps (AA+) */
+  --text-low: #5D6B80;        /* métadonnées, annotations */
+
+  /* --- Accent (variante A — cyan désaturé, réf. Jarvis) --- */
+  --accent: oklch(0.80 0.09 192);
+  --accent-ink: #06141A;      /* texte sur fond accent */
+  --accent-soft: color-mix(in oklab, var(--accent) 16%, transparent);
+  --accent-glow: color-mix(in oklab, var(--accent) 32%, transparent);
+
+  /* --- Sémantiques inbox (4, constantes sur toute l'app) --- */
+  --sem-question: oklch(0.79 0.11 82);   /* ambre — info manquante */
+  --sem-approval: oklch(0.77 0.09 192);  /* cyan — action à valider */
+  --sem-verdict: oklch(0.73 0.10 300);   /* violet — rapport du juge */
+  --sem-alert: oklch(0.71 0.15 25);      /* corail — budget, échec, auth */
+
+  /* --- États système --- */
+  --ok: oklch(0.75 0.08 160);  /* succès, discret */
+  --run: var(--accent);        /* en cours (pulsé) */
+  --pause: #7A8698;            /* pause / attente */
+
+  /* --- Verre (couche flottante, jamais le contenu) ---
+     Recette : backdrop-filter blur+saturate, bordure claire 1px,
+     voile sombre derrière le texte, typo +1 graisse sur verre.
+     Max 2-3 surfaces simultanées. Jamais de blurs imbriqués. */
+  --glass-bg: rgba(11, 17, 27, 0.55);
+  --glass-border: rgba(205, 225, 255, 0.13);
+  --glass-blur: 20px;
+  --glass-sat: 140%;
+
+  /* --- Typographie --- */
+  --font-sans: "Geist", -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --fs-label: 11px;   /* petites capitales espacées */
+  --ls-label: 0.16em;
+  --fs-meta: 11.5px;  /* mono : timestamps, IDs, coûts */
+  --fs-ui: 13px;
+  --fs-body: 14px;
+  --fs-h3: 16px;
+  --fs-h2: 20px;
+  --fs-h1: 28px;
+  --fs-display: 40px;
+
+  /* --- Espacements --- */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px;
+  --s-5: 24px; --s-6: 32px; --s-7: 48px; --s-8: 64px;
+
+  /* --- Radius --- */
+  --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-full: 999px;
+
+  /* --- Ombres (douces, jamais dures) --- */
+  --shadow-1: 0 2px 8px rgba(3, 6, 12, 0.35), 0 8px 24px rgba(3, 6, 12, 0.25);
+  --shadow-2: 0 8px 20px rgba(3, 6, 12, 0.40), 0 24px 64px rgba(3, 6, 12, 0.35);
+
+  /* --- Motion (micro-animations fonctionnelles) --- */
+  --dur-1: 150ms; --dur-2: 200ms; --dur-3: 250ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Variante B — bleu glacier : plus froid, plus discret.
+   Les 4 sémantiques restent inchangées. */
+[data-accent="glacier"] {
+  --accent: oklch(0.82 0.06 235);
+  --accent-ink: #081220;
+}
+
+/* Variante C — ambre doux (« veille nocturne ») :
+   question passe en bleu info pour libérer l'ambre. */
+[data-accent="ambre"] {
+  --accent: oklch(0.80 0.09 78);
+  --accent-ink: #171006;
+  --sem-question: oklch(0.78 0.08 235);
+}
