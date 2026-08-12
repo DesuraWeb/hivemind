@@ -11,6 +11,8 @@ export interface FakeAdapterOptions {
   /** Réponses renvoyées dans l'ordre, une par appel à send(). */
   replies?: string[]
   usage?: { fiveHourPct: number; sevenDayPct: number }
+  /** Si défini, `healthcheck()` échoue avec ce message — simule une auth cassée. */
+  healthcheckError?: string
 }
 
 /**
@@ -26,6 +28,11 @@ export function createFakeAdapter(opts: FakeAdapterOptions = {}): RuntimeAdapter
   let cursor = 0
 
   return {
+    async healthcheck() {
+      if (opts.healthcheckError) return { ok: false, error: opts.healthcheckError }
+      return { ok: true }
+    },
+
     async createSession(options) {
       const session: AgentSession = {
         id: `fake-${randomUUID()}`,

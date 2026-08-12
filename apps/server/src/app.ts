@@ -7,6 +7,8 @@ import { registerSession } from './auth/session'
 import { createSecretBox } from './crypto/secrets'
 import type { Database } from './db/types'
 import { loadEnv } from './env'
+import { createMailer } from './integrations/mailer'
+import { createRuntimeAdapter } from './runtime/index'
 import { createSettingsStore } from './settings/store'
 
 export interface AppDeps {
@@ -18,9 +20,16 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const env = loadEnv()
   const app = Fastify({ logger: env.NODE_ENV !== 'test' })
   const settings = createSettingsStore(deps.db, await createSecretBox(env.MASTER_KEY))
+  const adapter = await createRuntimeAdapter(env)
+  const mailer = createMailer(env)
 
   await registerSession(app, { db: deps.db, secret: env.SESSION_SECRET })
-  await app.register(healthRoutes)
+  await app.register(healthRoutes, {
+    db: deps.db,
+    adapter,
+    mailer,
+    alertTo: env.ALERT_EMAIL_TO ?? 'alerts@exemple.test',
+  })
   await app.register(authRoutes, { db: deps.db })
   await app.register(settingsRoutes, { settings })
 

@@ -96,6 +96,29 @@ export function createClaudeAdapter(): RuntimeAdapter {
   const live = new Map<string, Live>()
 
   return {
+    async healthcheck() {
+      // Le seul signal fiable d'une auth valide est un échange réellement
+      // abouti. On le garde minimal : pas d'outils, un mot en réponse. À la
+      // cadence du cron (15 min) le coût est négligeable devant le risque
+      // d'une panne d'authentification passée inaperçue.
+      try {
+        const stream = query({
+          prompt: 'Réponds exactement : OK',
+          options: { tools: [], allowedTools: [], maxTurns: 1 },
+        })
+        for await (const msg of stream) {
+          if (msg.type === 'result') {
+            return msg.is_error
+              ? { ok: false, error: 'Le runtime a répondu en erreur.' }
+              : { ok: true }
+          }
+        }
+        return { ok: false, error: 'Le runtime n a produit aucun résultat.' }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    },
+
     async createSession(options) {
       const session: AgentSession = {
         id: `claude-${randomUUID()}`,

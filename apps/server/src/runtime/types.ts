@@ -53,7 +53,22 @@ export interface UsageSnapshot {
   available: boolean
 }
 
+export interface HealthcheckResult {
+  ok: boolean
+  error?: string
+}
+
 export interface RuntimeAdapter {
+  /**
+   * Vérifie que le runtime est réellement joignable et authentifié.
+   *
+   * Méthode distincte de `createSession` à dessein : côté Claude, ouvrir une
+   * session ne déclenche aucun appel réseau (le premier échange a lieu dans
+   * `send`), donc s'appuyer dessus produirait un healthcheck qui répond
+   * toujours « ok », y compris avec un token expiré. Détecter une auth cassée
+   * suppose de parler au service — cet appel est volontairement minimal.
+   */
+  healthcheck(): Promise<HealthcheckResult>
   createSession(opts: CreateSessionOptions): Promise<AgentSession>
   send(session: AgentSession, message: string): Promise<AgentResult>
   resume(sessionId: string): Promise<AgentSession | null>
