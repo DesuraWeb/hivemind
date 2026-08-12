@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "pnpm --filter @hivemind/server dev",
     "dev:web": "pnpm --filter @hivemind/web dev",
-    "typecheck": "tsc --noEmit -p apps/server && tsc --noEmit -p packages/shared",
+    "typecheck": "tsc --noEmit -p apps/server && tsc --noEmit -p apps/web && tsc --noEmit -p packages/shared",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "test": "vitest run",

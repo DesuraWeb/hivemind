@@ -1,0 +1,28 @@
+/*
+ * PLACEHOLDER — à remplacer intégralement par le kit DA Claude Design.
+ * Ne pas construire de composant qui dépende de ces valeurs précises :
+ * seuls les NOMS de variables sont censés survivre au remplacement.
+ */
+:root {
+  --hm-bg: #0d0f12;
+  --hm-surface: rgba(255, 255, 255, 0.06);
+  --hm-border: rgba(255, 255, 255, 0.12);
+  --hm-text: #e8eaed;
+  --hm-text-muted: #9aa0a6;
+  --hm-accent: #c96442;
+  --hm-danger: #d9534f;
+  --hm-radius: 12px;
+  --hm-space: 8px;
+  --hm-font: ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--hm-bg);
+  color: var(--hm-text);
+  font-family: var(--hm-font);
+}
