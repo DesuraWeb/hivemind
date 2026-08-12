@@ -22,6 +22,11 @@ function baseCtx(overrides: Partial<RunContext> = {}): RunContext {
 
 const ALL_STATES: readonly RunState[] = RUN_STATES
 
+/** Les états depuis lesquels les événements génériques s'appliquent. */
+const ACTIVE_STATES: readonly RunState[] = ALL_STATES.filter(
+  (s) => !['awaiting_human', 'paused_budget', 'done', 'failed'].includes(s),
+)
+
 // Une instance représentative par variante d'événement (`question` compte
 // deux fois : bloquante et non bloquante ont des effets différents).
 const ALL_EVENTS: readonly LoopEvent[] = [
@@ -180,22 +185,12 @@ test('verdict + verdict_ecarts, iter 4/4 -> failed + alert + end_run', () => {
   )
 })
 
-test('etat actif + question bloquante -> awaiting_human + remember_resume_state', () => {
-  for (const state of [
-    'framing',
-    'coding',
-    'design_wait',
-    'reviewing',
-    'deploying',
-    'judging',
-    'verdict',
-  ] as const) {
+test('etat actif + question bloquante -> awaiting_human, memorisation ET item inbox', () => {
+  for (const state of ACTIVE_STATES) {
     const d = decide(state, { type: 'question', blocking: true }, baseCtx())
-    expect(d).toEqual({
-      kind: 'transition',
-      to: 'awaiting_human',
-      effects: [{ type: 'remember_resume_state', state }],
-    })
+    expect(d).toMatchObject({ kind: 'transition', to: 'awaiting_human' })
+    if (d.kind !== 'transition') throw new Error('attendu : transition')
+    expect(d.effects).toHaveLength(2)
   }
 })
 
@@ -299,4 +294,38 @@ test('une transition invalide ne produit jamais d effet', () => {
   // ALL_STATES (11) x ALL_EVENTS (15) : le balayage doit couvrir toutes les
   // combinaisons état x événement, pas seulement quelques cas choisis à la main.
   expect(combos).toBe(ALL_STATES.length * ALL_EVENTS.length)
+})
+
+// --- Corrections apportées après relecture (brief §7 et §8) ---
+
+test('une question bloquante ouvre AUSSI un item d inbox', () => {
+  for (const state of ACTIVE_STATES) {
+    const d = decide(state, { type: 'question', blocking: true }, baseCtx())
+    expect(d).toMatchObject({ kind: 'transition', to: 'awaiting_human' })
+    if (d.kind !== 'transition') throw new Error('attendu : transition')
+
+    // Sans l'item, le run attendrait sans que personne ne puisse le voir.
+    expect(d.effects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'open_inbox_item', itemType: 'question' }),
+      ]),
+    )
+    expect(d.effects).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'remember_resume_state', state })]),
+    )
+  }
+})
+
+test('aborted termine le run en failed sans item d inbox', () => {
+  for (const state of ACTIVE_STATES) {
+    const d = decide(state, { type: 'aborted', reason: 'stop humain' }, baseCtx())
+    expect(d).toMatchObject({ kind: 'transition', to: 'failed' })
+    if (d.kind !== 'transition') throw new Error('attendu : transition')
+
+    expect(d.effects).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'end_run', outcome: 'failed' })]),
+    )
+    // L'humain a décidé l'arrêt : il n'a pas à en être notifié.
+    expect(d.effects.some((e) => e.type === 'open_inbox_item')).toBe(false)
+  }
 })

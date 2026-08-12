@@ -301,7 +301,8 @@ export function decide(state: RunState, event: LoopEvent, ctx: RunContext): Deci
 | `verdict` | `verdict_conforme`, `auto` | → `done` + `end_run` |
 | `verdict` | `verdict_ecarts`, iter 1/4 | → `framing`, `increment_iteration`, `reset_review_round` |
 | `verdict` | `verdict_ecarts`, iter 4/4 | → `failed` + inbox `alert` + `end_run` |
-| n'importe quel état actif | `question` bloquante | → `awaiting_human` + `remember_resume_state` |
+| n'importe quel état actif | `question` bloquante | → `awaiting_human` + inbox `question` + `remember_resume_state` |
+| n'importe quel état actif | `aborted` | → `failed` + `end_run('failed')`, **sans** item d'inbox (c'est l'humain qui a arrêté) |
 | n'importe quel état actif | `question` non bloquante | `stay` + inbox `question` (la boucle continue) |
 | `awaiting_human` | `human_resolved` | → `ctx.resumeState`, `clear_resume_state` |
 | n'importe quel état actif | `budget_pause` | → `paused_budget` + `remember_resume_state` |
@@ -528,4 +529,6 @@ Ne pas anticiper, même si l'occasion se présente : Playwright et le juge visue
 
 1. **Conscience collective : contradiction à trancher.** `BRIEF-RETOUR.md` §6 la décrit comme centrale ; le brief v0.2 §2 l'exclut. Le brief fait foi, donc rien n'est implémenté — mais `Inbox.dc.html` contient vraisemblablement des items « validation · savoir » et un badge CONFLIT sans source de données. **À trancher avant J6.**
 2. **Après 3 allers-retours dev↔reviewer** : décision A appliquée (`awaiting_human` + `alert`). À confirmer.
+
+   Deux corrections apportées pendant P2-4, toutes deux des erreurs de ce plan : une `question` **bloquante** ouvre aussi un item d'inbox (le brief §7 l'exige — sans lui le run se garait invisible), et `aborted` était typé sans règle alors que c'est le bouton Stop du brief §8. `design_wait` reste un état actif sans transition propre jusqu'à J8.
 3. **Dépôt sandbox** : `desura/chapo-sandbox` à créer, ou nom au choix du garant.

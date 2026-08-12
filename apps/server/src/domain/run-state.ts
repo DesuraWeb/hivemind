@@ -89,8 +89,18 @@ export function decide(state: RunState, event: LoopEvent, ctx: RunContext): Deci
   // À partir d'ici, `state` est l'un des ACTIVE_STATES.
 
   if (event.type === 'question') {
+    // Brief §7 : TOUTE question d'un agent crée un item d'inbox ; seule une
+    // question bloquante met en plus le run en attente. Sans l'item, un run
+    // bloqué serait invisible — personne ne saurait qu'il attend une réponse.
     if (event.blocking) {
-      return transition('awaiting_human', [{ type: 'remember_resume_state', state }])
+      return transition('awaiting_human', [
+        { type: 'remember_resume_state', state },
+        {
+          type: 'open_inbox_item',
+          itemType: 'question',
+          reason: 'question bloquante posée par un agent',
+        },
+      ])
     }
     return {
       kind: 'stay',
@@ -109,10 +119,9 @@ export function decide(state: RunState, event: LoopEvent, ctx: RunContext): Deci
   }
 
   if (event.type === 'aborted') {
-    // Pas de règle dans le plan pour cet événement à ce stade : le type est
-    // posé pour une phase ultérieure, mais aucune transition n'est encore
-    // spécifiée. On refuse plutôt que d'inventer un comportement métier.
-    return invalid('aborted : non câblé dans cette phase')
+    // Arrêt demandé par l'humain (POST /api/runs/:id/stop, brief §8). Aucun
+    // item d'inbox : c'est lui qui a décidé, il n'a pas à en être informé.
+    return transition('failed', [{ type: 'end_run', outcome: 'failed' }])
   }
 
   switch (state) {
