@@ -14,10 +14,14 @@ const adapter = await createRuntimeAdapter(env)
 const mailer = createMailer(env)
 const alertTo = env.ALERT_EMAIL_TO ?? 'alerts@exemple.test'
 
-const app = await buildApp({ db, adapter, mailer })
-
+// Construit avant `buildApp` : `POST /api/inbox/:id/resolve` (Task 4) a
+// besoin de la même instance pour ré-enfiler `run.step` — `createBoss` ne
+// fait que construire l'objet, `startBoss` (plus bas) le démarre.
 const boss = createBoss(env)
+
+const app = await buildApp({ db, adapter, mailer, boss })
 boss.on('error', (err) => app.log.error(err, 'pg-boss'))
+
 await startBoss(boss, { db, adapter, mailer, alertTo })
 
 await app.listen({ port: env.PORT, host: '0.0.0.0' })

@@ -1,14 +1,18 @@
 import Fastify, { type FastifyInstance } from 'fastify'
 import type { Kysely } from 'kysely'
+import type { PgBoss } from 'pg-boss'
 import { eventsRoutes } from './api/events'
 import { authRoutes } from './api/routes/auth'
 import { healthRoutes } from './api/routes/health'
+import { inboxRoutes } from './api/routes/inbox'
+import { projectsRoutes } from './api/routes/projects'
 import { settingsRoutes } from './api/routes/settings'
 import { registerSession } from './auth/session'
 import { createSecretBox } from './crypto/secrets'
 import type { Database } from './db/types'
 import { loadEnv } from './env'
 import { type Mailer, createMailer } from './integrations/mailer'
+import { createBoss } from './jobs/boss'
 import { createRuntimeAdapter } from './runtime/index'
 import type { RuntimeAdapter } from './runtime/types'
 import { createSettingsStore } from './settings/store'
@@ -25,6 +29,20 @@ export interface AppDeps {
    */
   adapter?: RuntimeAdapter
   mailer?: Mailer
+  /**
+   * `POST /api/inbox/:id/resolve` (Task 4) ré-enfile le job `run.step` via
+   * `resolveInboxItem`, qui a besoin d'une instance pg-boss. `index.ts` la
+   * construit avec `createBoss(env)` (non démarrée) puis appelle `startBoss`
+   * APRÈS `buildApp`, exactement comme il le fait déjà pour le worker
+   * `run.step` lui-même — `createBoss` ne fait que construire l'objet, la
+   * démarrer est un choix séparé qui reste à `index.ts`. Les tests qui
+   * exercent réellement la résolution d'un item bloquant doivent passer une
+   * instance démarrée (cf. tests/inbox.test.ts pour le même besoin côté
+   * `resolveInboxItem` directement) ; ceux qui n'exercent que les autres
+   * routes peuvent laisser `buildApp` construire une instance non démarrée
+   * par défaut, jamais utilisée.
+   */
+  boss?: PgBoss
 }
 
 /** Construit l'instance Fastify sans l'écouter — utilisable tel quel en test. */
@@ -34,6 +52,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const settings = createSettingsStore(deps.db, await createSecretBox(env.MASTER_KEY))
   const adapter = deps.adapter ?? (await createRuntimeAdapter(env))
   const mailer = deps.mailer ?? createMailer(env)
+  const boss = deps.boss ?? createBoss(env)
 
   await registerSession(app, { db: deps.db, secret: env.SESSION_SECRET })
   await app.register(healthRoutes, {
@@ -45,6 +64,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(authRoutes, { db: deps.db })
   await app.register(settingsRoutes, { settings })
   await app.register(eventsRoutes)
+  await app.register(inboxRoutes, { db: deps.db, boss })
+  await app.register(projectsRoutes, { db: deps.db, settings })
 
   return app
 }

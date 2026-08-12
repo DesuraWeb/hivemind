@@ -1,0 +1,165 @@
+import type { InboxType, RoleKey, RunState } from '@silithid/shared'
+
+/**
+ * Statut *projet* agrégé depuis l'état du run courant. Jamais stocké : deux
+ * sources de vérité divergeraient au premier crash (plan Phase 3, Task 4).
+ */
+export type LoopStatus = 'run' | 'wait' | 'fail' | 'done' | 'pause'
+
+/**
+ * Correspondance états de run → statut projet.
+ *
+ *   framing, coding, design_wait, reviewing, deploying, judging, verdict
+ *                                            → 'run'   (la boucle avance encore ; même partition qu'`ACTIVE_STATES` de domain/run-state.ts)
+ *   awaiting_human                          → 'wait'  (bloqué sur une réponse humaine)
+ *   paused_budget                           → 'pause' (bloqué sur le budget)
+ *   failed                                  → 'fail'
+ *   done                                    → 'done'
+ *
+ * Un projet SANS AUCUN run (aucun step encore démarré) n'a par construction
+ * ni échoué, ni terminé, ni de question en attente d'une réponse humaine :
+ * rien ne le distingue, du point de vue de l'humain qui consulte la liste,
+ * d'un projet explicitement mis en pause — dans les deux cas rien ne tourne
+ * et rien ne réclame d'action. D'où le choix de 'pause' plutôt que d'ajouter
+ * un sixième statut hors de l'énum `badgeFor` de data.js.
+ */
+export function loopFromRunState(state: RunState | null): LoopStatus {
+  if (state === null) return 'pause'
+  if (state === 'awaiting_human') return 'wait'
+  if (state === 'paused_budget') return 'pause'
+  if (state === 'failed') return 'fail'
+  if (state === 'done') return 'done'
+  return 'run'
+}
+
+/**
+ * Rôle qui possède l'étape en cours, d'après les handlers réellement câblés
+ * (loop/steps/*.ts) : framing → garant, coding → dev, reviewing → reviewer.
+ * judging/verdict n'ont pas encore de handler (juge visuel J8, verdict/
+ * itérations J9 — hors périmètre Phase 3) mais `role_templates` définit déjà
+ * la clé 'judge' pour cette étape du pipeline, donc on l'utilise. deploying
+ * n'a pas de rôle des 6 définis qui lui soit propre (staging/gate prod J11,
+ * hors périmètre) ; on le rattache à 'dev', dont le code est en cours de
+ * déploiement. design_wait n'a aucune règle cette phase (brief : juge visuel
+ * hors périmètre) : aucun rôle ne lui est attribué.
+ */
+const ROLE_BY_ACTIVE_STATE: Partial<Record<RunState, RoleKey>> = {
+  framing: 'garant',
+  coding: 'dev',
+  reviewing: 'reviewer',
+  judging: 'judge',
+  verdict: 'judge',
+  deploying: 'dev',
+}
+
+/** Libellé affiché : identique à la clé sauf `judge` → « juge » (français, cf. data.js). */
+const ROLE_LABEL: Record<RoleKey, string> = {
+  majordome: 'hive',
+  garant: 'garant',
+  dev: 'dev',
+  reviewer: 'reviewer',
+  judge: 'juge',
+  communicant: 'communicant',
+}
+
+function roleForActiveState(state: RunState | null): string | null {
+  if (state === null) return null
+  const key = ROLE_BY_ACTIVE_STATE[state]
+  return key ? ROLE_LABEL[key] : null
+}
+
+/**
+ * `awaiting_human` n'est pas lui-même piloté par un rôle : on lit
+ * `resume_state` (l'étape à laquelle le run reprendra) pour savoir qui a été
+ * interrompu. `paused_budget`, `done` et `failed` n'ont personne « au
+ * travail » à afficher : pause budgétaire décidée hors contexte de rôle,
+ * états terminaux où plus aucun agent n'avance la boucle. L'historique de
+ * qui a échoué reste consultable via `messages` (piste d'audit), pas dans ce
+ * résumé de liste.
+ */
+export function deriveRole(state: RunState | null, resumeState: RunState | null): string | null {
+  if (state === null) return null
+  if (state === 'awaiting_human') return roleForActiveState(resumeState)
+  if (state === 'paused_budget' || state === 'done' || state === 'failed') return null
+  return roleForActiveState(state)
+}
+
+function frNumber(n: number, decimals: number): string {
+  return n.toFixed(decimals).replace('.', ',')
+}
+
+/**
+ * « 14,2 k tokens · 2,10 € » — séparateur « · », jamais de tiret cadratin
+ * (règle DA stricte, docs/design/CLAUDE.md). Cas 0 token : « 0 token »
+ * littéral (pas de division par zéro à afficher, pas d'euro à 0,00 €).
+ */
+export function formatConso(totalTokens: number, eurPerMtok: number): string {
+  if (totalTokens <= 0) return '0 token'
+  const kTokens = totalTokens / 1000
+  const eur = (totalTokens / 1_000_000) * eurPerMtok
+  return `${frNumber(kTokens, 1)} k tokens · ${frNumber(eur, 2)} €`
+}
+
+/** Durée écoulée depuis le début du run courant, seulement quand la boucle avance ('run') ; « · » sinon (data.js). */
+export function formatDuree(
+  loop: LoopStatus,
+  startedAt: Date | null,
+  now: Date = new Date(),
+): string {
+  if (loop !== 'run' || !startedAt) return '·'
+  const minutes = Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / 60_000))
+  if (minutes < 60) return `${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`
+}
+
+export interface PendingCount {
+  type: InboxType
+  n: number
+}
+
+export interface LineInput {
+  step: [number, number]
+  loop: LoopStatus
+  role: string | null
+  iteration: [number, number] | null
+  duree: string
+  pending: PendingCount[]
+}
+
+/**
+ * Résumé une ligne (« line » de data.js), calculé — jamais rédigé, contrairement
+ * à `synth` qui reste la prose de Hive. Vérifié champ à champ contre les 6
+ * lignes d'exemple de data.js dans le rapport de la Task 4 : 5/6 correspondent
+ * exactement, la 6e (bastide, « verdict à valider ») est une formulation
+ * éditoriale que ce gabarit générique ne cherche pas à reproduire mot pour
+ * mot — cf. rapport.
+ */
+export function buildLine(input: LineInput): string {
+  const stepPart = `step ${input.step[0]}/${input.step[1]}`
+  switch (input.loop) {
+    case 'run': {
+      const parts = [stepPart]
+      if (input.role) parts.push(input.role)
+      if (input.iteration) parts.push(`itér. ${input.iteration[0]}/${input.iteration[1]}`)
+      if (input.duree !== '·') parts.push(input.duree)
+      return parts.join(' · ')
+    }
+    case 'fail': {
+      const parts = [stepPart, 'échec']
+      if (input.iteration) parts.push(`itér. ${input.iteration[0]}/${input.iteration[1]}`)
+      return parts.join(' · ')
+    }
+    case 'wait': {
+      const pendingPart = input.pending.map((p) => `${p.n} ${p.type}`).join(' · ')
+      return pendingPart
+        ? `${stepPart} · en attente humain · ${pendingPart}`
+        : `${stepPart} · en attente humain`
+    }
+    case 'done':
+      return `${stepPart} · terminé`
+    case 'pause':
+      return `${stepPart} · pause`
+  }
+}
