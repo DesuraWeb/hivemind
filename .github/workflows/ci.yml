@@ -1,0 +1,48 @@
+name: CI
+
+# Aucune donnée contrôlée par un tiers (titre de PR, message de commit,
+# nom de branche…) n'est interpolée dans un `run:` — la seule expression
+# utilisée est `hashFiles()` sur un chemin constant.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hivemind_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/hivemind_test
+      DATABASE_URL_TEST: postgres://postgres:postgres@localhost:5432/hivemind_test
+      # Clés factices : la CI ne déchiffre aucune donnée réelle.
+      MASTER_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      SESSION_SECRET: BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=
+      # Aucun test n'appelle un vrai modèle : pas de token consommé, pas
+      # d'authentification requise.
+      RUNTIME_ADAPTER: fake
+      MAIL_DRY_RUN: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable pnpm
+      - uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
