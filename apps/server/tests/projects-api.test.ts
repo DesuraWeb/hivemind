@@ -293,11 +293,11 @@ test('loop="pause" pour un run paused_budget', async () => {
   expect(body.role).toBeNull()
 })
 
-test('loop="pause" pour un projet SANS AUCUN run (décision documentée : aucun run = pause)', async () => {
+test('loop="demarrage" pour un projet SANS AUCUN run', async () => {
   const slug = `loop-no-run-${randomUUID()}`
   await createProjectFixture({ slug, stepsCount: 5 })
   const body = (await get(`/api/projects/${slug}`)).json()
-  expect(body.loop).toBe('pause')
+  expect(body.loop).toBe('demarrage')
   expect(body.role).toBeNull()
   expect(body.step).toEqual([1, 5])
   expect(body.iteration).toBeNull()

@@ -42,7 +42,9 @@ test('loopFromRunState : done rend "done"', () => {
 })
 
 test('loopFromRunState : un projet sans aucun run (state null) rend "pause"', () => {
-  expect(loopFromRunState(null)).toBe('pause')
+  // Un projet neuf est une invitation à démarrer, pas une décision de pause :
+  // les deux appellent des gestes opposés dans l'UI.
+  expect(loopFromRunState(null)).toBe('demarrage')
 })
 
 // --- deriveRole ---
@@ -101,7 +103,7 @@ test('formatConso : aucun tiret cadratin dans la chaîne rendue (règle DA stric
 
 test('formatDuree : "·" pour tout loop différent de "run"', () => {
   const started = new Date(Date.now() - 5 * 60_000)
-  for (const loop of ['wait', 'fail', 'done', 'pause'] as const) {
+  for (const loop of ['wait', 'fail', 'done', 'pause', 'demarrage'] as const) {
     expect(formatDuree(loop, started)).toBe('·')
   }
 })
@@ -199,5 +201,19 @@ test('buildLine : aucun tiret cadratin dans les lignes rendues', () => {
       { type: 'question', n: 1 },
     ],
   })
+  expect(line).not.toContain('—')
+})
+
+test('la ligne d un projet neuf invite a lancer, elle ne constate pas un arret', () => {
+  const line = buildLine({
+    step: [1, 5],
+    loop: 'demarrage',
+    role: null,
+    iteration: null,
+    duree: '·',
+    pending: [],
+  })
+  expect(line).toBe('step 1/5 · prêt à démarrer')
+  // Règle DA stricte : séparateur « · », jamais de tiret cadratin.
   expect(line).not.toContain('—')
 })

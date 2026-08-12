@@ -4,7 +4,7 @@ import type { InboxType, RoleKey, RunState } from '@silithid/shared'
  * Statut *projet* agrégé depuis l'état du run courant. Jamais stocké : deux
  * sources de vérité divergeraient au premier crash (plan Phase 3, Task 4).
  */
-export type LoopStatus = 'run' | 'wait' | 'fail' | 'done' | 'pause'
+export type LoopStatus = 'run' | 'wait' | 'fail' | 'done' | 'pause' | 'demarrage'
 
 /**
  * Correspondance états de run → statut projet.
@@ -16,15 +16,16 @@ export type LoopStatus = 'run' | 'wait' | 'fail' | 'done' | 'pause'
  *   failed                                  → 'fail'
  *   done                                    → 'done'
  *
- * Un projet SANS AUCUN run (aucun step encore démarré) n'a par construction
- * ni échoué, ni terminé, ni de question en attente d'une réponse humaine :
- * rien ne le distingue, du point de vue de l'humain qui consulte la liste,
- * d'un projet explicitement mis en pause — dans les deux cas rien ne tourne
- * et rien ne réclame d'action. D'où le choix de 'pause' plutôt que d'ajouter
- * un sixième statut hors de l'énum `badgeFor` de data.js.
+ * Un projet SANS AUCUN run (aucun step encore démarré) reçoit 'demarrage'.
+ * Le confondre avec 'pause' serait faux pour l'humain qui consulte la liste :
+ * une pause est une décision, un projet neuf est une invitation à démarrer.
+ * Les deux appellent des gestes opposés (reprendre vs lancer).
+ *
+ * Statut ajouté après coup, absent de l'énum `badgeFor` de data.js : le pack
+ * DA n'a donc pas de visuel pour lui, c'est un manque à combler côté design.
  */
 export function loopFromRunState(state: RunState | null): LoopStatus {
-  if (state === null) return 'pause'
+  if (state === null) return 'demarrage'
   if (state === 'awaiting_human') return 'wait'
   if (state === 'paused_budget') return 'pause'
   if (state === 'failed') return 'fail'
@@ -161,5 +162,8 @@ export function buildLine(input: LineInput): string {
       return `${stepPart} · terminé`
     case 'pause':
       return `${stepPart} · pause`
+    // Un projet neuf : la ligne invite à lancer, elle ne constate pas un arrêt.
+    case 'demarrage':
+      return `${stepPart} · prêt à démarrer`
   }
 }
