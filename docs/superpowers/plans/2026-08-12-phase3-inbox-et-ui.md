@@ -181,4 +181,6 @@ Conscience collective (phase dédiée) · juge visuel J8 · verdict et itératio
 1. **Org GitHub `desura` n'appartient pas à Florian** — bloquant à J11 pour le dépôt pilote.
 2. **`rate_limit_event` jamais observé** malgré ~13 000 tokens réels — le scheduler J12 pourrait n'avoir aucune source.
 3. **Le calendrier est à refaire.** J5/14 atteint, un sous-système entier ajouté.
-4. **Qui écrit `projects.synth` ?** Hive, mais à quel moment — à chaque transition, ou sur demande ? À trancher avant la Task 4.
+4. **Plomberie transactionnelle dupliquée** (constat Task 2) : Kysely refuse les transactions imbriquées, donc `resolveInboxItem` ne peut pas appeler `applyEvent`. Il réutilise `decide()` mais duplique l'écriture d'état, des effets et du message d'audit. Le risque de divergence est contenu — le code lève explicitement sur tout effet autre que `clear_resume_state`, donc un changement du domaine casse bruyamment plutôt que silencieusement. Le nettoyage propre (extraire le corps d'`applyEvent` en une fonction prenant un exécuteur, transaction ou non) est à faire quand on retouchera l'orchestrateur, pas avant.
+
+5. **Qui écrit `projects.synth` ?** Hive, mais à quel moment — à chaque transition, ou sur demande ? À trancher avant la Task 4.
