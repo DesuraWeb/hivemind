@@ -161,7 +161,7 @@ const registry: StepRegistry = {
         kind: 'question',
         body: 'Le client a-t-il déjà une organisation GitHub existante ?',
       })
-      return { type: 'question', blocking: true }
+      return { type: 'question', blocking: true, fromRole: 'garant' }
     }
 
     const adapter = createFakeAdapter({
