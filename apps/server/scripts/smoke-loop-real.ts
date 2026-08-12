@@ -1,9 +1,12 @@
 /**
- * Vérification manuelle du critère de fin J4 (plan Phase 2, Task 10) : le
- * garant cadre un step réel via sa sortie structurée, le dev implémente dans
- * le worktree du run avec un vrai modèle, et une pull request réelle est
- * ouverte sur GitHub. **Consomme des tokens** — jamais lancé par la suite de
- * tests (`pnpm test` reste 100% `FakeAdapter`).
+ * Vérification manuelle des critères de fin J4 (plan Phase 2, Task 10) et J5
+ * (Task 11) : le garant cadre un step réel via sa sortie structurée, le dev
+ * implémente dans le worktree du run avec un vrai modèle et ouvre une pull
+ * request réelle sur GitHub, puis le reviewer la revoit réellement (checkout
+ * propre, tests exécutés pour de vrai) — jusqu'à convergence (`deploying`)
+ * ou épuisement de la borne à 3 allers-retours (`awaiting_human`). **Consomme
+ * des tokens** — jamais lancé par la suite de tests (`pnpm test` reste 100%
+ * `FakeAdapter`).
  *
  *   pnpm --filter @silithid/server exec tsx scripts/smoke-loop-real.ts
  *
@@ -19,6 +22,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import type { RunState } from '@silithid/shared'
 import { closeDb, getDb } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
 import { seedRoleTemplates } from '../src/db/seed'
@@ -27,6 +31,7 @@ import { type StepRegistry, stepOnce } from '../src/jobs/run-step'
 import { type StoredMessage, readRunMessages } from '../src/loop/bus'
 import { createCodingHandler } from '../src/loop/steps/coding'
 import { createFramingHandler } from '../src/loop/steps/framing'
+import { createReviewingHandler } from '../src/loop/steps/reviewing'
 import { createClaudeAdapter } from '../src/runtime/claude'
 import type { RuntimeAdapter } from '../src/runtime/types'
 
@@ -153,6 +158,7 @@ const adapter = withCostTracking(createClaudeAdapter(), costTotals)
 const registry: StepRegistry = {
   framing: createFramingHandler({ adapter, worktreesRoot }),
   coding: createCodingHandler({ adapter, worktreesRoot }),
+  reviewing: createReviewingHandler({ adapter, worktreesRoot }),
 }
 
 section('Exécution : stepOnce(framing) — le garant cadre le step')
@@ -172,20 +178,54 @@ if (frameMessage) {
   console.log('  (aucun frame trouvé — voir la timeline ci-dessous)')
 }
 
-section('Exécution : stepOnce(coding) — le dev implémente et ouvre la PR')
-const codingResult = await stepOnce(db, registry, runId)
-console.log(
-  `  résultat : applied=${codingResult.applied} state=${codingResult.state} requeue=${codingResult.requeue}`,
-)
+// États où la boucle dev↔reviewer s'arrête : convergence (`deploying`, hors
+// périmètre au-delà de ce point — J12+) ou borne des 3 allers-retours
+// épuisée (`awaiting_human`, décision A du plan Phase 2).
+const LOOP_STOP_STATES: ReadonlySet<RunState> = new Set([
+  'deploying',
+  'awaiting_human',
+  'failed',
+  'done',
+])
+
+section('Exécution : coding ↔ reviewing — jusqu’à convergence ou 3 KO (critère J5)')
+// 1 (framing déjà fait) + au plus 3 x (coding + reviewing) : garde-fou de
+// diagnostic seulement — `decide()` borne déjà réellement la boucle.
+const MAX_STEPS = 8
+let last = framingResult
+let steps = 1
+let reviewRounds = 0
+while (!LOOP_STOP_STATES.has(last.state) && last.requeue && steps < MAX_STEPS) {
+  const before = last.state
+  last = await stepOnce(db, registry, runId)
+  steps++
+  if (before === 'reviewing') reviewRounds++
+  console.log(`  ${before} → ${last.state}  (applied=${last.applied} requeue=${last.requeue})`)
+}
+if (!LOOP_STOP_STATES.has(last.state)) {
+  console.error(
+    `  ⚠️ arrêté après ${steps} pas sans converger ni buter sur la borne — état actuel : ${last.state}`,
+  )
+}
 
 section(`Timeline d'audit (run ${runId})`)
 const messages = await readRunMessages(db, runId)
 printTimeline(messages)
 
+section('Verdicts du reviewer')
+const reviewVerdicts = messages.filter((m) => m.kind === 'report' && m.fromRole === 'reviewer')
+if (reviewVerdicts.length === 0) {
+  console.log('  (aucune revue exécutée — voir la timeline ci-dessus)')
+}
+for (const [i, v] of reviewVerdicts.entries()) {
+  console.log(`  tour ${i + 1} → ${String(v.meta.verdict)} (destinataire : ${v.toRole})`)
+  console.log(`    ${v.body.replace(/\n/g, '\n    ')}`)
+}
+
 section('Pull request')
 const runAfter = await db
   .selectFrom('runs')
-  .select(['pr_number', 'branch'])
+  .select(['pr_number', 'branch', 'state', 'review_round'])
   .where('id', '=', runId)
   .executeTakeFirstOrThrow()
 
@@ -200,12 +240,16 @@ if (runAfter.pr_number) {
   console.log('  aucune PR (voir résultat ci-dessus)')
 }
 
-section('Coût')
-console.log(`  tokens consommés (garant + dev) : ${costTotals.tokens}`)
+section('Allers-retours et coût')
+console.log(`  allers-retours dev↔reviewer : ${reviewRounds}`)
+console.log(
+  `  état final du run           : ${runAfter.state} (review_round=${runAfter.review_round})`,
+)
+console.log(`  tokens consommés (garant + dev + reviewer) : ${costTotals.tokens}`)
 
 section('Nettoyage')
 // Fixtures DB et clone local seulement — la PR et la branche GitHub restent :
-// c'est la preuve du critère J4, on ne la referme ni ne la fusionne jamais ici.
+// c'est la preuve des critères J4/J5, on ne la referme ni ne la fusionne jamais ici.
 await db.deleteFrom('projects').where('id', '=', project.id).execute()
 await db.deleteFrom('clients').where('id', '=', client.id).execute()
 await db.deleteFrom('globes').where('id', '=', globe.id).execute()
@@ -214,20 +258,31 @@ await closeDb()
 console.log('  fixtures DB et clone local temporaire supprimés')
 
 const framingOk = framingResult.applied && framingResult.state === 'coding'
-const codingOk = codingResult.applied && codingResult.state === 'reviewing'
 const prOk = Boolean(runAfter.pr_number && prUrl)
-const ok = framingOk && codingOk && prOk
+const converged = runAfter.state === 'deploying'
+const bounded = runAfter.state === 'awaiting_human'
+const loopOk = converged || bounded
+const ok = framingOk && prOk && loopOk
 
 console.log()
-if (ok) {
-  console.log('✅ Critère J4 : le garant a cadré, le dev a implémenté, une PR réelle est ouverte.')
+if (ok && converged) {
+  console.log(
+    `✅ Critères J4 + J5 : le garant a cadré, le dev↔reviewer a convergé en ${reviewRounds} tour(s), la PR est prête pour le déploiement.`,
+  )
+  console.log(`   ${prUrl}`)
+} else if (ok && bounded) {
+  console.log(
+    `✅ Critère J5 (borne) : 3 allers-retours dev↔reviewer épuisés sans convergence — le run est passé en \`awaiting_human\` avec une alerte d'inbox, comme l'exige la décision A. La PR reste ouverte pour un humain.`,
+  )
   console.log(`   ${prUrl}`)
 } else {
-  console.error('❌ Critère J4 non satisfait :')
+  console.error('❌ Critères J4/J5 non satisfaits :')
   if (!framingOk)
     console.error(`   - framing n'a pas abouti à "coding" : ${JSON.stringify(framingResult)}`)
-  if (!codingOk)
-    console.error(`   - coding n'a pas abouti à "reviewing" : ${JSON.stringify(codingResult)}`)
   if (!prOk) console.error("   - aucune PR exploitable n'a été ouverte")
+  if (!loopOk)
+    console.error(
+      `   - la boucle n'a ni convergé ni buté sur la borne — état final inattendu : ${runAfter.state}`,
+    )
   process.exitCode = 1
 }

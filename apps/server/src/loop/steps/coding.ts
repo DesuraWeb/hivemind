@@ -4,7 +4,7 @@ import { promisify } from 'node:util'
 import type { LoopEvent } from '../../domain/run-state'
 import { ensureProjectRepo } from '../../git/repo'
 import { addRunWorktree, runWorktreePath } from '../../git/worktree'
-import { createPullRequest } from '../../integrations/github'
+import { createPullRequest, getPullRequest } from '../../integrations/github'
 import type { StepHandler } from '../../jobs/run-step'
 import type { RuntimeAdapter } from '../../runtime/types'
 import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
@@ -83,6 +83,18 @@ function findFrame(
   return { body: frameMessage.body, acceptanceCriteria }
 }
 
+/**
+ * Retours du reviewer sur le tour précédent (Task 11 : boucle dev↔reviewer).
+ * `undefined` au premier tour (`reviewing.ts` n'a encore rien écrit) — le dev
+ * travaille alors uniquement depuis le cadrage du garant, comme en Task 10.
+ */
+function findLatestReviewFeedback(messages: StoredMessage[]): string | undefined {
+  const feedback = [...messages]
+    .reverse()
+    .find((m) => m.kind === 'report' && m.fromRole === 'reviewer' && m.toRole === 'dev')
+  return feedback?.body
+}
+
 function prTitle(devPrompt: string): string {
   const firstLine = devPrompt.split('\n')[0]?.trim() || 'Step Silithid'
   return firstLine.length > 80 ? `${firstLine.slice(0, 77)}...` : firstLine
@@ -120,6 +132,13 @@ function prBody(opts: { devPrompt: string; acceptanceCriteria: string[]; report:
  * la PR malgré ce que suggère `bash: true` : c'est ce handler qui commit,
  * pousse et appelle `createPullRequest` — déterministe, pas laissé au hasard
  * d'un appel `gh` que l'agent aurait ou non pensé à faire.
+ *
+ * Rejoué après un `review_ko` (Task 11, boucle bornée à 3 — `decide()` dans
+ * `domain/run-state.ts`) : `runs.pr_number` est alors déjà posé, donc ce
+ * handler pousse les nouveaux commits sur la même branche sans rouvrir de
+ * PR (`gh pr create` échoue sec sur une branche qui a déjà une PR ouverte) —
+ * il relit juste son état via `getPullRequest`. Le prompt du dev inclut
+ * aussi, à partir du deuxième tour, les points signalés par le reviewer.
  */
 export function createCodingHandler(deps: CodingDeps): StepHandler {
   return async (db, runId) => {
@@ -130,6 +149,7 @@ export function createCodingHandler(deps: CodingDeps): StepHandler {
       .select([
         'runs.branch as branch',
         'runs.worktree_path as worktreePath',
+        'runs.pr_number as prNumber',
         'steps.project_id as projectId',
         'projects.slug as projectSlug',
         'projects.repo_full_name as repoFullName',
@@ -154,6 +174,7 @@ export function createCodingHandler(deps: CodingDeps): StepHandler {
       remoteUrl: githubRemoteUrl(runRow.repoFullName),
     })
     const worktreePath = runRow.worktreePath ?? (await ensureRunWorktree(repoPath, runId))
+    const reviewFeedback = findLatestReviewFeedback(messages)
 
     const prompt = [
       frame.body,
@@ -162,6 +183,9 @@ export function createCodingHandler(deps: CodingDeps): StepHandler {
       ...(frame.acceptanceCriteria.length > 0
         ? frame.acceptanceCriteria.map((c) => `- ${c}`)
         : ['(aucun critère explicite — implémente au mieux le prompt ci-dessus)']),
+      ...(reviewFeedback
+        ? ['', '## Retours du reviewer à corriger (tour précédent)', reviewFeedback]
+        : []),
       '',
       `Tu es déjà dans le worktree du run, sur la branche \`${branch}\` extraite depuis \`${runRow.defaultBranch}\`. Termine ta réponse par un rapport texte (ce que tu as fait, tes zones de doute) : l'ouverture de la pull request est prise en charge par l'orchestrateur, inutile de l'ouvrir toi-même.`,
     ].join('\n')
@@ -188,14 +212,23 @@ export function createCodingHandler(deps: CodingDeps): StepHandler {
 
     await run('git', ['push', '-u', 'origin', `HEAD:${branch}`], { cwd: worktreePath })
 
-    const pr = await createPullRequest({
-      repoFullName: runRow.repoFullName,
-      head: branch,
-      base: runRow.defaultBranch,
-      title: prTitle(frame.body),
-      body: prBody({ devPrompt: frame.body, acceptanceCriteria: frame.acceptanceCriteria, report }),
-      labels: [`silithid:run-${runId}`],
-    })
+    // Un `review_ko` renvoie ici avec `runs.pr_number` déjà posé (Task 11) :
+    // la PR existe, on vient seulement d'y pousser de nouveaux commits — on
+    // relit son état plutôt que d'en rouvrir une seconde sur la même branche.
+    const pr = runRow.prNumber
+      ? await getPullRequest(runRow.repoFullName, runRow.prNumber)
+      : await createPullRequest({
+          repoFullName: runRow.repoFullName,
+          head: branch,
+          base: runRow.defaultBranch,
+          title: prTitle(frame.body),
+          body: prBody({
+            devPrompt: frame.body,
+            acceptanceCriteria: frame.acceptanceCriteria,
+            report,
+          }),
+          labels: [`silithid:run-${runId}`],
+        })
 
     await db
       .updateTable('runs')

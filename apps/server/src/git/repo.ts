@@ -16,6 +16,16 @@ export interface EnsureProjectRepoOptions {
 }
 
 /**
+ * Chemin déterministe du clone d'un projet (décision C du plan Phase 2) —
+ * exporté pour les tests qui doivent pré-positionner un clone (par exemple
+ * pour faire pointer `origin` vers un dépôt local jetable plutôt que
+ * GitHub, sans reconstruire cette formule à la main).
+ */
+export function projectRepoPath(worktreesRoot: string, projectSlug: string): string {
+  return join(worktreesRoot, projectSlug, 'repo')
+}
+
+/**
  * Garantit qu'un clone du dépôt projet existe sous
  * `WORKTREES_ROOT/<project-slug>/repo` et renvoie son chemin.
  *
@@ -26,7 +36,7 @@ export interface EnsureProjectRepoOptions {
  */
 export async function ensureProjectRepo(opts: EnsureProjectRepoOptions): Promise<string> {
   const { worktreesRoot, projectSlug, remoteUrl } = opts
-  const repoPath = join(worktreesRoot, projectSlug, 'repo')
+  const repoPath = projectRepoPath(worktreesRoot, projectSlug)
 
   if (existsSync(join(repoPath, '.git'))) {
     await run('git', ['fetch', '--all', '--prune'], { cwd: repoPath })

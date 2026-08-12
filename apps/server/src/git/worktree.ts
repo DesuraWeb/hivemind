@@ -20,6 +20,15 @@ export function runWorktreePath(repoPath: string, runId: string): string {
   return join(runsRoot(repoPath), runId)
 }
 
+/**
+ * Chemin déterministe du worktree de REVUE d'un run — distinct de celui du
+ * dev (`runWorktreePath`). Task 11 : le reviewer ne doit jamais voir l'état
+ * de travail du dev, seulement ce qui a été poussé.
+ */
+export function reviewWorktreePath(repoPath: string, runId: string): string {
+  return join(runsRoot(repoPath), `${runId}-review`)
+}
+
 function runBranch(runId: string): string {
   return `run/${runId}`
 }
@@ -79,6 +88,49 @@ export async function removeRunWorktree(repoPath: string, runId: string): Promis
     // Rien à retirer administrativement (déjà supprimé, ou jamais créé) :
     // ce n'est pas une erreur, `rm` et `prune` ci-dessous suffisent à finir
     // le nettoyage dans tous les cas.
+  }
+
+  await rm(worktreePath, { recursive: true, force: true })
+  await run('git', ['worktree', 'prune'], { cwd: repoPath })
+}
+
+/**
+ * Crée le worktree de REVUE d'un run (Task 11), détaché sur `origin/run/<id>`
+ * — jamais sur la branche locale `run/<id>` elle-même, qui est déjà extraite
+ * dans le worktree du dev (`addRunWorktree`) : git refuse qu'une même branche
+ * soit extraite deux fois. Se détacher sur la référence distante garantit en
+ * prime que le reviewer voit exactement ce qui a été poussé — donc ce qui
+ * sera fusionné — jamais l'état de travail local, non commité, du dev.
+ *
+ * Suppose que l'appelant a rafraîchi le clone (`ensureProjectRepo` fait un
+ * `fetch` à chaque réutilisation) : `origin/run/<id>` doit déjà exister.
+ */
+export async function addReviewWorktree(repoPath: string, runId: string): Promise<string> {
+  const worktreePath = reviewWorktreePath(repoPath, runId)
+  const branch = runBranch(runId)
+
+  await run('git', ['worktree', 'prune'], { cwd: repoPath })
+  await run('git', ['worktree', 'add', '--detach', worktreePath, `origin/${branch}`], {
+    cwd: repoPath,
+  })
+
+  return worktreePath
+}
+
+/**
+ * Supprime le worktree de revue d'un run. Idempotent, même contrat que
+ * `removeRunWorktree` — appelé systématiquement avant `addReviewWorktree`
+ * (pas seulement après) pour garantir un worktree neuf même si un tour
+ * précédent a été interrompu en cours de revue.
+ */
+export async function removeReviewWorktree(repoPath: string, runId: string): Promise<void> {
+  const worktreePath = reviewWorktreePath(repoPath, runId)
+
+  try {
+    await run('git', ['worktree', 'remove', '--force', worktreePath], { cwd: repoPath })
+  } catch {
+    // Idem removeRunWorktree : rien à retirer administrativement n'est pas
+    // une erreur, rm + prune ci-dessous suffisent dans tous les cas.
   }
 
   await rm(worktreePath, { recursive: true, force: true })
