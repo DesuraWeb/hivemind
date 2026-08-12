@@ -25,8 +25,18 @@ export interface ClientsTable {
   created_at: Generated<Timestamp>
 }
 
+export interface GlobesTable {
+  id: Generated<string>
+  name: string
+  slug: string
+  color: string | null
+  position: Generated<number>
+  created_at: Generated<Timestamp>
+}
+
 export interface ProjectsTable {
   id: Generated<string>
+  globe_id: string
   client_id: string | null
   name: string
   slug: string
@@ -82,6 +92,10 @@ export interface RunsTable {
   branch: string | null
   pr_number: number | null
   worktree_path: string | null
+  /** État à restaurer en sortie de `awaiting_human` / `paused_budget`. */
+  resume_state: RunState | null
+  /** Allers-retours dev↔reviewer déjà consommés dans cette itération. */
+  review_round: Generated<number>
   cost_tokens: Generated<string>
   started_at: Generated<Timestamp>
   ended_at: Timestamp | null
@@ -154,6 +168,7 @@ export interface SettingsTable {
 
 export interface Database {
   users: UsersTable
+  globes: GlobesTable
   clients: ClientsTable
   projects: ProjectsTable
   steps: StepsTable

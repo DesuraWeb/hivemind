@@ -25,9 +25,16 @@ test('insère un client, un projet et un step reliés', async () => {
     .returningAll()
     .executeTakeFirstOrThrow()
 
+  const globe = await db
+    .selectFrom('globes')
+    .select('id')
+    .where('slug', '=', 'desura')
+    .executeTakeFirstOrThrow()
+
   const project = await db
     .insertInto('projects')
     .values({
+      globe_id: globe.id,
       client_id: client.id,
       name: 'Site Acme',
       slug: 'acme-site',
@@ -51,10 +58,17 @@ test('insère un client, un projet et un step reliés', async () => {
 })
 
 test('refuse un budget_weight hors bornes', async () => {
+  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
   await expect(
     db
       .insertInto('projects')
-      .values({ name: 'X', slug: 'x', repo_full_name: 'a/b', budget_weight: 99 })
+      .values({
+        globe_id: globe.id,
+        name: 'X',
+        slug: 'x',
+        repo_full_name: 'a/b',
+        budget_weight: 99,
+      })
       .execute(),
   ).rejects.toThrow()
 })
