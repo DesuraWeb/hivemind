@@ -2429,13 +2429,31 @@ export interface UsageSnapshot {
   available: boolean
 }
 
+export interface HealthcheckResult {
+  ok: boolean
+  error?: string
+}
+
 export interface RuntimeAdapter {
+  /**
+   * Vérifie que le runtime est réellement joignable et authentifié.
+   *
+   * Méthode distincte de `createSession` à dessein : côté Claude, ouvrir une
+   * session ne déclenche aucun appel réseau (le premier échange a lieu dans
+   * `send`), donc s'appuyer dessus produirait un healthcheck qui répond
+   * toujours « ok », y compris avec un token expiré.
+   */
+  healthcheck(): Promise<HealthcheckResult>
   createSession(opts: CreateSessionOptions): Promise<AgentSession>
   send(session: AgentSession, message: string): Promise<AgentResult>
   resume(sessionId: string): Promise<AgentSession | null>
   usage(): Promise<UsageSnapshot>
 }
 ```
+
+> **`healthcheck()` a été ajouté à l'interface pendant la Task 11**, pas prévu au départ. Le plan initial faisait ouvrir une session au healthcheck en supposant que ça suffirait à valider l'authentification — c'est faux avec le `ClaudeAdapter`, dont `createSession` est purement local. Détecter une auth cassée suppose de parler au service : `ClaudeAdapter.healthcheck()` fait donc un échange minimal (pas d'outils, un mot en réponse, ~5 s). À la cadence du cron de 15 minutes, le coût est négligeable devant celui d'une panne d'authentification passée inaperçue.
+>
+> Le `FakeAdapter` accepte une option `healthcheckError?: string` pour simuler la panne dans les tests.
 
 - [ ] **Step 2 : écrire le test qui échoue**
 
@@ -3060,8 +3078,14 @@ export interface AuthHealthcheckDeps {
 }
 
 /**
- * Vérifie que le runtime agent est utilisable, en ouvrant une session dans un
- * répertoire vide (aucun token consommé : on n'envoie pas de message).
+ * Vérifie que le runtime agent est réellement joignable et authentifié, en
+ * déléguant à `adapter.healthcheck()`.
+ *
+ * L'appel est borné dans le temps : un runtime injoignable fait pendre le SDK
+ * (réessais réseau) au lieu d'échouer, ce qui bloquerait le cron de 15 minutes
+ * indéfiniment — l'outil resterait muet exactement quand il devrait alerter.
+ * Un dépassement de délai est traité comme une panne, pas comme un doute.
+ *
  * En cas d'échec : un item d'inbox `alert` + un email immédiat. L'alerte n'est
  * pas dupliquée tant qu'une alerte de même cause est encore ouverte.
  */
