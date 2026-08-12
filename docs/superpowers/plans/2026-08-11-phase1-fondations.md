@@ -3565,6 +3565,28 @@ git add -A && git commit -m "feat(web): écran de connexion React + tokens DA pl
 
 ---
 
+## État à la fin de la Phase 1 (vérifié le 2026-08-12)
+
+Contrôle d'acceptation réalisé depuis un état vierge (`dropdb` des deux bases, puis `./scripts/setup.sh`) :
+
+| Vérification | Résultat |
+|---|---|
+| `./scripts/setup.sh` sur base vierge | 14 tables migrées, 6 templates de rôle seedés |
+| `pnpm test` | 43 tests, 9 fichiers |
+| `pnpm lint` / `pnpm typecheck` | propres (server + web + shared) |
+| Serveur + login HTTP | `/api/health` 200, login 200, cookie `httpOnly` |
+| Écran de connexion | vérifié au navigateur, session conservée au rechargement |
+| Agent réel en worktree jetable | fichier écrit, 611 tokens |
+| Healthcheck runtime | `ok:true` en ~5 s ; runtime injoignable → `ok:false` borné à 30 s |
+
+Trois ajouts non prévus par le plan initial, tous nés d'un défaut constaté à l'exécution :
+
+- `RuntimeAdapter.healthcheck()` — `createSession` ne fait aucun appel réseau côté Claude, le healthcheck ne pouvait donc rien détecter.
+- Un délai maximal sur le healthcheck — sans lui, un runtime injoignable faisait pendre l'appel indéfiniment.
+- `apps/server/scripts/create-user.ts` — `tsx -e` compile en CJS et refuse le `await` de premier niveau.
+
+Deux corrections de fragilité : altération déterministe du chiffré dans le test crypto, et `env.test.ts` qui vérifiait un nom de base au lieu d'un comportement.
+
 ## Critère de fin de Phase 1
 
 La phase est terminée quand, sur une machine ayant seulement Node 22, Postgres 16 et git :
