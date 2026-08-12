@@ -1,4 +1,4 @@
-import type { AutonomyMode, InboxType, RunState } from '@silithid/shared'
+import type { AutonomyMode, InboxType, RoleKey, RunState } from '@silithid/shared'
 
 export type LoopEvent =
   | { type: 'frame_ready' }
@@ -10,7 +10,7 @@ export type LoopEvent =
   | { type: 'judge_report' }
   | { type: 'verdict_conforme' }
   | { type: 'verdict_ecarts' }
-  | { type: 'question'; blocking: boolean }
+  | { type: 'question'; blocking: boolean; fromRole: RoleKey }
   | { type: 'human_resolved' }
   | { type: 'budget_pause' }
   | { type: 'budget_resume' }
@@ -28,7 +28,19 @@ export interface RunContext {
 }
 
 export type Effect =
-  | { type: 'open_inbox_item'; itemType: InboxType; subtype?: string; reason: string }
+  | {
+      type: 'open_inbox_item'
+      itemType: InboxType
+      subtype?: string
+      reason: string
+      /**
+       * Rôle à l'origine de l'item. Sans lui, l'UI ne peut pas distinguer une
+       * question du garant d'une question du dev — c'est précisément pourquoi
+       * `inbox_items.from_role` existe. Les items levés par la boucle
+       * elle-même (échec, max_iterations) portent 'system'.
+       */
+      fromRole: RoleKey | 'system'
+    }
   | { type: 'increment_iteration' }
   | { type: 'increment_review_round' }
   | { type: 'reset_review_round' }
@@ -99,6 +111,7 @@ export function decide(state: RunState, event: LoopEvent, ctx: RunContext): Deci
           type: 'open_inbox_item',
           itemType: 'question',
           reason: 'question bloquante posée par un agent',
+          fromRole: event.fromRole,
         },
       ])
     }
@@ -109,6 +122,7 @@ export function decide(state: RunState, event: LoopEvent, ctx: RunContext): Deci
           type: 'open_inbox_item',
           itemType: 'question',
           reason: 'question non bloquante posée par un agent',
+          fromRole: event.fromRole,
         },
       ],
     }
@@ -149,6 +163,7 @@ export function decide(state: RunState, event: LoopEvent, ctx: RunContext): Deci
             type: 'open_inbox_item',
             itemType: 'alert',
             reason: 'boucle dev↔reviewer épuisée (3 allers-retours)',
+            fromRole: 'reviewer',
           },
           { type: 'remember_resume_state', state: 'reviewing' },
         ])
@@ -159,7 +174,7 @@ export function decide(state: RunState, event: LoopEvent, ctx: RunContext): Deci
       if (event.type === 'ci_green') return transition('judging', [])
       if (event.type === 'ci_red') {
         return transition('awaiting_human', [
-          { type: 'open_inbox_item', itemType: 'alert', reason: event.reason },
+          { type: 'open_inbox_item', itemType: 'alert', reason: event.reason, fromRole: 'system' },
         ])
       }
       break
@@ -179,6 +194,7 @@ export function decide(state: RunState, event: LoopEvent, ctx: RunContext): Deci
               itemType: 'approval',
               subtype: 'step_end',
               reason: 'verdict conforme : validation humaine requise (mode gated)',
+              fromRole: 'garant',
             },
           ])
         }
@@ -196,6 +212,7 @@ export function decide(state: RunState, event: LoopEvent, ctx: RunContext): Deci
             type: 'open_inbox_item',
             itemType: 'alert',
             reason: 'itérations épuisées, écarts persistants',
+            fromRole: 'garant',
           },
           { type: 'end_run', outcome: 'failed' },
         ])

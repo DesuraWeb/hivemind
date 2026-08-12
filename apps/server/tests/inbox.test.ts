@@ -129,7 +129,11 @@ test('un item bloquant sans run_id (alerte systeme) ne casse pas la resolution',
 test('un item bloquant fait repartir le run depuis resume_state, qui est ensuite efface', async () => {
   const { runId } = await createRun({ state: 'coding' })
 
-  const { state } = await applyEvent(db, runId, { type: 'question', blocking: true })
+  const { state } = await applyEvent(db, runId, {
+    type: 'question',
+    blocking: true,
+    fromRole: 'garant',
+  })
   expect(state).toBe('awaiting_human')
   expect((await runRow(runId)).resume_state).toBe('coding')
 
@@ -158,7 +162,7 @@ test('un item bloquant fait repartir le run depuis resume_state, qui est ensuite
 test('un item non bloquant ne touche pas l etat du run', async () => {
   const { runId } = await createRun()
 
-  await applyEvent(db, runId, { type: 'question', blocking: false })
+  await applyEvent(db, runId, { type: 'question', blocking: false, fromRole: 'garant' })
   const item = await db
     .selectFrom('inbox_items')
     .selectAll()

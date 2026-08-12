@@ -13,6 +13,7 @@ import { getInboxItem } from '../src/inbox/repo'
 import { createBoss } from '../src/jobs/boss'
 import { RUN_STEP_QUEUE, type StepRegistry, stepOnce } from '../src/jobs/run-step'
 import { appendMessage, readRunMessages } from '../src/loop/bus'
+import { applyEvent } from '../src/loop/orchestrator'
 import { createFakeAdapter } from '../src/runtime/fake'
 import { collectStructured, frameSchema } from '../src/runtime/structured'
 import type { ToolPolicy } from '../src/runtime/types'
@@ -113,7 +114,7 @@ function createQuestionThenFrameHandler(): StepRegistry {
           kind: 'question',
           body: 'Le client a-t-il déjà une organisation GitHub existante ?',
         })
-        return { type: 'question', blocking: true }
+        return { type: 'question', blocking: true, fromRole: 'garant' }
       }
 
       const adapter = createFakeAdapter({
@@ -188,12 +189,10 @@ test('question bloquante -> inbox + SSE -> resolution HTTP -> le run repart (cri
     expect(item.status).toBe('open')
     expect(item.projectId).toBe(projectId)
     expect(item.runId).toBe(runId)
-    // Écart connu, pas un oubli : l'effet `open_inbox_item` (domain/run-state.ts,
-    // contrat non modifiable ici) ne transporte aucun rôle — seul
-    // `createInboxItem` (repo.ts, appel direct hors machine à états) accepte
-    // `fromRole`. `tests/inbox-api.test.ts` (Task 4) accepte déjà le même
-    // null pour le même chemin (`applyEvent(..., { type: 'question' })`).
-    expect(item.fromRole).toBeNull()
+    // L'effet `open_inbox_item` transporte le rôle depuis l'événement : sans
+    // lui, l'UI ne pourrait pas distinguer une question du garant d'une
+    // question du dev, ce qui est la raison d'être de la colonne (0003).
+    expect(item.fromRole).toBe('garant')
 
     // 2. Diffusion SSE : `run.state` ET `inbox.new` réellement publiés.
     expect(received).toContainEqual({ type: 'run.state', runId, projectId })
@@ -258,7 +257,7 @@ test('une question NON bloquante laisse le run avancer (contraste avec le cas bl
         kind: 'question',
         body: 'Détail mineur, ne bloque pas la suite.',
       })
-      return { type: 'question', blocking: false }
+      return { type: 'question', blocking: false, fromRole: 'garant' }
     },
   }
 
@@ -292,4 +291,20 @@ test('une question NON bloquante laisse le run avancer (contraste avec le cas bl
   } finally {
     unsubscribe()
   }
+})
+
+test("l'item porte le role qui a pose la question, pas null", async () => {
+  const { runId, projectId } = await createFixtureRun()
+  await applyEvent(db, runId, { type: 'question', blocking: true, fromRole: 'dev' })
+
+  const item = await db
+    .selectFrom('inbox_items')
+    .selectAll()
+    .where('run_id', '=', runId)
+    .executeTakeFirstOrThrow()
+
+  // Sans ce champ, l'UI ne peut pas distinguer une question du garant d'une
+  // question du dev : c'est la raison d'être de la colonne (migration 0003).
+  expect(item.from_role).toBe('dev')
+  expect(projectId).toBeTruthy()
 })

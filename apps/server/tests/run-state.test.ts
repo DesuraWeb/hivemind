@@ -39,8 +39,8 @@ const ALL_EVENTS: readonly LoopEvent[] = [
   { type: 'judge_report' },
   { type: 'verdict_conforme' },
   { type: 'verdict_ecarts' },
-  { type: 'question', blocking: true },
-  { type: 'question', blocking: false },
+  { type: 'question', blocking: true, fromRole: 'garant' },
+  { type: 'question', blocking: false, fromRole: 'garant' },
   { type: 'human_resolved' },
   { type: 'budget_pause' },
   { type: 'budget_resume' },
@@ -187,7 +187,7 @@ test('verdict + verdict_ecarts, iter 4/4 -> failed + alert + end_run', () => {
 
 test('etat actif + question bloquante -> awaiting_human, memorisation ET item inbox', () => {
   for (const state of ACTIVE_STATES) {
-    const d = decide(state, { type: 'question', blocking: true }, baseCtx())
+    const d = decide(state, { type: 'question', blocking: true, fromRole: 'garant' }, baseCtx())
     expect(d).toMatchObject({ kind: 'transition', to: 'awaiting_human' })
     if (d.kind !== 'transition') throw new Error('attendu : transition')
     expect(d.effects).toHaveLength(2)
@@ -204,7 +204,7 @@ test('etat actif + question non bloquante -> stay + inbox question', () => {
     'judging',
     'verdict',
   ] as const) {
-    const d = decide(state, { type: 'question', blocking: false }, baseCtx())
+    const d = decide(state, { type: 'question', blocking: false, fromRole: 'garant' }, baseCtx())
     expect(d.kind).toBe('stay')
     const decision = d as Extract<Decision, { kind: 'stay' }>
     expect(decision.effects).toEqual(
@@ -300,7 +300,7 @@ test('une transition invalide ne produit jamais d effet', () => {
 
 test('une question bloquante ouvre AUSSI un item d inbox', () => {
   for (const state of ACTIVE_STATES) {
-    const d = decide(state, { type: 'question', blocking: true }, baseCtx())
+    const d = decide(state, { type: 'question', blocking: true, fromRole: 'garant' }, baseCtx())
     expect(d).toMatchObject({ kind: 'transition', to: 'awaiting_human' })
     if (d.kind !== 'transition') throw new Error('attendu : transition')
 

@@ -159,6 +159,7 @@ async function applyEffect(
           subtype: effect.subtype ?? null,
           project_id: ctx.projectId,
           run_id: ctx.runId,
+          from_role: effect.fromRole,
           title: effect.reason,
           payload: JSON.stringify({ reason: effect.reason }),
         })

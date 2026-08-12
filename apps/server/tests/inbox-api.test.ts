@@ -319,7 +319,7 @@ test('POST /api/inbox/:id/resolve resolu deux fois renvoie 409 la seconde fois',
 test('POST /api/inbox/:id/resolve sur un item bloquant relance réellement le run (job ré-enfilé)', async () => {
   const { runId } = await createRun({ state: 'coding' })
 
-  await applyEvent(db, runId, { type: 'question', blocking: true })
+  await applyEvent(db, runId, { type: 'question', blocking: true, fromRole: 'garant' })
 
   const item = await db
     .selectFrom('inbox_items')

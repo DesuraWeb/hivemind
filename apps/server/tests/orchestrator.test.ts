@@ -84,7 +84,11 @@ test('une transition ecrit l etat ET un message d audit', async () => {
 test('un stay ecrit aussi un message, sans changer l etat', async () => {
   const runId = await createRun()
 
-  const { state, decision } = await applyEvent(db, runId, { type: 'question', blocking: false })
+  const { state, decision } = await applyEvent(db, runId, {
+    type: 'question',
+    blocking: false,
+    fromRole: 'garant',
+  })
 
   expect(state).toBe('framing')
   expect(decision.kind).toBe('stay')
@@ -189,7 +193,11 @@ test('awaiting_human ecrit resume_state ; human_resolved le restaure puis l effa
   const runId = await createRun()
   await db.updateTable('runs').set({ state: 'coding' }).where('id', '=', runId).execute()
 
-  const { state } = await applyEvent(db, runId, { type: 'question', blocking: true })
+  const { state } = await applyEvent(db, runId, {
+    type: 'question',
+    blocking: true,
+    fromRole: 'garant',
+  })
   expect(state).toBe('awaiting_human')
 
   const paused = await db
