@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { AutonomyMode } from '@chapo/shared'
+import type { AutonomyMode } from '@silithid/shared'
 import { sql } from 'kysely'
 import { afterAll, beforeAll, expect, test } from 'vitest'
 import { createDb, createPool } from '../src/db/client'

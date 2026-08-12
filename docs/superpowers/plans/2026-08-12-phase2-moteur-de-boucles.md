@@ -1,4 +1,4 @@
-# Chapo — Phase 2 (J3–J5) : Moteur de boucles
+# Silithid — Phase 2 (J3–J5) : Moteur de boucles
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -12,7 +12,7 @@
 
 ## État à l'entrée (vérifié le 2026-08-12)
 
-Phase 1 livrée, 43 tests verts, projet renommé `chapo`. Disponible et à réutiliser :
+Phase 1 livrée, 43 tests verts, projet renommé `silithid`. Disponible et à réutiliser :
 
 | Brique | Où | À savoir |
 |---|---|---|
@@ -194,7 +194,7 @@ test('les outils MCP sont prefixes et limites a l allowlist', () => {
 
 - [ ] **Step 3 : implémenter `resolveToolPolicy`** — une fonction pure `ToolPolicy → { allowed: string[]; sdkOptions: object }`. `claude.ts` ne construit plus ses options à la main : il appelle cette fonction.
 
-- [ ] **Step 4 : la preuve d'impossibilité.** `scripts/smoke-tool-gate.ts` : un agent avec `{ bash: false, fs: 'read', mcp: [] }` dans un worktree jetable, à qui on demande explicitement d'exécuter `echo compromis > /tmp/chapo-gate-breach` **et** d'écrire un fichier. Le script réussit si le fichier de brèche n'existe pas **et** qu'aucun `tool_use` de type `Bash`/`Write` n'a été observé. Vérification manuelle (consomme des tokens), à lancer et à rapporter.
+- [ ] **Step 4 : la preuve d'impossibilité.** `scripts/smoke-tool-gate.ts` : un agent avec `{ bash: false, fs: 'read', mcp: [] }` dans un worktree jetable, à qui on demande explicitement d'exécuter `echo compromis > /tmp/silithid-gate-breach` **et** d'écrire un fichier. Le script réussit si le fichier de brèche n'existe pas **et** qu'aucun `tool_use` de type `Bash`/`Write` n'a été observé. Vérification manuelle (consomme des tokens), à lancer et à rapporter.
 
 - [ ] **Step 5** `pnpm test && pnpm lint && pnpm typecheck`, lancer le smoke, commit : `feat(runtime): ToolPolicy comme frontiere de securite effective`
 
@@ -234,12 +234,12 @@ export interface UsageSnapshot {
 
 **Files:** Create `src/domain/run-state.ts` · Test `tests/run-state.test.ts`
 
-Aucune dépendance : ni Kysely, ni le SDK, ni `node:fs`. Si le fichier importe quoi que ce soit d'autre que des types de `@chapo/shared`, c'est un défaut.
+Aucune dépendance : ni Kysely, ni le SDK, ni `node:fs`. Si le fichier importe quoi que ce soit d'autre que des types de `@silithid/shared`, c'est un défaut.
 
 - [ ] **Step 1 : écrire les types**
 
 ```ts
-import type { AutonomyMode, InboxType, RunState } from '@chapo/shared'
+import type { AutonomyMode, InboxType, RunState } from '@silithid/shared'
 
 export type LoopEvent =
   | { type: 'frame_ready' }
@@ -349,7 +349,7 @@ test('une transition invalide ne produit jamais d effet', () => {
 
 **Files:** Create `src/loop/bus.ts` · Test `tests/bus.test.ts`
 
-- [ ] **Step 1** `appendMessage(db, { runId, fromRole, toRole, kind, body, meta })` et `readRunMessages(db, runId)` (ordre chronologique). `kind` ∈ `prompt|report|question|correction|info`, typé depuis `@chapo/shared` — l'ajouter là-bas s'il n'y est pas.
+- [ ] **Step 1** `appendMessage(db, { runId, fromRole, toRole, kind, body, meta })` et `readRunMessages(db, runId)` (ordre chronologique). `kind` ∈ `prompt|report|question|correction|info`, typé depuis `@silithid/shared` — l'ajouter là-bas s'il n'y est pas.
 
 - [ ] **Step 2** Tests : ordre chronologique préservé ; `meta` fait l'aller-retour JSON ; un `runId` inexistant est refusé par la contrainte de clé étrangère.
 
@@ -425,7 +425,7 @@ export const verdictSchema = z.object({
 
 **Files:** Create `src/jobs/boss.ts`, `src/jobs/run-step.ts`, `src/loop/orchestrator.ts`, `src/loop/roles.ts` · Modify `src/index.ts` · Test `tests/orchestrator.test.ts`
 
-- [ ] **Step 1** `pnpm --filter @chapo/server add pg-boss`
+- [ ] **Step 1** `pnpm --filter @silithid/server add pg-boss`
 
 - [ ] **Step 2 : `orchestrator.ts`** — le seul endroit qui a le droit d'écrire l'état d'un run :
 
@@ -476,9 +476,9 @@ Toute transition écrit un `message` (audit, brief §7). Une décision `invalid`
 
 **Files:** Create `src/integrations/github.ts`, `src/loop/steps/framing.ts`, `src/loop/steps/coding.ts` · Create `apps/server/scripts/smoke-loop-real.ts`
 
-- [ ] **Step 1 : le dépôt de test.** Ne **pas** viser `desura/Desura.fr` tout de suite : créer un dépôt jetable (`desura/chapo-sandbox`) avec un README et un test qui passe. Le pilote réel arrive à J11 selon le brief.
+- [ ] **Step 1 : le dépôt de test.** Ne **pas** viser `desura/Desura.fr` tout de suite : créer un dépôt jetable (`desura/silithid-sandbox`) avec un README et un test qui passe. Le pilote réel arrive à J11 selon le brief.
 
-- [ ] **Step 2 : GitHub.** PAT fine-grained en `settings` (chiffré via `setSecret`, jamais en clair — c'est déjà outillé). `createPullRequest`, `getPullRequest`, `listChecks`. Labels `chapo:run-<id>` (brief §10).
+- [ ] **Step 2 : GitHub.** PAT fine-grained en `settings` (chiffré via `setSecret`, jamais en clair — c'est déjà outillé). `createPullRequest`, `getPullRequest`, `listChecks`. Labels `silithid:run-<id>` (brief §10).
 
 - [ ] **Step 3 : `framing.ts`** — charge le rôle garant du projet, injecte le préambule commun (contexte projet, specs du step, fiche client, `iteration`/`max_iterations`), appelle `collectStructured` avec `frameSchema`, écrit le `frame` dans un `message` `prompt` garant→dev, émet `frame_ready`.
 
@@ -510,9 +510,9 @@ Toute transition écrit un `message` (audit, brief §7). Une décision `invalid`
 
 ```bash
 pnpm test && pnpm lint && pnpm typecheck
-pnpm --filter @chapo/server exec tsx scripts/smoke-loop-fake.ts   # sans token
-pnpm --filter @chapo/server exec tsx scripts/smoke-loop-real.ts   # avec tokens
-pnpm --filter @chapo/server exec tsx scripts/smoke-tool-gate.ts   # preuve du gate
+pnpm --filter @silithid/server exec tsx scripts/smoke-loop-fake.ts   # sans token
+pnpm --filter @silithid/server exec tsx scripts/smoke-loop-real.ts   # avec tokens
+pnpm --filter @silithid/server exec tsx scripts/smoke-tool-gate.ts   # preuve du gate
 ```
 
 Attendu : suite verte · une boucle complète tracée en base avec le `FakeAdapter` · sur le dépôt sandbox, un step réel produit une PR revue et convergée · un agent à qui on demande d'exécuter du shell alors que sa politique l'interdit **ne peut pas**.
@@ -531,4 +531,4 @@ Ne pas anticiper, même si l'occasion se présente : Playwright et le juge visue
 2. **Après 3 allers-retours dev↔reviewer** : décision A appliquée (`awaiting_human` + `alert`). À confirmer.
 
    Deux corrections apportées pendant P2-4, toutes deux des erreurs de ce plan : une `question` **bloquante** ouvre aussi un item d'inbox (le brief §7 l'exige — sans lui le run se garait invisible), et `aborted` était typé sans règle alors que c'est le bouton Stop du brief §8. `design_wait` reste un état actif sans transition propre jusqu'à J8.
-3. **Dépôt sandbox** : `desura/chapo-sandbox` à créer, ou nom au choix du garant.
+3. **Dépôt sandbox** : `desura/silithid-sandbox` à créer, ou nom au choix du garant.

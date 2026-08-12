@@ -1,5 +1,5 @@
-import { RUN_STATES } from '@chapo/shared'
-import type { RunState } from '@chapo/shared'
+import { RUN_STATES } from '@silithid/shared'
+import type { RunState } from '@silithid/shared'
 import { expect, test } from 'vitest'
 import type { Decision, LoopEvent, RunContext } from '../src/domain/run-state'
 import { decide } from '../src/domain/run-state'

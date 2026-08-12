@@ -1,4 +1,4 @@
-# chapo — Phase 1 (J1–J2) : Fondations
+# silithid — Phase 1 (J1–J2) : Fondations
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -62,7 +62,7 @@ Le brief spécifie `usage(): Promise<{ fiveHourPct, sevenDayPct }>`. Il n'est **
 Chaque fichier a une responsabilité unique. Les fichiers qui changent ensemble vivent ensemble.
 
 ```
-chapo/
+silithid/
 ├── package.json                        # workspace root, scripts, engines
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json                  # options strictes partagées
@@ -142,7 +142,7 @@ chapo/
 Le répertoire n'est pas encore un dépôt git.
 
 ```bash
-cd /Users/desura/Github/chapo && git init -b main
+cd /Users/desura/Github/silithid && git init -b main
 ```
 
 - [ ] **Step 2 : écrire les fichiers racine**
@@ -151,20 +151,20 @@ cd /Users/desura/Github/chapo && git init -b main
 
 ```json
 {
-  "name": "chapo",
+  "name": "silithid",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.15.0",
   "engines": { "node": ">=22" },
   "scripts": {
-    "dev": "pnpm --filter @chapo/server dev",
-    "dev:web": "pnpm --filter @chapo/web dev",
+    "dev": "pnpm --filter @silithid/server dev",
+    "dev:web": "pnpm --filter @silithid/web dev",
     "typecheck": "tsc --noEmit -p apps/server && tsc --noEmit -p packages/shared",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "test": "vitest run",
-    "db:migrate": "pnpm --filter @chapo/server db:migrate",
-    "db:seed": "pnpm --filter @chapo/server db:seed",
+    "db:migrate": "pnpm --filter @silithid/server db:migrate",
+    "db:seed": "pnpm --filter @silithid/server db:seed",
     "db:reset": "./scripts/db-reset.sh"
   },
   "devDependencies": {
@@ -243,8 +243,8 @@ coverage/
 
 ```
 # --- Base de données ---
-DATABASE_URL=postgres://desura@localhost:5432/chapo
-DATABASE_URL_TEST=postgres://desura@localhost:5432/chapo_test
+DATABASE_URL=postgres://desura@localhost:5432/silithid
+DATABASE_URL_TEST=postgres://desura@localhost:5432/silithid_test
 
 # --- Serveur ---
 PORT=3000
@@ -269,7 +269,7 @@ SMTP_PORT=587
 SMTP_USER=
 SMTP_PASS=
 ALERT_EMAIL_TO=alerts@exemple.test
-ALERT_EMAIL_FROM=chapo@desura.fr
+ALERT_EMAIL_FROM=silithid@desura.fr
 ```
 
 - [ ] **Step 3 : écrire les manifestes des workspaces**
@@ -278,7 +278,7 @@ ALERT_EMAIL_FROM=chapo@desura.fr
 
 ```json
 {
-  "name": "@chapo/shared",
+  "name": "@silithid/shared",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -296,14 +296,14 @@ ALERT_EMAIL_FROM=chapo@desura.fr
 `packages/shared/src/index.ts` :
 
 ```ts
-export const CHAPO_VERSION = '0.0.0'
+export const SILITHID_VERSION = '0.0.0'
 ```
 
 `apps/server/package.json` :
 
 ```json
 {
-  "name": "@chapo/server",
+  "name": "@silithid/server",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -314,7 +314,7 @@ export const CHAPO_VERSION = '0.0.0'
     "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
-    "@chapo/shared": "workspace:*",
+    "@silithid/shared": "workspace:*",
     "fastify": "^5.2.0",
     "@fastify/cookie": "^11.0.1",
     "kysely": "^0.27.5",
@@ -342,7 +342,7 @@ export const CHAPO_VERSION = '0.0.0'
 - [ ] **Step 4 : installer et vérifier**
 
 ```bash
-cd /Users/desura/Github/chapo && corepack enable pnpm && pnpm install && pnpm lint && pnpm typecheck
+cd /Users/desura/Github/silithid && corepack enable pnpm && pnpm install && pnpm lint && pnpm typecheck
 ```
 
 Attendu : `pnpm install` réussit, `biome check` ne signale rien, `tsc --noEmit` ne signale rien.
@@ -385,8 +385,8 @@ if [ ! -f .env ]; then
   echo "→ .env créé avec des clés fraîches."
 fi
 
-createdb chapo 2>/dev/null || echo "→ base 'chapo' déjà présente"
-createdb chapo_test 2>/dev/null || echo "→ base 'chapo_test' déjà présente"
+createdb silithid 2>/dev/null || echo "→ base 'silithid' déjà présente"
+createdb silithid_test 2>/dev/null || echo "→ base 'silithid_test' déjà présente"
 
 pnpm db:migrate
 pnpm db:seed
@@ -401,11 +401,11 @@ echo "✅ Setup terminé. Lancer: pnpm dev"
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-read -rp "Supprimer et recréer la base 'chapo' ? [y/N] " ok
+read -rp "Supprimer et recréer la base 'silithid' ? [y/N] " ok
 [ "$ok" = "y" ] || { echo "annulé"; exit 1; }
 
-dropdb --if-exists chapo
-createdb chapo
+dropdb --if-exists silithid
+createdb silithid
 pnpm db:migrate
 pnpm db:seed
 echo "✅ Base réinitialisée."
@@ -414,10 +414,10 @@ echo "✅ Base réinitialisée."
 - [ ] **Step 3 : rendre exécutables et créer les bases**
 
 ```bash
-chmod +x scripts/*.sh && createdb chapo && createdb chapo_test && psql -l | grep chapo
+chmod +x scripts/*.sh && createdb silithid && createdb silithid_test && psql -l | grep silithid
 ```
 
-Attendu : les deux bases `chapo` et `chapo_test` apparaissent.
+Attendu : les deux bases `silithid` et `silithid_test` apparaissent.
 
 - [ ] **Step 4 : commit**
 
@@ -609,7 +609,7 @@ test('loadEnv lit .env et fournit les clés requises', () => {
 test('databaseUrl bascule sur la base de test en NODE_ENV=test', () => {
   const env = loadEnv()
   expect(env.NODE_ENV).toBe('test')
-  expect(databaseUrl(env)).toContain('chapo_test')
+  expect(databaseUrl(env)).toContain('silithid_test')
 })
 
 test('une source explicite court-circuite .env et rejette une config invalide', () => {
@@ -975,7 +975,7 @@ export * from './inbox'
 export * from './roles'
 export * from './run'
 
-export const CHAPO_VERSION = '0.0.0'
+export const SILITHID_VERSION = '0.0.0'
 ```
 
 - [ ] **Step 2 : écrire les types Kysely**
@@ -983,7 +983,7 @@ export const CHAPO_VERSION = '0.0.0'
 `apps/server/src/db/types.ts` (remplace intégralement le stub) :
 
 ```ts
-import type { AutonomyMode, InboxStatus, InboxType, RunState } from '@chapo/shared'
+import type { AutonomyMode, InboxStatus, InboxType, RunState } from '@silithid/shared'
 import type { ColumnType, Generated, JSONColumnType } from 'kysely'
 
 /** Colonne écrite par la DB (default now()), jamais fournie à l'insert. */
@@ -1248,7 +1248,7 @@ Le préambule commun (contexte projet, specs du step, fiche client, « français
 `majordome.md` :
 
 ```markdown
-Tu es le Majordome de chapo : le bras droit transverse de Florian.
+Tu es le Majordome de silithid : le bras droit transverse de Florian.
 
 ## Ton rôle
 Tu as la vue d'ensemble sur tous les projets, tous les runs, l'inbox et le budget.
@@ -1425,7 +1425,7 @@ Français. Direct côté interne, adapté au client côté rédaction.
 `apps/server/tests/seed.test.ts` :
 
 ```ts
-import { ROLE_KEYS } from '@chapo/shared'
+import { ROLE_KEYS } from '@silithid/shared'
 import { sql } from 'kysely'
 import { afterAll, beforeAll, expect, test } from 'vitest'
 import { createDb, createPool } from '../src/db/client'
@@ -1484,7 +1484,7 @@ Attendu : ÉCHEC, `Failed to resolve import "../src/db/seed"`.
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ROLE_KEYS, type RoleKey } from '@chapo/shared'
+import { ROLE_KEYS, type RoleKey } from '@silithid/shared'
 import type { Kysely } from 'kysely'
 import type { Database } from './types'
 
@@ -1561,7 +1561,7 @@ git add -A && git commit -m "feat(db): seed des 6 templates de rôle generic v1"
 - [ ] **Step 1 : installer libsodium**
 
 ```bash
-pnpm --filter @chapo/server add libsodium-wrappers && pnpm --filter @chapo/server add -D @types/libsodium-wrappers
+pnpm --filter @silithid/server add libsodium-wrappers && pnpm --filter @silithid/server add -D @types/libsodium-wrappers
 ```
 
 - [ ] **Step 2 : écrire le test qui échoue**
@@ -1717,7 +1717,7 @@ git add -A && git commit -m "feat(crypto): chiffrement applicatif des secrets vi
 - [ ] **Step 1 : installer les dépendances**
 
 ```bash
-pnpm --filter @chapo/server add @node-rs/argon2
+pnpm --filter @silithid/server add @node-rs/argon2
 ```
 
 - [ ] **Step 2 : écrire le test qui échoue**
@@ -2374,7 +2374,7 @@ C'est le contrat que toutes les phases suivantes consomment. Il est écrit **ava
 `apps/server/src/runtime/types.ts` :
 
 ```ts
-import type { RoleKey } from '@chapo/shared'
+import type { RoleKey } from '@silithid/shared'
 
 /** Ce qu'un rôle a le droit de faire. Traduit en options SDK par l'adapter. */
 export interface ToolPolicy {
@@ -2647,7 +2647,7 @@ Cette tâche appelle un vrai modèle : elle consomme des tokens et ne peut pas �
 - [ ] **Step 1 : installer le SDK et inspecter ses types**
 
 ```bash
-pnpm --filter @chapo/server add @anthropic-ai/claude-agent-sdk
+pnpm --filter @silithid/server add @anthropic-ai/claude-agent-sdk
 ```
 
 Puis **lire les types réellement installés avant d'écrire une ligne** :
@@ -2685,10 +2685,10 @@ export interface DisposableWorktree {
  * dépôt arrivent en Phase 2 avec le moteur de boucles.
  */
 export async function createThrowawayRepo(): Promise<DisposableWorktree> {
-  const path = await mkdtemp(join(tmpdir(), 'chapo-smoke-'))
+  const path = await mkdtemp(join(tmpdir(), 'silithid-smoke-'))
   await run('git', ['init', '-b', 'main'], { cwd: path })
-  await run('git', ['config', 'user.email', 'chapo@local'], { cwd: path })
-  await run('git', ['config', 'user.name', 'chapo'], { cwd: path })
+  await run('git', ['config', 'user.email', 'silithid@local'], { cwd: path })
+  await run('git', ['config', 'user.name', 'silithid'], { cwd: path })
   await run('git', ['commit', '--allow-empty', '-m', 'init'], { cwd: path })
   return {
     path,
@@ -2815,7 +2815,7 @@ export function createClaudeAdapter(): RuntimeAdapter {
 /**
  * Vérification manuelle de la Task 10 : un agent réel écrit un fichier
  * dans un dépôt jetable, et on constate le résultat sur le disque.
- * Consomme des tokens. Lancer avec : pnpm --filter @chapo/server exec tsx scripts/smoke-agent.ts
+ * Consomme des tokens. Lancer avec : pnpm --filter @silithid/server exec tsx scripts/smoke-agent.ts
  */
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -2840,14 +2840,14 @@ const session = await adapter.createSession({
 
 const result = await adapter.send(
   session,
-  "Crée un fichier BONJOUR.md contenant exactement la ligne « chapo est vivant ». Puis réponds 'fait'.",
+  "Crée un fichier BONJOUR.md contenant exactement la ligne « silithid est vivant ». Puis réponds 'fait'.",
 )
 
 console.log(`\n--- Résultat : isError=${result.isError}, coût=${result.costTokens}`)
 console.log(`--- sdkSessionId : ${session.sdkSessionId ?? '(non fourni)'}`)
 
 const content = await readFile(join(repo.path, 'BONJOUR.md'), 'utf8').catch(() => null)
-if (content?.includes('chapo est vivant')) {
+if (content?.includes('silithid est vivant')) {
   console.log('✅ Le fichier a bien été écrit dans le worktree.')
 } else {
   console.error('❌ BONJOUR.md absent ou incorrect. Contenu lu :', content)
@@ -2860,7 +2860,7 @@ await repo.dispose()
 - [ ] **Step 5 : lancer le smoke test**
 
 ```bash
-pnpm --filter @chapo/server exec tsx scripts/smoke-agent.ts
+pnpm --filter @silithid/server exec tsx scripts/smoke-agent.ts
 ```
 
 Attendu : le texte de l'agent s'affiche en streaming, puis `✅ Le fichier a bien été écrit dans le worktree.`
@@ -2894,7 +2894,7 @@ Le healthcheck détecte un token agent devenu invalide et lève une alerte (item
 - [ ] **Step 1 : installer nodemailer**
 
 ```bash
-pnpm --filter @chapo/server add nodemailer && pnpm --filter @chapo/server add -D @types/nodemailer
+pnpm --filter @silithid/server add nodemailer && pnpm --filter @silithid/server add -D @types/nodemailer
 ```
 
 - [ ] **Step 2 : implémenter le mailer**
@@ -3092,7 +3092,7 @@ export interface AuthHealthcheckDeps {
 export async function runAuthHealthcheck(
   deps: AuthHealthcheckDeps,
 ): Promise<AuthHealthcheckResult> {
-  const dir = await mkdtemp(join(tmpdir(), 'chapo-healthcheck-'))
+  const dir = await mkdtemp(join(tmpdir(), 'silithid-healthcheck-'))
   try {
     await deps.adapter.createSession({
       roleKey: 'majordome',
@@ -3134,7 +3134,7 @@ async function raiseAlert(deps: AuthHealthcheckDeps, error: string): Promise<voi
 
   await deps.mailer.send({
     to: deps.alertTo,
-    subject: '[chapo] Authentification agent indisponible',
+    subject: '[silithid] Authentification agent indisponible',
     text: [
       "Le healthcheck n'a pas pu ouvrir de session agent.",
       '',
@@ -3226,14 +3226,14 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: chapo_test
+          POSTGRES_DB: silithid_test
         ports: ['5432:5432']
         options: >-
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       NODE_ENV: test
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/chapo_test
-      DATABASE_URL_TEST: postgres://postgres:postgres@localhost:5432/chapo_test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/silithid_test
+      DATABASE_URL_TEST: postgres://postgres:postgres@localhost:5432/silithid_test
       # Clés factices : la CI ne déchiffre aucune donnée réelle.
       MASTER_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       SESSION_SECRET: BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=
@@ -3282,14 +3282,14 @@ L'objectif est de fermer la boucle « se connecter dans un navigateur », pas de
 - [ ] **Step 1 : créer le workspace web**
 
 ```bash
-mkdir -p apps/web/src/{lib,routes,styles} && pnpm --filter @chapo/web add react react-dom && pnpm --filter @chapo/web add -D @vitejs/plugin-react vite @types/react @types/react-dom
+mkdir -p apps/web/src/{lib,routes,styles} && pnpm --filter @silithid/web add react react-dom && pnpm --filter @silithid/web add -D @vitejs/plugin-react vite @types/react @types/react-dom
 ```
 
 `apps/web/package.json` :
 
 ```json
 {
-  "name": "@chapo/web",
+  "name": "@silithid/web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -3339,7 +3339,7 @@ export default defineConfig({
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>chapo</title>
+    <title>silithid</title>
   </head>
   <body>
     <div id="root"></div>
@@ -3454,7 +3454,7 @@ export function Login({ onSuccess }: { onSuccess: (me: Me) => void }) {
 
   return (
     <form onSubmit={submit} style={{ maxWidth: 320, margin: '15vh auto', display: 'grid', gap: 12 }}>
-      <h1 style={{ margin: 0, fontSize: 20 }}>chapo</h1>
+      <h1 style={{ margin: 0, fontSize: 20 }}>silithid</h1>
       <input
         aria-label="Identifiant"
         value={login}
@@ -3538,7 +3538,7 @@ createRoot(document.getElementById('root') as HTMLElement).render(
 Le script `apps/server/scripts/create-user.ts` a été créé à la Task 7 :
 
 ```bash
-pnpm --filter @chapo/server exec tsx scripts/create-user.ts florian <mot-de-passe>
+pnpm --filter @silithid/server exec tsx scripts/create-user.ts florian <mot-de-passe>
 ```
 
 > **N'utilise pas `tsx -e "…"`** pour ça : `tsx` compile le code passé en `-e` au format CJS, qui refuse le `await` de premier niveau — la commande échoue avec `Top-level await is currently not supported with the "cjs" output format`. D'où un vrai fichier de script.
@@ -3595,7 +3595,7 @@ La phase est terminée quand, sur une machine ayant seulement Node 22, Postgres 
 ./scripts/setup.sh && pnpm test && pnpm dev
 ```
 
-produit une base migrée et seedée, une suite de tests verte, un serveur qui répond, un écran de connexion fonctionnel — et que `pnpm --filter @chapo/server exec tsx scripts/smoke-agent.ts` fait écrire un fichier par un agent réel dans un worktree jetable.
+produit une base migrée et seedée, une suite de tests verte, un serveur qui répond, un écran de connexion fonctionnel — et que `pnpm --filter @silithid/server exec tsx scripts/smoke-agent.ts` fait écrire un fichier par un agent réel dans un worktree jetable.
 
 Cela couvre les critères J1 et J2 du brief, à une substitution près : `docker compose up` → `./scripts/setup.sh`.
 

@@ -129,7 +129,7 @@ test('boucle framing -> coding factice tracee de bout en bout (critere J3)', asy
   // Dépôt git local jetable — jamais GitHub, cf. tests/git-worktree.test.ts.
   const sourceRepo = await createThrowawayRepo()
   cleanups.push(sourceRepo.dispose)
-  const worktreesRoot = await mkdtemp(join(tmpdir(), 'chapo-j3-worktrees-'))
+  const worktreesRoot = await mkdtemp(join(tmpdir(), 'silithid-j3-worktrees-'))
   cleanups.push(() => rm(worktreesRoot, { recursive: true, force: true }))
 
   // globe → client → projet → step → run
@@ -153,7 +153,7 @@ test('boucle framing -> coding factice tracee de bout en bout (critere J3)', asy
       client_id: client.id,
       name: 'Projet J3',
       slug: projectSlug,
-      repo_full_name: 'chapo/sandbox-j3',
+      repo_full_name: 'silithid/sandbox-j3',
     })
     .returning('id')
     .executeTakeFirstOrThrow()

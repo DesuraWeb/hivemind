@@ -1,4 +1,4 @@
-import type { MessageKind, RoleKey } from '@chapo/shared'
+import type { MessageKind, RoleKey } from '@silithid/shared'
 import type { Kysely } from 'kysely'
 import type { Database } from '../db/types'
 

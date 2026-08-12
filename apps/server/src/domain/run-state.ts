@@ -1,4 +1,4 @@
-import type { AutonomyMode, InboxType, RunState } from '@chapo/shared'
+import type { AutonomyMode, InboxType, RunState } from '@silithid/shared'
 
 export type LoopEvent =
   | { type: 'frame_ready' }

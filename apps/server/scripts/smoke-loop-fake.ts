@@ -7,7 +7,7 @@
  * relancer chaque fois qu'on veut voir une boucle s'exécuter sans payer pour
  * la regarder.
  *
- *   pnpm --filter @chapo/server exec tsx scripts/smoke-loop-fake.ts
+ *   pnpm --filter @silithid/server exec tsx scripts/smoke-loop-fake.ts
  *
  * Écrit puis nettoie ses propres lignes (globe/client/projet/step/run) dans
  * la base configurée par DATABASE_URL — rejouable sans laisser de trace.
@@ -62,7 +62,7 @@ await seedRoleTemplates(db)
 section('Fixtures')
 
 const sourceRepo = await createThrowawayRepo()
-const worktreesRoot = await mkdtemp(join(tmpdir(), 'chapo-smoke-j3-worktrees-'))
+const worktreesRoot = await mkdtemp(join(tmpdir(), 'silithid-smoke-j3-worktrees-'))
 console.log(`  dépôt source jetable : ${sourceRepo.path}`)
 console.log(`  racine des worktrees : ${worktreesRoot}`)
 
@@ -86,7 +86,7 @@ const project = await db
     client_id: client.id,
     name: 'Projet smoke J3',
     slug: projectSlug,
-    repo_full_name: 'chapo/sandbox-smoke-j3',
+    repo_full_name: 'silithid/sandbox-smoke-j3',
   })
   .returning('id')
   .executeTakeFirstOrThrow()

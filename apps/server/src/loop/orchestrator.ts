@@ -1,4 +1,4 @@
-import type { RunState } from '@chapo/shared'
+import type { RunState } from '@silithid/shared'
 import type { Kysely, Transaction } from 'kysely'
 import type { Database } from '../db/types'
 import {

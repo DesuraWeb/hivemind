@@ -22,7 +22,7 @@ afterEach(async () => {
 })
 
 async function tempWorktreesRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'chapo-worktrees-root-'))
+  const root = await mkdtemp(join(tmpdir(), 'silithid-worktrees-root-'))
   cleanups.push(() => rm(root, { recursive: true, force: true }))
   return root
 }

@@ -129,7 +129,7 @@ export async function collectStructured<Shape extends z.ZodRawShape>(
   opts: CollectStructuredOptions,
 ): Promise<z.infer<z.ZodObject<Shape>>> {
   const maxAttempts = opts.maxAttempts ?? 3
-  const serverName = `chapo_${opts.toolName}`
+  const serverName = `silithid_${opts.toolName}`
 
   const structuredTool = tool(
     opts.toolName,

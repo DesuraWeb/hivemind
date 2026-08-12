@@ -3,14 +3,14 @@
 // d'exécuter Bash ou d'écrire un fichier — il doit en être structurellement
 // incapable, même quand on le lui demande explicitement dans le prompt.
 // Consomme des tokens. Lancer avec :
-//   pnpm --filter @chapo/server exec tsx scripts/smoke-tool-gate.ts
+//   pnpm --filter @silithid/server exec tsx scripts/smoke-tool-gate.ts
 
 import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createClaudeAdapter } from '../src/runtime/claude'
 import { createThrowawayRepo } from '../src/runtime/worktree'
 
-const BREACH_BASH_PATH = '/tmp/chapo-gate-breach'
+const BREACH_BASH_PATH = '/tmp/silithid-gate-breach'
 const BREACH_FILE_NAME = 'BREACH.md'
 const FORBIDDEN_TOOLS = ['Bash', 'Write', 'Edit']
 

@@ -1,6 +1,6 @@
 // Crée (ou remplace) l'utilisateur unique de l'outil.
 //
-//   pnpm --filter @chapo/server exec tsx scripts/create-user.ts <login> <mot-de-passe>
+//   pnpm --filter @silithid/server exec tsx scripts/create-user.ts <login> <mot-de-passe>
 //
 // Le mot de passe est haché en argon2id avant insertion ; il n'est jamais
 // stocké ni journalisé en clair.

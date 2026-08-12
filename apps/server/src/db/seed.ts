@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ROLE_KEYS, type RoleKey } from '@chapo/shared'
+import { ROLE_KEYS, type RoleKey } from '@silithid/shared'
 import type { Kysely } from 'kysely'
 import type { Database } from './types'
 

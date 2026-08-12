@@ -1,4 +1,4 @@
-import type { AutonomyMode, InboxStatus, InboxType, RunState } from '@chapo/shared'
+import type { AutonomyMode, InboxStatus, InboxType, RunState } from '@silithid/shared'
 import type { ColumnType, Generated, JSONColumnType } from 'kysely'
 
 /** Colonne écrite par la DB (default now()), jamais fournie à l'insert. */
