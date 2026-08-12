@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { query } from '@anthropic-ai/claude-agent-sdk'
+import { resolveToolPolicy } from './tools'
 import type {
   AgentResult,
   AgentSession,
   CreateSessionOptions,
   RuntimeAdapter,
-  ToolPolicy,
   UsageSnapshot,
 } from './types'
 
@@ -57,35 +57,16 @@ import type {
  *    mémoriser le dernier percentage vu par fenêtre, plutôt que de l'exposer
  *    comme une vraie requête à la demande.)
  *
- * Constat additionnel du smoke test (Step 5) qui a forcé un correctif : passer
- * uniquement `allowedTools` ne suffit pas à faire respecter `ToolPolicy`.
- * `allowedTools` ne fait que dispenser les outils listés du prompt de
- * permission — le `tools` (ensemble de base des outils *disponibles*) garde sa
- * valeur par défaut (tous les outils Claude Code, `Bash` compris) tant qu'on
- * ne le restreint pas explicitement. Constaté en direct : avec `tools: {
- * bash: false, ... }` côté politique, l'agent a quand même appelé `Bash`
- * (`pwd`) avec succès, faute de restriction de `options.tools`. Correctif :
- * on calcule aussi la liste des outils *natifs* autorisés et on la passe dans
- * `options.tools` pour retirer les outils hors politique de la surface
- * disponible au modèle, pas seulement de l'écran de permission. Les entrées
- * MCP (`mcp__<serveur>`) restent uniquement dans `allowedTools` : `tools` ne
- * documente que les outils natifs, et aucun `mcpServers` n'est câblé par cette
- * tâche (portée Task 10).
+ * Task 2 : la traduction `ToolPolicy → options SDK` ne se fait plus à la main
+ * ici. Elle vit dans `resolveToolPolicy` (`./tools.ts`, fonction pure,
+ * testée en isolation) — voir ce fichier pour l'analyse complète de quelle(s)
+ * option(s) SDK restreignent réellement la surface d'outils (`tools`,
+ * `disallowedTools`) par opposition à celles qui ne font que dispenser du
+ * prompt de permission (`allowedTools`). Constat d'origine (Phase 1, smoke
+ * test) : avec `tools: { bash: false, ... }` côté politique mais seulement
+ * `allowedTools` côté SDK, l'agent a quand même appelé `Bash` (`pwd`) avec
+ * succès — `allowedTools` seul ne bloque rien.
  */
-
-/** Outils natifs Claude Code (hors MCP) que la politique autorise. */
-function builtinTools(policy: ToolPolicy): string[] {
-  const tools: string[] = []
-  if (policy.bash) tools.push('Bash')
-  if (policy.fs !== 'none') tools.push('Read', 'Glob', 'Grep')
-  if (policy.fs === 'write') tools.push('Write', 'Edit')
-  return tools
-}
-
-/** Traduit notre politique d'outils en allowlist SDK (natifs + MCP). */
-function allowedTools(policy: ToolPolicy): string[] {
-  return [...builtinTools(policy), ...policy.mcp.map((name) => `mcp__${name}`)]
-}
 
 interface Live {
   session: AgentSession
@@ -102,9 +83,10 @@ export function createClaudeAdapter(): RuntimeAdapter {
       // cadence du cron (15 min) le coût est négligeable devant le risque
       // d'une panne d'authentification passée inaperçue.
       try {
+        const { sdkOptions } = resolveToolPolicy({ bash: false, fs: 'none', mcp: [] })
         const stream = query({
           prompt: 'Réponds exactement : OK',
-          options: { tools: [], allowedTools: [], maxTurns: 1 },
+          options: { ...sdkOptions, maxTurns: 1 },
         })
         for await (const msg of stream) {
           if (msg.type === 'result') {
@@ -138,18 +120,16 @@ export function createClaudeAdapter(): RuntimeAdapter {
       let costTokens = 0
       let isError = false
 
+      const { sdkOptions } = resolveToolPolicy(options.tools)
       const stream = query({
         prompt: message,
         options: {
           cwd: options.cwd,
           systemPrompt: options.systemPrompt,
           ...(options.model ? { model: options.model } : {}),
-          // `tools` restreint la surface d'outils *disponibles* pour le modèle ;
-          // `allowedTools` dispense en plus les outils listés du prompt de
-          // permission. Les deux sont nécessaires — voir le constat en tête de
-          // fichier.
-          tools: builtinTools(options.tools),
-          allowedTools: allowedTools(options.tools),
+          // Frontière de sécurité effective, voir `resolveToolPolicy` — pas
+          // seulement `allowedTools` (constat en tête de fichier).
+          ...sdkOptions,
           // Reprend la conversation quand le SDK nous a déjà donné un identifiant.
           ...(session.sdkSessionId ? { resume: session.sdkSessionId } : {}),
         },
