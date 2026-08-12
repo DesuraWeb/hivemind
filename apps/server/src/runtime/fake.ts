@@ -7,9 +7,19 @@ import type {
   UsageSnapshot,
 } from './types'
 
+/**
+ * Simule un appel d'outil plutôt qu'une réponse en texte libre (Task 7) —
+ * ce que le FakeAdapter renvoie quand on veut scripter le comportement
+ * attendu du garant (appeler l'outil de sortie structurée) sans dépendre du
+ * SDK réel ni consommer de tokens.
+ */
+export interface FakeToolCall {
+  toolUse: { name: string; input: unknown }
+}
+
 export interface FakeAdapterOptions {
-  /** Réponses renvoyées dans l'ordre, une par appel à send(). */
-  replies?: string[]
+  /** Réponses renvoyées dans l'ordre, une par appel à send(). Texte libre ou appel d'outil scripté. */
+  replies?: (string | FakeToolCall)[]
   usage?: { fiveHourPct: number; sevenDayPct: number }
   /** Si défini, `healthcheck()` échoue avec ce message — simule une auth cassée. */
   healthcheckError?: string
@@ -45,15 +55,25 @@ export function createFakeAdapter(opts: FakeAdapterOptions = {}): RuntimeAdapter
       return session
     },
 
+    // `opts` (Task 7 : `extraMcpServers`/`extraAllowedTools`) n'a pas de sens
+    // pour ce faux runtime — le comportement d'un appel d'outil se scripte
+    // via `replies`, pas via un vrai câblage MCP. Paramètre accepté pour
+    // rester compatible avec `RuntimeAdapter.send`, jamais lu.
     async send(session, message): Promise<AgentResult> {
       const entry = sessions.get(session.id)
-      const text = replies[cursor++] ?? `[fake] réponse à : ${message}`
-      const costTokens = message.length + text.length
+      const reply = replies[cursor++] ?? `[fake] réponse à : ${message}`
 
-      entry?.onEvent({ type: 'text', text })
+      if (typeof reply === 'string') {
+        const costTokens = message.length + reply.length
+        entry?.onEvent({ type: 'text', text: reply })
+        entry?.onEvent({ type: 'cost', tokens: costTokens })
+        return { text: reply, costTokens, isError: false }
+      }
+
+      const costTokens = message.length + JSON.stringify(reply.toolUse.input).length
+      entry?.onEvent({ type: 'tool_use', name: reply.toolUse.name, input: reply.toolUse.input })
       entry?.onEvent({ type: 'cost', tokens: costTokens })
-
-      return { text, costTokens, isError: false }
+      return { text: '', costTokens, isError: false, toolCalls: [reply.toolUse] }
     },
 
     async resume(sessionId) {

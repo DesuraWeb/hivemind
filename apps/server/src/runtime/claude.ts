@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import { query } from '@anthropic-ai/claude-agent-sdk'
+import type { McpServerConfig } from '@anthropic-ai/claude-agent-sdk'
 import { resolveToolPolicy } from './tools'
 import type {
   AgentResult,
   AgentSession,
   CreateSessionOptions,
   RuntimeAdapter,
+  SendOptions,
   UsageSnapshot,
 } from './types'
 
@@ -161,7 +163,7 @@ export function createClaudeAdapter(): RuntimeAdapter {
       return session
     },
 
-    async send(session, message): Promise<AgentResult> {
+    async send(session, message, sendOpts?: SendOptions): Promise<AgentResult> {
       const entry = live.get(session.id)
       if (!entry) throw new Error(`Session inconnue : ${session.id}`)
       const { options } = entry
@@ -169,8 +171,24 @@ export function createClaudeAdapter(): RuntimeAdapter {
       let text = ''
       let costTokens = 0
       let isError = false
+      const toolCalls: { name: string; input: unknown }[] = []
 
       const { sdkOptions } = resolveToolPolicy(options.tools)
+      // Task 7 : un appelant (ex. `collectStructured`) peut câbler un outil
+      // in-process pour ce seul échange, en plus de la ToolPolicy fixée à la
+      // création de la session. On fusionne par-dessus `sdkOptions`, jamais
+      // à sa place — `strictMcpConfig: true` reste posé (voir la note Task 2
+      // en tête de `tools.ts`, et la note Task 7 en tête de `structured.ts`) :
+      // seuls les serveurs explicitement listés ici (ceux du rôle + celui-ci)
+      // sont visibles, pas ceux de l'hôte. Le cast est nécessaire :
+      // `SendOptions.extraMcpServers` est volontairement opaque côté
+      // `types.ts` pour ne pas coupler ce fichier partagé au SDK Claude.
+      const mcpServers = {
+        ...sdkOptions.mcpServers,
+        ...(sendOpts?.extraMcpServers as Record<string, McpServerConfig> | undefined),
+      }
+      const allowedTools = [...sdkOptions.allowedTools, ...(sendOpts?.extraAllowedTools ?? [])]
+
       const stream = query({
         prompt: message,
         options: {
@@ -180,6 +198,8 @@ export function createClaudeAdapter(): RuntimeAdapter {
           // Frontière de sécurité effective, voir `resolveToolPolicy` — pas
           // seulement `allowedTools` (constat en tête de fichier).
           ...sdkOptions,
+          mcpServers,
+          allowedTools,
           // Reprend la conversation quand le SDK nous a déjà donné un identifiant.
           ...(session.sdkSessionId ? { resume: session.sdkSessionId } : {}),
         },
@@ -200,6 +220,12 @@ export function createClaudeAdapter(): RuntimeAdapter {
               options.onEvent({ type: 'text', text: block.text })
             } else if (block.type === 'tool_use') {
               options.onEvent({ type: 'tool_use', name: block.name, input: block.input })
+              // Task 7 : recopié dans le résultat retourné, pas seulement
+              // poussé sur `onEvent` — `collectStructured` n'a pas accès à
+              // l'`onEvent` de la session (fixé par l'appelant à la création),
+              // c'est donc ce canal qu'il consulte pour savoir si l'agent a
+              // appelé l'outil plutôt que répondu en texte libre.
+              toolCalls.push({ name: block.name, input: block.input })
             }
           }
         }
@@ -214,7 +240,7 @@ export function createClaudeAdapter(): RuntimeAdapter {
         }
       }
 
-      return { text, costTokens, isError }
+      return { text, costTokens, isError, toolCalls }
     },
 
     async resume(sessionId) {

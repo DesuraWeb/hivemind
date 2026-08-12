@@ -30,6 +30,35 @@ export interface AgentResult {
   costTokens: number
   /** Vrai si la session s'est terminée en erreur côté SDK. */
   isError: boolean
+  /**
+   * Appels d'outils observés pendant cet échange, dans l'ordre. Alimenté par
+   * les deux adapters (Task 7) : `ClaudeAdapter` y recopie les blocs
+   * `tool_use` réellement reçus, `FakeAdapter` y recopie les appels
+   * scriptés — c'est le canal que `collectStructured` (`./structured.ts`)
+   * consulte pour savoir si l'agent a appelé l'outil de sortie structurée
+   * plutôt que de répondre en texte libre.
+   */
+  toolCalls?: { name: string; input: unknown }[]
+}
+
+/**
+ * Additions ponctuelles à un seul échange, en plus de la `ToolPolicy` fixée
+ * à la création de la session. Sert à câbler un outil in-process (Task 7 :
+ * sortie structurée du garant) sans toucher à la politique persistée du
+ * rôle : le champ est opaque ici pour garder ce fichier indépendant du SDK
+ * Claude (comme le reste de `types.ts`) — c'est `claude.ts` qui connaît le
+ * type réel (`McpServerConfig`) et fait le cast au point d'usage.
+ *
+ * Sécurité (suite de la Task 2) : ceci s'ajoute à `strictMcpConfig: true`,
+ * posé systématiquement par `resolveToolPolicy` — jamais à sa place. Un
+ * serveur passé ici est explicitement nommé par l'appelant ; l'hôte ne peut
+ * toujours rien injecter par ailleurs.
+ */
+export interface SendOptions {
+  /** Serveurs MCP in-process supplémentaires, valables pour ce seul appel. */
+  extraMcpServers?: Record<string, unknown>
+  /** Noms d'outils (natifs ou `mcp__serveur__outil`) à autoriser en plus, pour ce seul appel. */
+  extraAllowedTools?: string[]
 }
 
 export interface CreateSessionOptions {
@@ -82,7 +111,7 @@ export interface RuntimeAdapter {
    */
   healthcheck(): Promise<HealthcheckResult>
   createSession(opts: CreateSessionOptions): Promise<AgentSession>
-  send(session: AgentSession, message: string): Promise<AgentResult>
+  send(session: AgentSession, message: string, opts?: SendOptions): Promise<AgentResult>
   resume(sessionId: string): Promise<AgentSession | null>
   usage(): Promise<UsageSnapshot>
 }
