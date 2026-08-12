@@ -7,3 +7,7 @@ dist/
 /worktrees/
 /artifacts/
 coverage/
+
+# Archives sources des polices : les fontes variables extraites sont dans
+# apps/web/public/fonts, inutile de versionner les zips en plus.
+docs/*.zip

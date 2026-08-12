@@ -1,0 +1,45 @@
+/*
+ * Polices du pack DA : Geist (UI) et JetBrains Mono (système).
+ * Fichiers sous licence SIL Open Font, copiés dans public/fonts avec leur
+ * OFL.txt — les redistribuer sans la licence serait une infraction.
+ *
+ * On utilise les fontes VARIABLES : deux fichiers par famille au lieu de neuf,
+ * et toute la plage de graisses disponible. `font-weight: 100 900` dans la
+ * déclaration indique au navigateur cette plage continue.
+ *
+ * `font-display: swap` : le texte s'affiche immédiatement dans la police de
+ * repli puis bascule. Sur un outil qu'on ouvre toute la journée, la police est
+ * en cache dès la seconde visite ; c'est le premier rendu qu'on protège.
+ */
+
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/Geist-Variable.ttf') format('truetype-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/Geist-Italic-Variable.ttf') format('truetype-variations');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-Variable.ttf') format('truetype-variations');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-Italic-Variable.ttf') format('truetype-variations');
+  font-weight: 100 800;
+  font-style: italic;
+  font-display: swap;
+}
