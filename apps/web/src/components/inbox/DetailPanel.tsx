@@ -107,7 +107,7 @@ export function DetailPanel({
             {item.title}
           </div>
           <div style={{ font: '11.5px var(--font-mono)', color: 'var(--text-low)' }}>
-            {projectName} · {item.agent ?? '—'} · {formatAge(item.blockedSince)}
+            {projectName} · {item.agent ?? '·'} · {formatAge(item.blockedSince)}
           </div>
         </div>
         <button
