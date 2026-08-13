@@ -1,12 +1,14 @@
 import { INBOX_STATUSES, INBOX_TYPES } from '@silithid/shared'
-import type { FastifyInstance } from 'fastify'
+import type { FastifyBaseLogger, FastifyInstance } from 'fastify'
 import type { Kysely } from 'kysely'
 import type { PgBoss } from 'pg-boss'
 import { z } from 'zod'
+import { sendApprovedClientEmail } from '../../communication/client-email'
 import type { Database } from '../../db/types'
 import { optimizeAnswer } from '../../inbox/optimize'
-import { type InboxItemRow, getInboxItem, listInbox } from '../../inbox/repo'
+import { type InboxItemRow, createInboxItem, getInboxItem, listInbox } from '../../inbox/repo'
 import { type InboxResponse, resolveInboxItem } from '../../inbox/resolve'
+import type { GmailSendPort } from '../../integrations/gmail'
 import type { RuntimeAdapter } from '../../runtime/types'
 import type { SettingsStore } from '../../settings/store'
 
@@ -15,6 +17,12 @@ export interface InboxRoutesDeps {
   boss: PgBoss
   adapter: RuntimeAdapter
   settings: SettingsStore
+  /**
+   * Envoi d'un email client, côté serveur uniquement (Task 5, Phase 5). Cette
+   * route est le SEUL appelant : c'est ici qu'une validation humaine devient
+   * un envoi, et nulle part ailleurs. Aucun agent n'atteint ce port.
+   */
+  gmailSender: GmailSendPort
 }
 
 /** `status=` / `type=` / `project=` vides : traités comme absents, pas comme invalides — cf. le gabarit de route du brief §8. */
@@ -99,6 +107,41 @@ function toApiItem(item: InboxItemRow, projectSlug: string | null) {
   }
 }
 
+/**
+ * Suite serveur d'une validation : un item `approval`/`email` approuvé fait
+ * partir le brouillon Gmail correspondant. Tout le reste rend `false` sans
+ * rien faire.
+ *
+ * L'échec d'envoi ne fait pas échouer la requête : l'item est déjà résolu, le
+ * rejouer produirait un doublon (`resolveInboxItem` refuse un item non
+ * `open`). Il lève un `alert` en inbox, parce qu'un email client approuvé qui
+ * n'est jamais parti doit se voir : une ligne de log ne se voit pas.
+ */
+async function sendApprovedEmailOrAlert(
+  deps: InboxRoutesDeps,
+  item: InboxItemRow,
+  log: FastifyBaseLogger,
+): Promise<boolean> {
+  try {
+    const sent = await sendApprovedClientEmail(deps.db, deps.gmailSender, item)
+    return sent !== null
+  } catch (err) {
+    log.error({ err, itemId: item.id }, "envoi de l'email client approuvé échoué")
+    await createInboxItem(deps.db, {
+      type: 'alert',
+      projectId: item.projectId,
+      runId: item.runId,
+      title: `Envoi impossible · ${item.title}`,
+      fromRole: 'system',
+      payload: {
+        sourceItemId: item.id,
+        error: err instanceof Error ? err.message : String(err),
+      },
+    })
+    return false
+  }
+}
+
 export async function inboxRoutes(app: FastifyInstance, deps: InboxRoutesDeps): Promise<void> {
   app.get('/api/inbox', { preHandler: app.requireAuth }, async (req, reply) => {
     const parsed = listQuery.safeParse(req.query)
@@ -151,7 +194,8 @@ export async function inboxRoutes(app: FastifyInstance, deps: InboxRoutesDeps): 
         ? ((await projectSlugMap(deps.db, [result.item.projectId])).get(result.item.projectId) ??
           null)
         : null
-      return { item: toApiItem(result.item, slug), runResumed: result.runResumed }
+      const emailSent = await sendApprovedEmailOrAlert(deps, result.item, req.log)
+      return { item: toApiItem(result.item, slug), runResumed: result.runResumed, emailSent }
     } catch (err) {
       // `resolve.ts` (Task 2, non modifié ici) n'expose que des `Error`
       // génériques — matcher le message est le seul signal disponible sans

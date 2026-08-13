@@ -12,6 +12,7 @@ import { registerSession } from './auth/session'
 import { createSecretBox } from './crypto/secrets'
 import type { Database } from './db/types'
 import { loadEnv } from './env'
+import { type GmailSendPort, createLazyGmailSender } from './integrations/gmail'
 import { type Mailer, createMailer } from './integrations/mailer'
 import { createBoss } from './jobs/boss'
 import { createRuntimeAdapter } from './runtime/index'
@@ -44,6 +45,13 @@ export interface AppDeps {
    * par défaut, jamais utilisée.
    */
   boss?: PgBoss
+  /**
+   * Port d'envoi Gmail (Task 5, Phase 5). Par défaut construit depuis le
+   * coffre : tant qu'aucun secret Gmail n'y est déposé, c'est un compte
+   * factice en mémoire et rien ne part. Les tests passent le leur pour
+   * observer ce qui aurait été envoyé.
+   */
+  gmailSender?: GmailSendPort
 }
 
 /** Construit l'instance Fastify sans l'écouter — utilisable tel quel en test. */
@@ -54,6 +62,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const adapter = deps.adapter ?? (await createRuntimeAdapter(env))
   const mailer = deps.mailer ?? createMailer(env)
   const boss = deps.boss ?? createBoss(env)
+  const gmailSender = deps.gmailSender ?? createLazyGmailSender(settings)
 
   await registerSession(app, { db: deps.db, secret: env.SESSION_SECRET })
   await app.register(healthRoutes, {
@@ -65,7 +74,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(authRoutes, { db: deps.db })
   await app.register(settingsRoutes, { settings })
   await app.register(eventsRoutes)
-  await app.register(inboxRoutes, { db: deps.db, boss, adapter, settings })
+  await app.register(inboxRoutes, { db: deps.db, boss, adapter, settings, gmailSender })
   await app.register(projectsRoutes, { db: deps.db, settings })
   await app.register(globesRoutes, { db: deps.db })
 
