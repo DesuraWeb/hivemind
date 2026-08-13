@@ -136,9 +136,32 @@ Sur `DesuraWeb/silithid-sandbox`, un step réel traverse `framing → coding →
 
 Communicant et Gmail (J10) · staging réel et gate prod (J11) · scheduler de budget (J12) · orbe v2 avec focus (J13) · conscience collective (phase dédiée) · les 18 écrans restants du pack.
 
+## Task 6 — Le 4ᵉ gate : auto-modification des fichiers de sécurité
+
+**Validé par Florian le 13/08.** Subagent obligatoire (sécurité).
+
+**Files:** `src/loop/steps/coding.ts` · `src/domain/run-state.ts` (nouvel effet) · Test `tests/gate-selfmod.test.ts`
+
+Silithid peut modifier son propre code : son dépôt est un dépôt comme un autre. Trois choses **sont** la frontière de sécurité :
+
+- `apps/server/src/domain/run-state.ts` — la machine à états, donc les gates eux-mêmes
+- `apps/server/src/runtime/tools.ts` — la traduction d'une `ToolPolicy` en restriction effective
+- la colonne `roles.tools` — les droits accordés à un rôle sur un projet
+
+- [ ] À l'ouverture d'une PR, comparer les chemins modifiés à cette liste. Une correspondance lève un item d'inbox **distinct** (pas un `approval:step_end` ordinaire) qui dit explicitement ce qui est touché et pourquoi c'est différent.
+- [ ] **Ce n'est pas une interdiction** : c'est l'impossibilité que ça passe dans le flux ordinaire. Le run continue son cours ; l'item est levé en parallèle.
+- [ ] La liste des chemins surveillés vit dans un réglage (`settings['security.guarded_paths']`), pas en dur : elle grandira.
+- [ ] **Test** : une PR touchant `tools.ts` lève l'item ; une PR ordinaire n'en lève pas ; la liste est bien lue depuis les réglages.
+
+---
+
 ## Points ouverts hérités
 
 1. **`rate_limit_event` jamais observé** malgré des milliers de tokens réels. Le scheduler J12 pourrait n'avoir aucune source ; sa règle de péremption deviendrait le comportement nominal.
 2. **`hive.answer_baseline`** contient mes suppositions, pas les constantes de travail réelles de Florian.
 3. **Le 4ᵉ gate** (auto-modification de `run-state.ts`, `tools.ts`, `roles.tools`) reste à arbitrer.
-4. **Le calendrier J1→J14 ne tient plus** : J7 atteint après quatre phases, la conscience collective ajoutée au périmètre.
+4. ~~Le calendrier~~ **Tranché le 13/08 : les numéros de jour sont abandonnés.** Ils cadraient un sprint de deux semaines qui n'existe plus (la conscience collective a été ajoutée au périmètre). On travaille par phases. L'ordre reste : finir la boucle (cette phase), puis arbitrer entre le reste du pipeline (communicant, staging, budget) et la conscience.
+
+5. ~~Le 4ᵉ gate~~ **Tranché le 13/08 : validé**, devient la Task 6 de cette phase.
+
+6. ~~`hive.answer_baseline`~~ **Rempli le 13/08** avec les vraies règles de Florian, et découpé : socle universel + `hive.stack_rules` injectées selon `projects.stack`. Deux règles restent marquées RÈGLE MANQUANTE (tunnel de commande PrestaShop, Pest ou PHPUnit sur Le Koin).
