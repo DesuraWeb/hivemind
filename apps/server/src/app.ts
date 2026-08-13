@@ -9,6 +9,7 @@ import { globesRoutes } from './api/routes/globes'
 import { healthRoutes } from './api/routes/health'
 import { inboxRoutes } from './api/routes/inbox'
 import { projectsRoutes } from './api/routes/projects'
+import { rolesRoutes } from './api/routes/roles'
 import { settingsRoutes } from './api/routes/settings'
 import { registerSession } from './auth/session'
 import { createSecretBox } from './crypto/secrets'
@@ -81,6 +82,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(globesRoutes, { db: deps.db })
   await app.register(budgetRoutes, { db: deps.db, settings, adapter, boss })
   await app.register(clientsRoutes, { db: deps.db })
+  await app.register(rolesRoutes, { db: deps.db, settings })
 
   return app
 }
