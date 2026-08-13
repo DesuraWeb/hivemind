@@ -81,9 +81,9 @@ function ActionBody({ label, hint }: { label: string; hint: string }): ReactNode
  *   plus actionnable, elle cède le rôle primaire à l'action d'inbox (le
  *   prototype la rétrogradait en « ghost » précisément parce que le run
  *   prenait le primaire).
- * - « Ouvrir le projet » pointe sur `/projets/{slug}`, route en cours de
- *   construction par ailleurs : lien natif (pas `Link`) tant qu'elle n'est
- *   pas dans l'arbre de routes typé.
+ * - « Ouvrir le projet » vise la fiche projet réelle,
+ *   `/globes/{globe}/{projet}` : l'URL porte le fil d'Ariane, elle n'est pas
+ *   le `/projets/{slug}` qu'on pouvait attendre du prototype.
  * - « Staging » est un vrai lien externe ici, là où le prototype laisse un
  *   bouton inerte : la flèche ↗ annonce une sortie, et `staging` porte un
  *   hôte réel. Absent quand le projet n'a pas de staging.
@@ -223,9 +223,13 @@ export function FocusPanel({
           </Link>
         )}
 
-        <a href={`/projets/${project.id}`} style={actionStyle('ghost')}>
+        <Link
+          to="/globes/$globeId/$projectId"
+          params={{ globeId: project.globe, projectId: project.id }}
+          style={actionStyle('ghost')}
+        >
           <ActionBody label="Ouvrir le projet" hint="" />
-        </a>
+        </Link>
 
         {project.staging && (
           <a
