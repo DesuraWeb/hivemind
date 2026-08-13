@@ -68,9 +68,14 @@ export const DEFAULT_ANSWER_BASELINE =
  * Les clés sont comparées en minuscules, sans accent, par inclusion : un
  * `projects.stack` valant « Laravel 12 » déclenche la règle `laravel`.
  *
- * Deux règles portent la mention RÈGLE MANQUANTE : Florian les a laissées en
- * suspens. Elles restent visibles exprès, pour que Hive dise qu'il ne sait pas
- * plutôt que d'inventer une contrainte.
+ * Deux entrées portaient la mention RÈGLE MANQUANTE (tunnel de commande
+ * PrestaShop, Pest ou PHPUnit sur Le Koin). Retirées le 13/08 : « je m'en fous
+ * de PrestaShop et du Koin ». Ce ne sont plus des trous, c'est un périmètre —
+ * le dépôt pilote est Desura.fr, en WordPress, et ses règles sont complètes.
+ *
+ * Le mécanisme qui fait dire « je ne sais pas » plutôt qu'inventer reste
+ * disponible pour la prochaine règle réellement en suspens : écrire
+ * `RÈGLE MANQUANTE : …` dans une entrée suffit.
  */
 export const DEFAULT_STACK_RULES: Record<string, string> = {}
 
