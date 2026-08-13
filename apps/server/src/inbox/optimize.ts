@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os'
 import type { Kysely } from 'kysely'
 import { z } from 'zod'
-import { DEFAULT_ANSWER_BASELINE } from '../db/seed'
+import { DEFAULT_ANSWER_BASELINE, DEFAULT_STACK_RULES } from '../db/seed'
 import type { Database } from '../db/types'
 import { resolveProjectRole } from '../loop/roles'
 import { type ClientRow, clientSummary } from '../loop/steps/framing'
@@ -36,6 +36,28 @@ async function loadBaseline(settings: SettingsStore): Promise<string> {
   return typeof value === 'string' && value.trim().length > 0 ? value : DEFAULT_ANSWER_BASELINE
 }
 
+/**
+ * Règles de la stack du projet, s'il y en a. Comparaison en minuscules et par
+ * inclusion : « Laravel 12 » déclenche la règle `laravel`.
+ *
+ * Injectées séparément du socle commun : mêler les règles PrestaShop à une
+ * question sur un projet WordPress ferait payer des tokens pour des contraintes
+ * hors sujet, et diluerait celles qui comptent.
+ */
+async function loadStackRules(
+  settings: SettingsStore,
+  stack: string | null,
+): Promise<string | null> {
+  if (!stack) return null
+  const stored = await settings.get<Record<string, string>>('hive.stack_rules')
+  const rules = stored && typeof stored === 'object' ? stored : DEFAULT_STACK_RULES
+  const haystack = stack.toLowerCase()
+  for (const [key, value] of Object.entries(rules)) {
+    if (haystack.includes(key)) return value
+  }
+  return null
+}
+
 export interface OptimizeAnswerInput {
   projectId: string
   /** La question posée à l'humain (item.title, cf. QuestionPanel : « le titre de l'item EST la question »). */
@@ -51,6 +73,7 @@ function buildPrompt(opts: {
   question: string
   draft: string
   baseline: string
+  stackRules: string | null
 }): string {
   return [
     '# Contexte projet',
@@ -64,6 +87,7 @@ function buildPrompt(opts: {
     '(point de départ à affiner, réglage `hive.answer_baseline` — ne les cite que si pertinents pour cette question)',
     opts.baseline,
     '',
+    ...(opts.stackRules ? ['# Règles propres à la stack de ce projet', opts.stackRules, ''] : []),
     '# Question posée à Florian',
     opts.question,
     '',
@@ -95,7 +119,7 @@ export async function optimizeAnswer(
 ): Promise<OptimizeAnswerResult> {
   const project = await db
     .selectFrom('projects')
-    .select(['id', 'name', 'context', 'client_id'])
+    .select(['id', 'name', 'context', 'client_id', 'stack'])
     .where('id', '=', input.projectId)
     .executeTakeFirstOrThrow()
 
@@ -109,6 +133,7 @@ export async function optimizeAnswer(
 
   const role = await resolveProjectRole(db, project.id, 'majordome')
   const baseline = await loadBaseline(settings)
+  const stackRules = await loadStackRules(settings, project.stack)
 
   const session = await adapter.createSession({
     roleKey: 'majordome',
@@ -128,6 +153,7 @@ export async function optimizeAnswer(
     question: input.question,
     draft: input.draft,
     baseline,
+    stackRules,
   })
 
   return collectStructured(adapter, session, prompt, optimizeAnswerSchema, {

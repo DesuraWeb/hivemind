@@ -54,12 +54,23 @@ export async function seedRoleTemplates(db: Kysely<Database>): Promise<void> {
  * corrections de Florian (BRIEF-RETOUR.md §6, « conscience collective ») est
  * hors scope ici — ce réglage reste statique tant qu'elle n'existe pas.
  */
-export const DEFAULT_ANSWER_BASELINE = [
-  '- Mobile 390px d’abord, desktop ensuite.',
-  '- Tokens du pack (couleurs, typographies, espacements) : jamais de valeur en dur.',
-  '- Aucune nouvelle dépendance sans qu’elle soit explicitement demandée.',
-  '- Un test (unitaire ou de type) qui couvre le correctif ou la fonctionnalité livrée.',
-].join('\n')
+export const DEFAULT_ANSWER_BASELINE =
+  "[socle de règles retiré de l’historique · voir seeds/prive/]"
+
+/**
+ * Règles propres à une stack, injectées UNIQUEMENT quand `projects.stack`
+ * correspond. Les mettre dans le socle commun ferait traîner les règles
+ * PrestaShop sur un projet WordPress : du bruit, et des tokens dépensés pour
+ * des contraintes hors sujet.
+ *
+ * Les clés sont comparées en minuscules, sans accent, par inclusion : un
+ * `projects.stack` valant « Laravel 12 » déclenche la règle `laravel`.
+ *
+ * Deux règles portent la mention RÈGLE MANQUANTE : Florian les a laissées en
+ * suspens. Elles restent visibles exprès, pour que Hive dise qu'il ne sait pas
+ * plutôt que d'inventer une contrainte.
+ */
+export const DEFAULT_STACK_RULES: Record<string, string> = {}
 
 /**
  * Taux de conversion tokens → euros, affiché dans les listes de projets
@@ -77,6 +88,12 @@ export async function seedDefaultSettings(db: Kysely<Database>): Promise<void> {
   await db
     .insertInto('settings')
     .values({ key: 'hive.answer_baseline', value: JSON.stringify(DEFAULT_ANSWER_BASELINE) })
+    .onConflict((oc) => oc.column('key').doNothing())
+    .execute()
+
+  await db
+    .insertInto('settings')
+    .values({ key: 'hive.stack_rules', value: JSON.stringify(DEFAULT_STACK_RULES) })
     .onConflict((oc) => oc.column('key').doNothing())
     .execute()
 }
