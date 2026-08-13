@@ -4,13 +4,18 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { SEM } from './inbox/constants'
 
+/**
+ * Destination d'un résultat. Un type somme plutôt qu'un simple chemin : la
+ * fiche projet est une route paramétrée, elle a besoin de ses deux slugs.
+ */
+type PaletteTarget = { kind: 'inbox' } | { kind: 'project'; globeId: string; projectId: string }
+
 interface PaletteEntry {
   key: string
   label: string
   hint: string
   dot: string
-  /** Toujours une des 5 routes réelles de l'app (pas de page Projet/Savoirs cette phase). */
-  to: '/inbox' | '/globes'
+  target: PaletteTarget
 }
 
 interface PaletteGroup {
@@ -28,9 +33,10 @@ const INBOX_QUERY_KEY = ['inbox'] as const
  * palette de `MajordomeStrip.dc.html` (chercher `pal` dans le source), sans
  * les groupes qui n'ont pas de contrepartie réelle dans cette phase.
  *
- * Ni les projets ni les items d'inbox n'ont de page de détail cette phase
- * (Projets.dc.html/Projet.dc.html hors périmètre) : sélectionner un résultat
- * ouvre l'Inbox, où l'action réelle a lieu — jamais un lien mort.
+ * Un résultat « projet » ouvre désormais sa fiche (`/globes/:globe/:projet`)
+ * plutôt que l'Inbox : le repli sur `/inbox` datait de l'absence de page
+ * projet, il n'a plus lieu d'être. Les items d'inbox, eux, continuent d'ouvrir
+ * l'Inbox — c'est là que l'action a lieu.
  */
 export function CommandPalette() {
   const navigate = useNavigate()
@@ -81,7 +87,7 @@ export function CommandPalette() {
         label: p.name,
         hint: p.line,
         dot: p.tint ?? 'var(--pause)',
-        to: '/inbox',
+        target: { kind: 'project', globeId: p.globe, projectId: p.id },
       }))
 
     const inboxItems: PaletteEntry[] = (inboxQuery.data ?? [])
@@ -92,7 +98,7 @@ export function CommandPalette() {
         label: i.title,
         hint: i.agent ?? '',
         dot: SEM[i.type],
-        to: '/inbox',
+        target: { kind: 'inbox' },
       }))
 
     return [
@@ -106,7 +112,14 @@ export function CommandPalette() {
 
   function go(entry: PaletteEntry) {
     setOpen(false)
-    void navigate({ to: entry.to })
+    if (entry.target.kind === 'project') {
+      void navigate({
+        to: '/globes/$globeId/$projectId',
+        params: { globeId: entry.target.globeId, projectId: entry.target.projectId },
+      })
+      return
+    }
+    void navigate({ to: '/inbox' })
   }
 
   if (!open) return null

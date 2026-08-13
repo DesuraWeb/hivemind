@@ -5,6 +5,7 @@ import { Dashboard } from './routes/Dashboard'
 import { GlobeInterior } from './routes/GlobeInterior'
 import { Globes } from './routes/Globes'
 import { Inbox } from './routes/Inbox'
+import { Project } from './routes/Project'
 import { Reglages } from './routes/Reglages'
 
 // Routage code-first (pas de génération de fichiers de routes) : cinq routes
@@ -44,6 +45,12 @@ const globeInteriorRoute = createRoute({
   component: GlobeInterior,
 })
 
+const projectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/globes/$globeId/$projectId',
+  component: Project,
+})
+
 const clientsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/clients',
@@ -61,6 +68,7 @@ const routeTree = rootRoute.addChildren([
   inboxRoute,
   globesRoute,
   globeInteriorRoute,
+  projectRoute,
   clientsRoute,
   reglagesRoute,
 ])
