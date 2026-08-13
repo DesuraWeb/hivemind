@@ -33,11 +33,13 @@ type TabId = (typeof TABS)[number][0]
  * Globes / Desura / projet »). Le slug du globe est dans l'URL, donc le fil
  * d'Ariane se rend sans attendre le moindre appel réseau.
  *
- * Écart assumé au pack : le prototype porte cinq onglets. « Équipe » (rôles,
- * dérive au template) et « Config » (repo, plafond budget, branche) n'ont
- * aucune route côté serveur dans cette phase, et cet écran ne doit rien
- * inventer : ils ne sont pas rendus plutôt que rendus vides. Trois onglets
- * restent, tous alimentés par de vraies données.
+ * Écart assumé au pack : le prototype porte cinq onglets. « Config » (repo,
+ * plafond budget, branche de travail) n'a aucune route qui l'alimente, en
+ * lecture comme en écriture. « Équipe » demande les rôles DU PROJET et leur
+ * dérive au template ; `GET /api/role-templates` ne rend que les templates
+ * globaux, pas cette dérive. Aucun des deux n'est rendu plutôt que rendu vide
+ * ou meublé d'inventions. Les trois onglets restants sont tous alimentés par
+ * de vraies données.
  */
 export function Project() {
   const { globeId, projectId } = useParams({ from: '/globes/$globeId/$projectId' })
