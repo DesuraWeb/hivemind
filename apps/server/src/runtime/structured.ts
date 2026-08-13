@@ -98,6 +98,37 @@ export const verdictSchema = z.object({
 })
 export type Verdict = z.infer<typeof verdictSchema>
 
+/**
+ * Rapport du juge visuel (Task 3, Phase 4), conforme au format déjà écrit
+ * dans `src/db/seeds/role_templates/judge.md`. Volontairement SANS aucun
+ * champ de décision (pas de `verdict`, pas de `recommandation`, pas de
+ * `action`) : « le juge décrit, il ne décide pas » (judge.md) doit être vrai
+ * ici, pas seulement dans le prompt — c'est le garant (`verdictSchema`
+ * ci-dessus, Task 4) qui tranche depuis ce constat.
+ *
+ * `screenshot_ref` n'est PAS validé ici par zod (il n'existe aucune règle de
+ * forme à vérifier — n'importe quelle chaîne non vide est syntaxiquement
+ * valide) : la validation qui compte, « cette référence correspond-elle à un
+ * artifact réellement enregistré ? », est une question de base de données, pas
+ * de forme. Elle est faite côté serveur après réception, dans
+ * `loop/steps/judging.ts` — voir le commentaire de tête de ce fichier pour la
+ * décision sur une référence inventée.
+ */
+export const judgeReportSchema = z.object({
+  conformites: z.array(z.string().min(1)),
+  ecarts: z.array(
+    z.object({
+      severite: z.enum(['bloquant', 'majeur', 'mineur']),
+      page: z.string().min(1),
+      viewport: z.enum(['mobile', 'tablette', 'desktop']),
+      description: z.string().min(1),
+      screenshot_ref: z.string().min(1),
+    }),
+  ),
+})
+export type JudgeReport = z.infer<typeof judgeReportSchema>
+export type JudgeEcart = JudgeReport['ecarts'][number]
+
 export interface CollectStructuredOptions {
   /** Nom de l'outil que l'agent doit appeler (ex. `submit_frame`). */
   toolName: string
