@@ -46,12 +46,20 @@ export function Layout() {
         }}
       >
         <Outlet />
+        {/* Reprend le mécanisme exact du dc-import MajordomeStrip dans les
+            prototypes (Inbox/Clients/Globes/Reglages.dc.html, etc.) : enveloppe
+            en position: absolute; left: calc(50% - 240px); bottom: 12px;
+            width: 480px; display: flex; justify-content: center; pointer-events:
+            none — pour que les clics traversent la bande vide autour du strip,
+            seul le contenu (HiveStrip, pointer-events: auto) reste cliquable. */}
         <div
           style={{
             position: 'absolute',
-            left: '50%',
-            bottom: 16,
-            transform: 'translateX(-50%)',
+            left: 'calc(50% - 240px)',
+            bottom: 12,
+            width: 480,
+            display: 'flex',
+            justifyContent: 'center',
             zIndex: 30,
             pointerEvents: 'none',
           }}

@@ -164,8 +164,14 @@ export function RailNav() {
           title="Se déconnecter"
           aria-label="Se déconnecter"
           style={{
-            width: 26,
-            height: 26,
+            // 28px et non 26 : le prototype porte l'avatar sur un <span> (box-sizing
+            // content-box par défaut), donc son cercle rendu fait 26px de contenu +
+            // 1px de bordure de chaque côté = 28px. Notre <button> est en border-box
+            // (reset global + défaut UA des form controls) : il faut donc 28px pour
+            // obtenir le même cercle à l'écran (c'est le rendu qui fait foi, pas la
+            // valeur littérale du style source).
+            width: 28,
+            height: 28,
             flexShrink: 0,
             borderRadius: 999,
             background: 'var(--bg-2)',
