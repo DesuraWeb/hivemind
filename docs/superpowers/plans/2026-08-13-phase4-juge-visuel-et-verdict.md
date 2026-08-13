@@ -155,7 +155,25 @@ Silithid peut modifier son propre code : son dépôt est un dépôt comme un aut
 
 ---
 
-## Constat de qualité à trancher — le garant a peut-être tamponné
+## Doute levé le 13/08 — les deux rôles fonctionnent
+
+`scripts/diag-juge-garant.ts` amorce un run directement à `judging`, sur une page dont la **vérité terrain est contrôlée** : trois critères d'acceptation explicites, deux satisfaits, un violé au seul viewport mobile (bouton masqué par une media query sous 500 px). Coût : un dixième d'une boucle complète, puisque le dev et le reviewer sont court-circuités.
+
+**Le juge** a trouvé le bon écart, au bon viewport, avec la bonne sévérité, et a su distinguer ce qu'il pouvait constater de ce qu'il ne pouvait pas : sur la position du lien Contact, il écrit « je ne peux pas déterminer si ce lien est réellement contenu dans un élément `<footer>` » plutôt que d'affirmer.
+
+**Le garant a réellement arbitré**, il n'a pas tamponné :
+- il a retenu le seul écart bloquant et produit un correctif précis, citant la media query et sa ligne ;
+- il a **écarté le doute du juge en allant lire la source** (« vérification faite dans la source, le lien est bien contenu dans un élément `<footer>`, index.html l.25 ») — c'est exactement le rôle d'arbitre, appuyé sur un fait, pas sur une préférence ;
+- il a classé le troisième écart en conséquence du premier, pas en défaut autonome ;
+- il a respecté la règle de dernière itération : « livre une correction minimale et sûre plutôt qu'une amélioration ambitieuse ».
+
+**Ce que ça ne dit pas.** Le run de fin de phase reste inexpliqué dans le détail : ses fixtures ont été nettoyées. L'hypothèse la plus probable est que ses écarts étaient hors des critères de ce step-là, ce que le garant a eu raison d'écarter. Le doute systémique est levé ; le cas particulier ne le sera qu'en gardant les fixtures d'un prochain run.
+
+Le script reste dans le dépôt : c'est le test de non-régression du jugement, à relancer après toute retouche des prompts du juge ou du garant.
+
+---
+
+## Ancien constat (conservé pour la trace) — le garant a peut-être tamponné
 
 Lors du run réel de fin de Phase 4 (35 494 tokens, PR #3), le juge a rendu **0 conformité et 6 écarts, dont un bloquant**. Le garant a répondu **`conforme`, avec une liste d'écarts vide**.
 
