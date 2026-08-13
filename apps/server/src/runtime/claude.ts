@@ -10,6 +10,7 @@ import type {
   SendOptions,
   UsageSnapshot,
 } from './types'
+import { probeUsage } from './usage'
 
 /**
  * Notes de vérification (Task 10, Step 1) contre
@@ -43,21 +44,22 @@ import type {
  *    sans cast nécessaire une fois le type narrowed sur `msg.type ===
  *    'result'`.
  *
- * 3. Il n'existe **aucune fonction exportée** pour interroger la consommation
- *    par fenêtre en dehors d'une session active (`query`, `startup`,
- *    `listSessions`, etc. — aucune ne renvoie de pourcentage 5h/7j). Le SDK
- *    expose un type `SDKRateLimitEvent` (`type: 'rate_limit_event'`) avec
- *    `rate_limit_info: { status; rateLimitType: 'five_hour' | 'seven_day' |
- *    ...; utilization?: number; resetsAt?: number }`, mais ce n'est qu'un
- *    évènement poussé *pendant* une conversation en cours — il n'y a pas
- *    d'API de type `getUsage()` indépendante qu'on pourrait appeler à froid.
- *    Comme `RuntimeAdapter.usage()` doit pouvoir répondre sans session
- *    active, on ne peut pas s'appuyer dessus honnêtement pour l'instant :
- *    `usage()` retourne `{ fiveHourPct: 0, sevenDayPct: 0, available: false
- *    }`, conformément au plan. (Piste pour plus tard, hors scope Task 10 :
- *    capter opportunément `rate_limit_event` pendant les `send()` actifs et
- *    mémoriser le dernier percentage vu par fenêtre, plutôt que de l'exposer
- *    comme une vraie requête à la demande.)
+ * 3. ~~Il n'existe aucune fonction exportée pour interroger la consommation
+ *    par fenêtre en dehors d'une session active.~~ **CE CONSTAT ÉTAIT FAUX,
+ *    corrigé le 13/08 (Phase 5, Task 1).** Il n'existe pas de *fonction
+ *    exportée*, c'est exact — mais l'objet `Query` porte une méthode de
+ *    contrôle, `usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET()`,
+ *    qui renvoie les pourcentages 5 h / 7 j et leurs dates de remise à zéro.
+ *    Elle répond en ~1 s pour 0 token tant qu'on n'itère pas le flux. Tout est
+ *    dans `./usage.ts`, y compris la mesure qui le prouve.
+ *
+ *    Le repli imaginé alors (capter `rate_limit_event` pendant les `send()`)
+ *    ne pouvait de toute façon pas fonctionner : l'évènement arrive bien, mais
+ *    son `rate_limit_info` ne contient pas `utilization` (voir
+ *    `scripts/diag-rate-limit.ts`). `captureRateLimit` ci-dessous n'a donc
+ *    jamais rien capté depuis la Phase 1 — il est conservé comme source
+ *    secondaire au cas où l'API expérimentale disparaîtrait, et au cas où le
+ *    serveur se mettrait à envoyer le champ.
  *
  * Task 2 : la traduction `ToolPolicy → options SDK` ne se fait plus à la main
  * ici. Elle vit dans `resolveToolPolicy` (`./tools.ts`, fonction pure,
@@ -76,9 +78,14 @@ interface Live {
 }
 
 /**
- * Dernière conso observée. Le SDK pousse `rate_limit_event` pendant une session
- * active ; il n'existe aucun moyen de l'interroger à froid, donc la mesure est
- * conservée en mémoire du process et datée.
+ * Source SECONDAIRE de conso, conservée en mémoire du process et datée.
+ *
+ * Elle n'a jamais rien produit : le `rate_limit_info` réellement reçu ne
+ * contient pas `utilization`, donc le garde ci-dessous sort en `return` à
+ * chaque évènement (mesuré, `scripts/diag-rate-limit.ts`). La source primaire
+ * est `./usage.ts`. On garde ce chemin pour deux raisons : l'API d'usage est
+ * marquée expérimentale et peut disparaître, et le serveur peut se mettre à
+ * envoyer le champ.
  *
  * `rateLimitType` a six valeurs possibles, pas deux : `five_hour`, `seven_day`,
  * `seven_day_opus`, `seven_day_sonnet`, `seven_day_overage_included`,
@@ -248,10 +255,15 @@ export function createClaudeAdapter(): RuntimeAdapter {
     },
 
     async usage(): Promise<UsageSnapshot> {
-      // Le SDK n'expose aucune API de consultation à froid : la conso n'arrive
-      // que poussée pendant une session active (voir captureRateLimit).
-      // Tant qu'aucun échange n'a eu lieu, on se déclare indisponible plutôt
-      // que d'alimenter le scheduler de budget avec des chiffres inventés.
+      // Source primaire : la vraie mesure, gratuite (voir ./usage.ts).
+      const probed = await probeUsage()
+      if (probed) return probed
+
+      // Repli : ce que `captureRateLimit` aurait pu voir passer. En pratique
+      // il ne voit rien, faute de champ `utilization` dans l'évènement — d'où
+      // l'`available: false` qui suit, et qui interdit au scheduler de mettre
+      // quoi que ce soit en pause. Mieux vaut une jauge muette qu'une jauge
+      // qui invente.
       if (!lastUsage.sampledAt) return { fiveHourPct: 0, sevenDayPct: 0, available: false }
       return {
         fiveHourPct: lastUsage.fiveHourPct,

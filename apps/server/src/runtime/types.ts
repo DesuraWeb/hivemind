@@ -85,10 +85,16 @@ export interface UsageSnapshot {
    * n'a produit d'évènement de limite de débit.
    *
    * La règle de péremption (fraîche ≤ 90 min, sinon jauge « inconnu » et
-   * majoration de 10 points) appartient au scheduler de budget (J12) : ici on
-   * se contente de dater honnêtement la mesure.
+   * majoration de 10 points) appartient au scheduler de budget : ici on se
+   * contente de dater honnêtement la mesure.
    */
   sampledAt?: Date
+  /**
+   * Quand la fenêtre de 5 h se remet à zéro (`BUDGET.reset` du pack DA). Sans
+   * elle, une jauge à 80 % ne dit pas s'il faut attendre dix minutes ou quatre
+   * heures — deux décisions opposées pour le même chiffre.
+   */
+  resetsAt?: Date
 }
 
 export interface HealthcheckResult {
