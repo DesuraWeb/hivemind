@@ -155,6 +155,23 @@ Silithid peut modifier son propre code : son dépôt est un dépôt comme un aut
 
 ---
 
+## Constat de qualité à trancher — le garant a peut-être tamponné
+
+Lors du run réel de fin de Phase 4 (35 494 tokens, PR #3), le juge a rendu **0 conformité et 6 écarts, dont un bloquant**. Le garant a répondu **`conforme`, avec une liste d'écarts vide**.
+
+**La plomberie est vérifiée correcte à chaque maillon** : le juge reçoit bien les `acceptance_criteria` (lus depuis `meta` du cadrage), et le garant reçoit le rapport complet du juge (`formatJudgeReport` détaille chaque écart avec sa sévérité, sa page, son viewport et sa description). Ce n'est donc pas un défaut de câblage.
+
+Deux lectures possibles, et on ne peut pas trancher sans une observation réelle :
+
+1. **Le garant a eu raison.** Son prompt lui dit qu'« un écart cosmétique non couvert par un critère d'acceptation n'est pas un écart ». Si le step ne portait que sur un lien « Contact » et que le juge a commenté la mise en page générale d'une page de démonstration volontairement nue, écarter les 6 est le comportement correct. La sévérité est l'avis du juge, pas une mesure de la portée du step.
+2. **Le garant a tamponné.** Auquel cas la boucle valide du travail non conforme, ce qui vide de son sens tout le pipeline.
+
+**Le vrai signal d'alarme est le « 0 conformité ».** Si le lien Contact a bien été ajouté (le reviewer a dit OK, les tests passaient), le juge aurait dû constater au moins cette conformité-là. Un juge qui ne trouve aucune conformité sur un travail que le reviewer valide, puis un garant qui déclare conforme, est une combinaison contradictoire.
+
+**À faire avant de s'appuyer sur cette boucle :** un run réel avec conservation des fixtures (ne pas nettoyer en fin de smoke), pour lire les trois passations telles qu'elles ont été échangées. Le correctif sera probablement dans le prompt du juge — lui rappeler qu'il juge **contre les critères d'acceptation**, pas dans l'absolu.
+
+---
+
 ## Points ouverts hérités
 
 1. **`rate_limit_event` jamais observé** malgré des milliers de tokens réels. Le scheduler J12 pourrait n'avoir aucune source ; sa règle de péremption deviendrait le comportement nominal.
