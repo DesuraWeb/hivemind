@@ -58,12 +58,19 @@ async function projectSlugMap(
 
 /**
  * Forme rendue par l'API : les clés suivent `INBOX[]` de data.js (id, type,
- * sub, title, project, agent), à une différence près et volontaire —
+ * sub, title, project, agent), à des différences près et volontaires —
  * `age`/`ageMin` sont retirés : ce sont des valeurs d'affichage qui se
  * périment dès que l'horloge tourne (plan Phase 3, Task 4 : « Rends
  * blockedSince et createdAt bruts ; le front calcule »). `status` est ajouté
  * : sans lui, un appel sans filtre `status` ne permettrait pas de distinguer
  * un item ouvert d'un item déjà résolu.
+ *
+ * `payload` et `archiveToClient` sont ajoutés pour la Task 7 (écran Inbox) :
+ * les 5 panneaux de traitement ont besoin du contenu structuré de l'item
+ * (brouillon d'email, rapport de verdict, cause d'alerte…) pour s'afficher,
+ * et `archiveToClient` est affiché en lecture seule dans le panneau question
+ * — c'est un réglage figé à la création de l'item (resolve.ts, Task 2), pas
+ * quelque chose que la résolution peut changer.
  */
 function toApiItem(item: InboxItemRow, projectSlug: string | null) {
   return {
@@ -78,6 +85,8 @@ function toApiItem(item: InboxItemRow, projectSlug: string | null) {
     status: item.status,
     blockedSince: item.blockedSince.toISOString(),
     createdAt: item.createdAt.toISOString(),
+    payload: item.payload,
+    archiveToClient: item.archiveToClient,
   }
 }
 

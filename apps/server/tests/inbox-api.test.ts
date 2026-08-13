@@ -140,6 +140,34 @@ test('GET /api/inbox rend la forme de INBOX[] (data.js) sans age/ageMin, avec bl
   expect(new Date(found.blockedSince).toString()).not.toBe('Invalid Date')
 })
 
+test('GET /api/inbox rend payload et archiveToClient (Task 7 : contenu des panneaux)', async () => {
+  const { projectId } = await createProject()
+  const item = await createInboxItem(
+    db,
+    makeInput({
+      type: 'approval',
+      subtype: 'email',
+      title: 'Relance client',
+      projectId,
+      payload: { email: { from: 'a@desura.fr', to: 'b@client.fr', subject: 'S', body: 'B' } },
+      archiveToClient: false,
+    }),
+  )
+
+  const res = await app.inject({
+    method: 'GET',
+    url: '/api/inbox',
+    cookies: { hm_session: cookie },
+  })
+  const body = res.json() as Array<Record<string, unknown>>
+  const found = body.find((i) => i.id === item.id)
+
+  expect(found?.payload).toEqual({
+    email: { from: 'a@desura.fr', to: 'b@client.fr', subject: 'S', body: 'B' },
+  })
+  expect(found?.archiveToClient).toBe(false)
+})
+
 test('GET /api/inbox : la clé "sub" est absente sans sous-type, présente avec', async () => {
   const { projectId } = await createProject()
   const withSub = await createInboxItem(
