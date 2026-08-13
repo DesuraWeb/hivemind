@@ -1,4 +1,5 @@
 import { buildApp } from './app'
+import { createSecretBox } from './crypto/secrets'
 import { getDb } from './db/client'
 import { loadEnv } from './env'
 import { createMailer } from './integrations/mailer'
@@ -6,6 +7,7 @@ import { closeBrowser } from './integrations/playwright'
 import { createBoss, startBoss } from './jobs/boss'
 import { createStepRegistry } from './loop/registry'
 import { createRuntimeAdapter } from './runtime/index'
+import { createSettingsStore } from './settings/store'
 
 const env = loadEnv()
 const db = getDb()
@@ -21,6 +23,10 @@ const alertTo = env.ALERT_EMAIL_TO ?? 'alerts@exemple.test'
 // fait que construire l'objet, `startBoss` (plus bas) le démarre.
 const boss = createBoss(env)
 
+// Le store est sans état (il ne fait que lire/écrire la table `settings`) :
+// celui-ci et celui construit par `buildApp` ne peuvent pas diverger.
+const settings = createSettingsStore(db, await createSecretBox(env.MASTER_KEY))
+
 const app = await buildApp({ db, adapter, mailer, boss })
 boss.on('error', (err) => app.log.error(err, 'pg-boss'))
 
@@ -35,6 +41,7 @@ await startBoss(boss, {
   adapter,
   mailer,
   alertTo,
+  settings,
   stepRegistry: createStepRegistry({
     adapter,
     worktreesRoot: env.WORKTREES_ROOT,

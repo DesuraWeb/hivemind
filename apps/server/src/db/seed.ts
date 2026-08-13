@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ROLE_KEYS, type RoleKey } from '@silithid/shared'
 import type { Kysely } from 'kysely'
+import { BUDGET_SETTINGS_KEYS, DEFAULT_BUDGET_THRESHOLDS } from '../budget/scheduler'
 import { DEFAULT_GUARDED_PATHS, GUARDED_PATHS_SETTINGS_KEY } from '../security/guarded-paths'
 import type { Database } from './types'
 
@@ -108,6 +109,24 @@ export async function seedDefaultSettings(db: Kysely<Database>): Promise<void> {
     })
     .onConflict((oc) => oc.column('key').doNothing())
     .execute()
+
+  // Seuils du scheduler de budget (Phase 5, Task 2). Les défauts et leur
+  // justification vivent dans `budget/scheduler.ts` : ici on ne fait que les
+  // matérialiser en base pour qu'ils soient modifiables sans redéploiement.
+  // `doNothing` sur conflit : un seuil ajusté par Florian ne doit pas être
+  // réécrit par un `pnpm db:seed`.
+  for (const [key, value] of [
+    [BUDGET_SETTINGS_KEYS.reservePct, DEFAULT_BUDGET_THRESHOLDS.reservePct],
+    [BUDGET_SETTINGS_KEYS.resumePct, DEFAULT_BUDGET_THRESHOLDS.resumePct],
+    [BUDGET_SETTINGS_KEYS.stalenessMinutes, DEFAULT_BUDGET_THRESHOLDS.stalenessMinutes],
+    [BUDGET_SETTINGS_KEYS.staleBumpPct, DEFAULT_BUDGET_THRESHOLDS.staleBumpPct],
+  ] as const) {
+    await db
+      .insertInto('settings')
+      .values({ key, value: JSON.stringify(value) })
+      .onConflict((oc) => oc.column('key').doNothing())
+      .execute()
+  }
 }
 
 // Point d'entrée CLI : `pnpm db:seed`

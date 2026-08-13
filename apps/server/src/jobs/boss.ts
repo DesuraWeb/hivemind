@@ -1,15 +1,37 @@
 import type { Kysely } from 'kysely'
 import { PgBoss } from 'pg-boss'
+import { type BudgetSettingsSource, runBudgetTick } from '../budget/scheduler'
 import type { Database } from '../db/types'
 import { type Env, databaseUrl } from '../env'
 import { runAuthHealthcheck } from '../health/auth-check'
 import type { Mailer } from '../integrations/mailer'
 import type { RuntimeAdapter } from '../runtime/types'
-import { RUN_STEP_QUEUE, type StepRegistry, registerRunStepWorker } from './run-step'
+import {
+  RUN_STEP_QUEUE,
+  type RunStepJobData,
+  type StepRegistry,
+  registerRunStepWorker,
+} from './run-step'
 
 /** Brief §4 : le healthcheck d'authentification tourne toutes les 15 minutes. */
 export const AUTH_HEALTHCHECK_QUEUE = 'auth.healthcheck'
 const AUTH_HEALTHCHECK_CRON = '*/15 * * * *'
+
+/** La sonde de budget (Phase 5, Task 2). */
+export const BUDGET_PROBE_QUEUE = 'budget.probe'
+/**
+ * Toutes les 5 minutes. La mesure est gratuite (`runtime/usage.ts`), donc la
+ * fréquence n'arbitre pas un coût en tokens — seulement un appel réseau d'une
+ * seconde, et le retard de détection qu'on accepte.
+ *
+ * Le raisonnement tient dans la réserve : 15 points de la fenêtre de 5 h, soit
+ * bien plus que ce qu'une boucle peut consommer en 5 minutes. Le retard de
+ * détection est donc absorbé par construction. Descendre à la minute
+ * multiplierait les appels par cinq sans rien protéger de plus ; monter à 15
+ * minutes laisserait plusieurs runs parallèles grignoter la réserve avant
+ * qu'on ne s'en aperçoive.
+ */
+const BUDGET_PROBE_CRON = '*/5 * * * *'
 
 export interface BossDeps {
   db: Kysely<Database>
@@ -23,6 +45,12 @@ export interface BossDeps {
    * la boucle elle-même, et ce que remplissent ceux qui le font.
    */
   stepRegistry?: StepRegistry
+  /**
+   * Réglages lus par la sonde de budget (seuils, péremption). Typé au plus
+   * étroit — `SettingsStore` le satisfait structurellement : pg-boss n'a
+   * besoin que de lire des clés publiques, jamais des secrets.
+   */
+  settings: BudgetSettingsSource
 }
 
 /**
@@ -60,4 +88,19 @@ export async function startBoss(boss: PgBoss, deps: BossDeps): Promise<void> {
   // côté pg-boss (upsert sur la clé de queue), un redémarrage ne duplique pas
   // le cron.
   await boss.schedule(AUTH_HEALTHCHECK_QUEUE, AUTH_HEALTHCHECK_CRON)
+
+  await boss.createQueue(BUDGET_PROBE_QUEUE)
+  await boss.work(BUDGET_PROBE_QUEUE, async () => {
+    await runBudgetTick({
+      db: deps.db,
+      adapter: deps.adapter,
+      settings: deps.settings,
+      // La reprise doit ré-enfiler le run elle-même : le worker `run.step`
+      // s'est arrêté de se ré-enfiler en entrant dans `paused_budget`.
+      enqueueRun: async (runId) => {
+        await boss.send(RUN_STEP_QUEUE, { runId } satisfies RunStepJobData)
+      },
+    })
+  })
+  await boss.schedule(BUDGET_PROBE_QUEUE, BUDGET_PROBE_CRON)
 }
