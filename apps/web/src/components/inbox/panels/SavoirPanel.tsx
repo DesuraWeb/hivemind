@@ -16,7 +16,7 @@ export function SavoirPanel({ item, projectName }: PanelProps) {
   return (
     <>
       <div style={{ font: '11.5px var(--font-mono)', color: 'var(--text-low)' }}>
-        proposé par {projectName} · {item.agent ?? '—'}
+        proposé par {projectName} · {item.agent ?? '·'}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <SectionLabel>Formulation</SectionLabel>

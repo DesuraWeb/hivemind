@@ -4,12 +4,17 @@ import type { Kysely } from 'kysely'
 import type { PgBoss } from 'pg-boss'
 import { z } from 'zod'
 import type { Database } from '../../db/types'
-import { type InboxItemRow, listInbox } from '../../inbox/repo'
+import { optimizeAnswer } from '../../inbox/optimize'
+import { type InboxItemRow, getInboxItem, listInbox } from '../../inbox/repo'
 import { type InboxResponse, resolveInboxItem } from '../../inbox/resolve'
+import type { RuntimeAdapter } from '../../runtime/types'
+import type { SettingsStore } from '../../settings/store'
 
 export interface InboxRoutesDeps {
   db: Kysely<Database>
   boss: PgBoss
+  adapter: RuntimeAdapter
+  settings: SettingsStore
 }
 
 /** `status=` / `type=` / `project=` vides : traités comme absents, pas comme invalides — cf. le gabarit de route du brief §8. */
@@ -26,6 +31,10 @@ const resolveParams = z.object({ id: z.string().uuid() })
 /** Miroir de `InboxResponse` (resolve.ts) : `text`, s'il est présent, doit être une chaîne — le reste passe tel quel. */
 const humanResponseSchema = z.object({ text: z.string().optional() }).passthrough()
 const resolveBody = z.object({ response: humanResponseSchema })
+
+const optimizeParams = z.object({ id: z.string().uuid() })
+/** `text` : la réponse brute telle que tapée dans le champ — vide refusé, rien à optimiser. */
+const optimizeBody = z.object({ text: z.string().min(1) })
 
 /**
  * zod rend les clés optionnelles comme `T | undefined` explicitement, jamais
@@ -153,6 +162,43 @@ export async function inboxRoutes(app: FastifyInstance, deps: InboxRoutesDeps): 
         return reply.code(404).send({ error: 'item_introuvable' })
       if (message.includes('déjà résolu')) return reply.code(409).send({ error: 'deja_resolu' })
       throw err
+    }
+  })
+
+  /**
+   * Fonctionnalité à la demande (BRIEF-RETOUR.md §6 : « la formulation de
+   * Florian fait foi ») : propose une version enrichie de `text`, ne l'écrit
+   * jamais. Un vrai échange modèle par appel — jamais déclenché à la frappe,
+   * seulement quand le panneau question clique « Optimiser ».
+   */
+  app.post('/api/inbox/:id/optimize', { preHandler: app.requireAuth }, async (req, reply) => {
+    const params = optimizeParams.safeParse(req.params)
+    if (!params.success) return reply.code(400).send({ error: 'id_invalide' })
+
+    const body = optimizeBody.safeParse(req.body)
+    if (!body.success) return reply.code(400).send({ error: 'requete_invalide' })
+
+    const item = await getInboxItem(deps.db, params.data.id)
+    if (!item) return reply.code(404).send({ error: 'item_introuvable' })
+    // Le panneau question est le seul appelant prévu : un item d'un autre
+    // type n'a ni « question posée » ni sens à optimiser une réponse.
+    if (item.type !== 'question') return reply.code(400).send({ error: 'type_non_supporte' })
+    if (!item.projectId) return reply.code(422).send({ error: 'projet_introuvable' })
+
+    try {
+      const result = await optimizeAnswer(deps.db, deps.adapter, deps.settings, {
+        projectId: item.projectId,
+        question: item.title,
+        draft: body.data.text,
+      })
+      return result
+    } catch (err) {
+      // `collectStructured` (structured.ts) épuise ses tentatives puis lève
+      // une `Error` générique — même traitement que le reste de cette route :
+      // 502, jamais un 500 opaque, l'appelant (QuestionPanel) sait que c'est
+      // l'échange modèle qui a échoué, pas la route elle-même.
+      req.log.error({ err, itemId: item.id }, 'optimisation Hive échouée')
+      return reply.code(502).send({ error: 'optimisation_echouee' })
     }
   })
 }

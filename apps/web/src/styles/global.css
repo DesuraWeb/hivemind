@@ -66,6 +66,45 @@ textarea::placeholder {
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 12%, transparent);
 }
 
+/* Liseré lumineux orbitant (palette ⌘K, MajordomeStrip.dc.html) : conic-gradient
+   ACCENT UNIQUEMENT animé via @property --hive-angle (CLAUDE.md, 12/08 soir).
+   @property doit vivre dans une feuille de style, pas dans un style inline React. */
+@property --hive-angle {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@keyframes hiveOrbit {
+  from {
+    --hive-angle: 0;
+  }
+  to {
+    --hive-angle: 360;
+  }
+}
+
+.hive-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-lg);
+  padding: 1.5px;
+  pointer-events: none;
+  z-index: 3;
+  background: conic-gradient(
+    from calc(var(--hive-angle) * 1deg),
+    rgba(205, 225, 255, 0.09) 0deg 252deg,
+    color-mix(in oklab, var(--accent) 80%, transparent) 294deg,
+    color-mix(in oklab, var(--accent) 45%, white) 303deg,
+    rgba(205, 225, 255, 0.09) 330deg 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: hiveOrbit 5s linear infinite;
+}
+
 /* Pastille pulsée d'une boucle active (indicateur d'état flottant, Task 7/8). */
 @keyframes chapoPulse {
   0%,

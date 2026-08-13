@@ -63,11 +63,11 @@ export function EmailApprovalPanel({ item, resolving, onResolve }: PanelProps) {
         >
           <div style={fieldRow}>
             <span style={fieldLabel}>De</span>
-            <span style={{ color: 'var(--text-mid)' }}>{email.from ?? '—'}</span>
+            <span style={{ color: 'var(--text-mid)' }}>{email.from ?? '·'}</span>
           </div>
           <div style={fieldRow}>
             <span style={fieldLabel}>À</span>
-            <span style={{ color: 'var(--text-mid)' }}>{email.to ?? '—'}</span>
+            <span style={{ color: 'var(--text-mid)' }}>{email.to ?? '·'}</span>
           </div>
           <div style={fieldRow}>
             <span style={fieldLabel}>Objet</span>

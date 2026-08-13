@@ -1,5 +1,11 @@
 import type { InboxStatus, InboxType } from '@silithid/shared'
-import type { InboxItemView, InboxResponsePayload, ResolveResult } from './inbox-types'
+import type {
+  InboxItemView,
+  InboxResponsePayload,
+  OptimizeAnswerResult,
+  ResolveResult,
+} from './inbox-types'
+import type { ProjectView } from './project-types'
 
 export class ApiError extends Error {
   constructor(
@@ -34,7 +40,7 @@ export interface Me {
 }
 
 /**
- * Sous-ensemble de `ProjectView` (projects/repo.ts) dont l'Inbox a besoin :
+ * Sous-ensemble de `ProjectView` (project-types.ts) dont l'Inbox a besoin :
  * le nom et la teinte du projet pour la ligne de méta d'un item (« Le Koin ·
  * dev · q-112 »). `api.projects.list()` rend la forme complète — le reste des
  * champs (step, loop, conso…) est simplement ignoré ici, pas absent.
@@ -43,6 +49,27 @@ export interface ProjectSummary {
   id: string
   name: string
   tint: string | null
+}
+
+/**
+ * Miroir front de `GlobeView` (apps/server/src/globes/repo.ts). Comme pour
+ * les projets, `id` est le slug public. Les compteurs (`projectCount`,
+ * `activeCount`, `pendingCount`) sont dérivés côté serveur — jamais
+ * recalculés ici.
+ */
+export interface GlobeView {
+  id: string
+  name: string
+  color: string | null
+  position: number
+  projectCount: number
+  activeCount: number
+  pendingCount: number
+}
+
+export interface CreateGlobeInput {
+  name: string
+  color?: string
 }
 
 export interface InboxListFilters {
@@ -70,8 +97,15 @@ export const api = {
       request<InboxItemView[]>('GET', `/api/inbox${toQuery(filters)}`),
     resolve: (id: string, response: InboxResponsePayload) =>
       request<ResolveResult>('POST', `/api/inbox/${id}/resolve`, { response }),
+    /** À la demande uniquement (bouton « Optimiser ») — jamais appelé à la frappe. */
+    optimize: (id: string, text: string) =>
+      request<OptimizeAnswerResult>('POST', `/api/inbox/${id}/optimize`, { text }),
   },
   projects: {
-    list: () => request<ProjectSummary[]>('GET', '/api/projects'),
+    list: () => request<ProjectView[]>('GET', '/api/projects'),
+  },
+  globes: {
+    list: () => request<GlobeView[]>('GET', '/api/globes'),
+    create: (input: CreateGlobeInput) => request<GlobeView>('POST', '/api/globes', input),
   },
 }

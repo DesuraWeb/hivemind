@@ -141,7 +141,7 @@ function SavoirRow({
         {item.title}
       </div>
       <div style={{ font: '11px var(--font-mono)', color: 'var(--text-low)' }}>
-        {projectName} · {item.agent ?? '—'} · {shortId(item.id)}
+        {projectName} · {item.agent ?? '·'} · {shortId(item.id)}
       </div>
     </button>
   )

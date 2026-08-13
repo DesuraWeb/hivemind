@@ -87,7 +87,7 @@ export function Inbox() {
   }, [projectsQuery.data])
 
   const projectName = (slug: string | null): string =>
-    slug ? (projectsBySlug.get(slug)?.name ?? slug) : '—'
+    slug ? (projectsBySlug.get(slug)?.name ?? slug) : '·'
 
   const selectedItem = allItems.find((i) => i.id === selectedId) ?? null
 

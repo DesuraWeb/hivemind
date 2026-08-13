@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { OscilloscopeInstance } from '../vendor/oscilloscope'
 import { create as createOscilloscope } from '../vendor/oscilloscope'
+import { CommandPalette } from './CommandPalette'
 
 // HiveStrip = reprise React de MajordomeStrip.dc.html (le fichier du pack
 // garde son nom, CLAUDE.md : « HIVE » partout dans l'UI, le composant React
-// s'appelle HiveStrip). Ne porte ici que le socle : oscilloscope, micro rond,
-// champ pilule. Le fil de conversation et la palette ⌘K arrivent à la Task 8
-// — volontairement absents.
+// s'appelle HiveStrip). Porte le socle (oscilloscope, micro rond, champ
+// pilule) + la palette ⌘K (CommandPalette, Task 8). Le fil de conversation
+// Hive au-dessus du strip reste volontairement absent (hors périmètre Task 8,
+// cf. plan Phase 3).
 export function HiveStrip() {
   const oscContainerRef = useRef<HTMLDivElement>(null)
   const oscRef = useRef<OscilloscopeInstance | null>(null)
@@ -48,6 +50,7 @@ export function HiveStrip() {
         fontFamily: 'var(--font-sans)',
       }}
     >
+      <CommandPalette />
       <div ref={oscContainerRef} style={{ width: '72%', maxWidth: 340, height: 36 }} />
       <div
         style={{

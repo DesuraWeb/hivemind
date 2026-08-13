@@ -3,6 +3,7 @@ import type { Kysely } from 'kysely'
 import type { PgBoss } from 'pg-boss'
 import { eventsRoutes } from './api/events'
 import { authRoutes } from './api/routes/auth'
+import { globesRoutes } from './api/routes/globes'
 import { healthRoutes } from './api/routes/health'
 import { inboxRoutes } from './api/routes/inbox'
 import { projectsRoutes } from './api/routes/projects'
@@ -64,8 +65,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(authRoutes, { db: deps.db })
   await app.register(settingsRoutes, { settings })
   await app.register(eventsRoutes)
-  await app.register(inboxRoutes, { db: deps.db, boss })
+  await app.register(inboxRoutes, { db: deps.db, boss, adapter, settings })
   await app.register(projectsRoutes, { db: deps.db, settings })
+  await app.register(globesRoutes, { db: deps.db })
 
   return app
 }

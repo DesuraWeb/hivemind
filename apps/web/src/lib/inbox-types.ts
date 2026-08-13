@@ -26,3 +26,15 @@ export interface ResolveResult {
 
 /** Réponse humaine envoyée à `POST /api/inbox/:id/resolve` — forme libre au-delà de `text` (resolve.ts). */
 export type InboxResponsePayload = Record<string, unknown> & { text?: string }
+
+/**
+ * Rendu par `POST /api/inbox/:id/optimize` (inbox/optimize.ts) : `optimized`
+ * est une PROPOSITION, jamais écrite nulle part par cette route — c'est
+ * QuestionPanel qui décide si elle remplace le champ (« Utiliser ») ou reste
+ * simplement affichée. `added` liste ce que Hive a injecté que Florian
+ * n'avait pas dit, pour que la proposition soit auditable.
+ */
+export interface OptimizeAnswerResult {
+  optimized: string
+  added: string[]
+}

@@ -79,7 +79,7 @@ export function ItemCard({ item, projectName, selected, vanishing, onPick }: Ite
           {item.title}
         </div>
         <div style={{ font: '11.5px var(--font-mono)', color: 'var(--text-low)' }}>
-          {projectName} · {item.agent ?? '—'} · {shortId(item.id)}
+          {projectName} · {item.agent ?? '·'} · {shortId(item.id)}
         </div>
       </button>
     </div>

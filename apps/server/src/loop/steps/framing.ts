@@ -18,7 +18,8 @@ function githubRemoteUrl(repoFullName: string): string {
   return `https://github.com/${repoFullName}.git`
 }
 
-interface ClientRow {
+/** Exporté : `inbox/optimize.ts` (Task « réponse optimisée par Hive ») construit le même résumé pour le majordome. */
+export interface ClientRow {
   name: string
   tone: string | null
   notes: unknown
@@ -34,7 +35,7 @@ function isClientNote(value: unknown): value is ClientNote {
 }
 
 /** Résumé de la fiche client injecté au garant — brief : « consulte la fiche client ». */
-function clientSummary(client: ClientRow | undefined): string {
+export function clientSummary(client: ClientRow | undefined): string {
   if (!client) return 'Aucun client associé à ce projet — rien à consulter côté fiche client.'
 
   const lines = [`Client : ${client.name}`]

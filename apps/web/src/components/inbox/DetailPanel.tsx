@@ -144,6 +144,10 @@ export function DetailPanel({
         }}
       >
         <Panel
+          // Force un remontage complet à chaque changement d'item sélectionné :
+          // sans ça, l'état local d'un panneau (réponse tapée, proposition Hive
+          // en cours…) survivrait au changement de question, invisible mais faux.
+          key={item.id}
           item={item}
           projectName={projectName}
           resolving={resolving}

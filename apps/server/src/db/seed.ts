@@ -45,6 +45,23 @@ export async function seedRoleTemplates(db: Kysely<Database>): Promise<void> {
 }
 
 /**
+ * Paramètres de base sous-entendus par Florian dans ses réponses lapidaires
+ * (« Ok réalise ce design », « corrige ces bugs ») — injectés par
+ * `POST /api/inbox/:id/optimize` (inbox/optimize.ts) dans la proposition de
+ * Hive, jamais dans la réponse brute elle-même. Point de départ à affiner au
+ * fil de l'usage, pas une vérité figée : modifiable dans les réglages sans
+ * redéploiement. La boucle qui apprendrait ces paramètres depuis les
+ * corrections de Florian (BRIEF-RETOUR.md §6, « conscience collective ») est
+ * hors scope ici — ce réglage reste statique tant qu'elle n'existe pas.
+ */
+export const DEFAULT_ANSWER_BASELINE = [
+  '- Mobile 390px d’abord, desktop ensuite.',
+  '- Tokens du pack (couleurs, typographies, espacements) : jamais de valeur en dur.',
+  '- Aucune nouvelle dépendance sans qu’elle soit explicitement demandée.',
+  '- Un test (unitaire ou de type) qui couvre le correctif ou la fonctionnalité livrée.',
+].join('\n')
+
+/**
  * Taux de conversion tokens → euros, affiché dans les listes de projets
  * (« 14,2 k tokens · 2,10 € »). Valeur d'ordre de grandeur, pas de
  * facturation : elle est destinée à donner une échelle, pas un montant exact.
@@ -54,6 +71,12 @@ export async function seedDefaultSettings(db: Kysely<Database>): Promise<void> {
   await db
     .insertInto('settings')
     .values({ key: 'pricing.eur_per_mtok', value: JSON.stringify(15) })
+    .onConflict((oc) => oc.column('key').doNothing())
+    .execute()
+
+  await db
+    .insertInto('settings')
+    .values({ key: 'hive.answer_baseline', value: JSON.stringify(DEFAULT_ANSWER_BASELINE) })
     .onConflict((oc) => oc.column('key').doNothing())
     .execute()
 }
