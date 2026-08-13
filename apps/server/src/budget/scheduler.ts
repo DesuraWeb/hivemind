@@ -5,6 +5,12 @@ import { createInboxItem } from '../inbox/repo'
 import { applyEvent } from '../loop/orchestrator'
 import { loopFromRunState } from '../projects/derive'
 import type { RuntimeAdapter, UsageSnapshot } from '../runtime/types'
+import {
+  RESERVE_UNLOCK_SETTINGS_KEY,
+  type ReserveStatus,
+  effectivePauseThreshold,
+  parseUnlockUntil,
+} from './reserve'
 
 /**
  * Le scheduler de budget (Phase 5, Task 2) : met les boucles en pause quand la
@@ -187,6 +193,13 @@ export function decideBudget(
   snapshot: UsageSnapshot | null,
   thresholds: BudgetThresholds,
   now: Date,
+  /**
+   * État de la réserve. Par défaut intacte : le seuil s'applique. Entamée, il
+   * ne s'applique plus — c'est le sens même de puiser dans la réserve, et sans
+   * ça une reprise manuelle serait annulée cinq minutes plus tard par le tick
+   * suivant (voir `./reserve.ts`).
+   */
+  reserve: ReserveStatus = { state: 'intacte' },
 ): BudgetDecision {
   if (!snapshot || !snapshot.available) {
     return {
@@ -213,7 +226,7 @@ export function decideBudget(
     ageMinutes,
   }
 
-  const pause = pauseThreshold(thresholds)
+  const pause = effectivePauseThreshold(thresholds, reserve)
   const label = fresh
     ? `${pct} %`
     : `${pct} % (mesure périmée · majorée de ${thresholds.staleBumpPct} points)`
@@ -299,7 +312,10 @@ export async function runBudgetTick(deps: BudgetTickDeps): Promise<BudgetTickRes
     snapshot = null
   }
 
-  const decision = decideBudget(snapshot, thresholds, now)
+  // La réserve est lue à chaque tick, jamais mise en cache : une dérogation
+  // expire toute seule, et c'est le tick suivant qui doit s'en apercevoir.
+  const reserve = parseUnlockUntil(await deps.settings.get(RESERVE_UNLOCK_SETTINGS_KEY), now)
+  const decision = decideBudget(snapshot, thresholds, now, reserve)
   const result: BudgetTickResult = {
     decision,
     pausedRunIds: [],
