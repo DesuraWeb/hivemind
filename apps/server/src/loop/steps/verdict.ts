@@ -10,8 +10,20 @@
  * jamais le garant, il boucle dev↔reviewer sans lui) et le rapport du juge
  * visuel (`judging.ts`, conformités + écarts, sans aucune décision — « le
  * juge décrit, le garant décide »).
+ *
+ * DEPUIS LA PHASE 5 (Task 4), un verdict `conforme` lève en plus le gate de
+ * mise en prod (`../../deploy/prod-gate.ts`), quel que soit le mode de boucle
+ * du step — `auto` compris. Ce fichier est le point d'appel parce que c'est
+ * ici, et nulle part ailleurs, qu'un step devient promouvable.
  */
 
+import {
+  type ProdBase,
+  type ProdChangedFile,
+  parseChangedFiles,
+  resolveStaging,
+  runProdGate,
+} from '../../deploy/prod-gate'
 import type { LoopEvent } from '../../domain/run-state'
 import type { StepHandler } from '../../jobs/run-step'
 import { type Verdict, collectStructured, verdictSchema } from '../../runtime/structured'
@@ -58,6 +70,70 @@ function findLatestJudgeReport(messages: StoredMessage[]): string | undefined {
     .reverse()
     .find((m) => m.kind === 'report' && m.fromRole === 'judge' && m.toRole === 'garant')
   return report?.body
+}
+
+/**
+ * Ce que la dernière passation dev→garant porte en plus du rapport : la PR, la
+ * liste de ses fichiers et le commit d'où part le step (`coding.ts`). C'est la
+ * matière de « ce qui change » et du rollback dans l'item de mise en prod. Tout
+ * y est optionnel : un run dont le bus ne porterait pas ces clés (message écrit
+ * avant la Phase 5) donne un item qui dit ce qu'il ignore, jamais un item qui
+ * invente.
+ */
+function findDevHandoff(messages: StoredMessage[]): {
+  pr: { number: number; url: string } | null
+  changedFiles: ProdChangedFile[]
+  base: ProdBase | null
+} {
+  const handoff = [...messages]
+    .reverse()
+    .find((m) => m.kind === 'report' && m.fromRole === 'dev' && m.toRole === 'garant')
+  const meta = handoff?.meta ?? {}
+
+  const prNumber = meta.pr_number
+  const prUrl = meta.pr_url
+  const baseRef = meta.base_ref
+  const baseCommit = meta.base_commit
+
+  return {
+    pr:
+      typeof prNumber === 'number' && typeof prUrl === 'string'
+        ? { number: prNumber, url: prUrl }
+        : null,
+    changedFiles: parseChangedFiles(meta.changed_files),
+    base:
+      typeof baseRef === 'string' && typeof baseCommit === 'string'
+        ? { ref: baseRef, commit: baseCommit }
+        : null,
+  }
+}
+
+/**
+ * L'URL réellement servie et capturée pour ce tour (`deploying.ts`).
+ *
+ * Filtré sur la PRÉSENCE de `url` + `target`, jamais sur `kind === 'info'`
+ * seul : l'orchestrateur écrit lui aussi des `info` system→system à chaque
+ * transition (`meta.event`/`meta.decision`), et prendre le dernier `info` venu
+ * rendrait une URL vide un run sur deux.
+ */
+function findDeployInfo(
+  messages: StoredMessage[],
+): { url: string; targetKind: string; pages: number } | null {
+  const info = [...messages]
+    .reverse()
+    .find(
+      (m) =>
+        m.fromRole === 'system' &&
+        typeof m.meta.url === 'string' &&
+        typeof m.meta.target === 'string',
+    )
+  if (!info) return null
+  const pages = info.meta.pages
+  return {
+    url: String(info.meta.url),
+    targetKind: String(info.meta.target),
+    pages: Array.isArray(pages) ? pages.length : 0,
+  }
 }
 
 function buildPreamble(opts: {
@@ -169,7 +245,12 @@ export function createVerdictHandler(deps: VerdictDeps): StepHandler {
         'runs.worktree_path as worktreePath',
         'steps.max_iterations as maxIterations',
         'steps.project_id as projectId',
+        'steps.position as stepPosition',
+        'steps.title as stepTitle',
+        'steps.autonomy as stepAutonomy',
         'projects.name as projectName',
+        'projects.autonomy_default as projectAutonomy',
+        'projects.staging_url as stagingUrl',
       ])
       .where('runs.id', '=', runId)
       .executeTakeFirstOrThrow()
@@ -239,6 +320,49 @@ export function createVerdictHandler(deps: VerdictDeps): StepHandler {
     })
 
     if (verdict.decision === 'conforme') {
+      // Le gate de mise en prod (Phase 5, Task 4), levé EN PARALLÈLE du flux :
+      // l'événement `verdict_conforme` ci-dessous traverse `decide()`
+      // exactement comme avant, sans savoir que ce gate existe. Aucune
+      // condition sur `autonomy` ici — c'est le point de la tâche : le mode
+      // `auto` porte sur l'itération dev↔reviewer, jamais sur la prod.
+      //
+      // Sur `verdict_ecarts`, en revanche, rien n'est levé : il n'y a rien à
+      // promouvoir quand le garant vient de refuser le step (le type de
+      // `runProdGate` interdit d'ailleurs de l'appeler avec ce verdict).
+      //
+      // Pas de `try/catch` : si l'item ne peut pas être écrit, le handler doit
+      // échouer bruyamment. Un verdict conforme qui passerait sans laisser la
+      // décision de prod quelque part est exactement ce que cette tâche
+      // interdit — et l'échec est ici de même nature que celui des écritures
+      // qui précèdent (la base), donc le rejeu du job les couvre ensemble.
+      const stepCount = await db
+        .selectFrom('steps')
+        .select((eb) => eb.fn.countAll<string>().as('count'))
+        .where('project_id', '=', runRow.projectId)
+        .executeTakeFirstOrThrow()
+      const handoff = findDevHandoff(messages)
+
+      await runProdGate(db, {
+        runId,
+        projectId: runRow.projectId,
+        projectName: runRow.projectName,
+        step: {
+          position: runRow.stepPosition,
+          count: Number(stepCount.count),
+          title: runRow.stepTitle,
+        },
+        // Même règle de résolution que l'orchestrateur : `steps.autonomy`
+        // prime, `null` hérite du projet (migration 0001).
+        autonomy: runRow.stepAutonomy ?? runRow.projectAutonomy,
+        iteration: runRow.iteration,
+        maxIterations: runRow.maxIterations,
+        verdict: { decision: 'conforme', ecarts: verdict.ecarts },
+        pr: handoff.pr,
+        changedFiles: handoff.changedFiles,
+        base: handoff.base,
+        staging: resolveStaging(findDeployInfo(messages), runRow.stagingUrl),
+      })
+
       return { type: 'verdict_conforme' } satisfies LoopEvent
     }
 

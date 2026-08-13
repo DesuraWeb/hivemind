@@ -59,6 +59,9 @@ export interface PullRequestFile {
   previousPath?: string
   /** brut GitHub : added|removed|modified|renamed|copied|changed|unchanged. */
   status: string
+  /** Lignes ajoutées / retirées, rendues par la même réponse REST. Le gate de mise en prod (Phase 5, Task 4) en fait « +2 340 −118 » : sans ce chiffre, « ce qui change » oblige à ouvrir le diff. */
+  additions: number
+  deletions: number
 }
 
 export interface CheckRun {
@@ -178,11 +181,19 @@ export async function listPullRequestFiles(
     '--slurp',
   ])
   const pages = JSON.parse(stdout) as Array<
-    Array<{ filename: string; previous_filename?: string | null; status: string }>
+    Array<{
+      filename: string
+      previous_filename?: string | null
+      status: string
+      additions?: number
+      deletions?: number
+    }>
   >
   return pages.flat().map((f) => ({
     path: f.filename,
     status: f.status,
+    additions: f.additions ?? 0,
+    deletions: f.deletions ?? 0,
     ...(f.previous_filename ? { previousPath: f.previous_filename } : {}),
   }))
 }

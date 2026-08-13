@@ -41,6 +41,29 @@ async function commitIfDirty(worktreePath: string, message: string): Promise<voi
   await run('git', [...DEV_COMMIT_IDENTITY, 'commit', '-m', message], { cwd: worktreePath })
 }
 
+/**
+ * Le commit d'où part ce step : l'ancêtre commun entre la branche du run et sa
+ * base. C'est l'état du dépôt d'AVANT le step, donc la cible d'un retour
+ * arrière — c'est ce que le gate de mise en prod (Phase 5, Task 4) affiche
+ * comme rollback côté code, et il ne l'affiche que s'il est réellement connu.
+ *
+ * `merge-base` plutôt que `rev-parse origin/<base>` : la base a pu avancer
+ * depuis que la branche en a été extraite (le dépôt est partagé entre runs et
+ * refetché), et pointer un commit que ce step n'a jamais vu ferait annoncer un
+ * retour arrière faux. `null` en cas d'échec git : le gate dit alors qu'il ne
+ * sait pas, ce qui est vrai — jamais faire échouer un run de dev pour ça.
+ */
+async function mergeBaseWithBase(worktreePath: string, base: string): Promise<string | null> {
+  try {
+    const { stdout } = await run('git', ['merge-base', 'HEAD', `origin/${base}`], {
+      cwd: worktreePath,
+    })
+    return stdout.trim() || null
+  } catch {
+    return null
+  }
+}
+
 async function commitsAheadOfBase(worktreePath: string, base: string): Promise<number> {
   const { stdout } = await run('git', ['rev-list', '--count', `origin/${base}..HEAD`], {
     cwd: worktreePath,
@@ -235,13 +258,28 @@ export function createCodingHandler(deps: CodingDeps): StepHandler {
     })
 
     // La passation dev→garant : le rapport, plus l'endroit où trouver la PR.
+    //
+    // `changed_files` et `base_commit` s'ajoutent ici (Phase 5, Task 4) parce
+    // que le gate de mise en prod en a besoin au moment du verdict, et que la
+    // seule autre voie serait un second appel `gh` depuis `verdict.ts` — un
+    // appel réseau de plus, sur une donnée que ce handler vient déjà de
+    // récupérer pour le 4ᵉ gate. Réécrit à chaque tour dev↔reviewer : ce que
+    // l'item de prod montrera est bien le dernier état de la PR.
+    const baseCommit = await mergeBaseWithBase(worktreePath, runRow.defaultBranch)
     await appendMessage(db, {
       runId,
       fromRole: 'dev',
       toRole: 'garant',
       kind: 'report',
       body: report,
-      meta: { pr_number: pr.number, pr_url: pr.url, branch },
+      meta: {
+        pr_number: pr.number,
+        pr_url: pr.url,
+        branch,
+        changed_files: changedFiles,
+        base_ref: runRow.defaultBranch,
+        base_commit: baseCommit,
+      },
     })
 
     return { type: 'pr_opened', prNumber: pr.number } satisfies LoopEvent
