@@ -31,8 +31,7 @@ function isSavoir(item: InboxItemView): boolean {
  * rafraîchi par `GET /api/events` (SSE) — jamais de polling : la liste
  * s'invalide sur `inbox.new`/`inbox.resolved`, React Query refait la
  * requête. Résoudre un item appelle réellement `POST /api/inbox/:id/resolve`,
- * qui relance la boucle bloquée le cas échéant (resolve.ts, Task 2) — c'est
- * le critère de fin J7.
+ * qui relance la boucle bloquée le cas échéant (resolve.ts, Task 2).
  */
 export function Inbox() {
   const queryClient = useQueryClient()

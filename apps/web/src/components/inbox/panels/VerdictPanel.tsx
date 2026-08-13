@@ -21,8 +21,9 @@ function readEcarts(payload: Record<string, unknown>): Ecart[] {
 // Panneau « verdict » (Inbox.dc.html, sc-if selV). Les 3 captures d'écran
 // (mobile/tablette/desktop) sont décoratives dans le prototype lui-même — de
 // simples cadres, jamais de vraies images — on les reprend telles quelles :
-// aucune donnée réelle n'existe encore pour elles (juge visuel = J8, hors
-// périmètre).
+// le juge visuel existe depuis la Phase 4 et produit de vraies captures
+// (table `artifacts`), mais aucune route ne les sert encore au front : c'est
+// ce qu'il faudrait brancher pour remplacer ces cadres.
 const SHOTS = [
   { label: 'mobile · 375', ratio: '375 / 640' },
   { label: 'tablette · 768', ratio: '768 / 800' },

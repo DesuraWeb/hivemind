@@ -3,8 +3,8 @@ import { Link } from '@tanstack/react-router'
 /**
  * Panneau de verre flottant sur l'orbe (Dashboard.dc.html : « Brief du
  * matin »). Le prototype affiche une phrase rédigée par Hive (BRIEF_MATIN de
- * data.js) — rien d'équivalent n'existe côté serveur cette phase (le
- * communicant/Hive qui rédigerait ce texte est J10+, hors périmètre Task 8).
+ * data.js) — rien d'équivalent n'existe côté serveur : le communicant sait
+ * rédiger depuis la Phase 5, mais rien ne l'appelle pour écrire ce brief.
  * `summary` est donc un résumé CALCULÉ à partir des vrais compteurs d'inbox
  * (nombre de décisions ouvertes, âge de la plus ancienne) — jamais une phrase
  * inventée pour ressembler à de la prose Hive.

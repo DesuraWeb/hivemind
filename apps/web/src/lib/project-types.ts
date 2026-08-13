@@ -16,9 +16,10 @@ export type LoopStatus = 'run' | 'wait' | 'fail' | 'done' | 'pause' | 'demarrage
 /**
  * Miroir front de `ProjectView` (apps/server/src/projects/repo.ts) : la forme
  * exacte rendue par `GET /api/projects`, alignée sur `PROJECTS[]` de
- * `docs/design/data.js`. `nodes` reste `null` tant que J13 ne le dérive pas
- * de l'activité réelle du projet — `orb.js` retombe alors sur 200 (poids égal
- * pour tous les clusters), c'est le comportement attendu de cette phase.
+ * `docs/design/data.js`. `nodes` reste `null` tant que rien ne le dérive de
+ * l'activité réelle du projet (ce sera la conscience collective, sa phase est
+ * à venir) — `orb.js` retombe alors sur 200, poids égal pour tous les
+ * clusters, et c'est le comportement voulu en attendant.
  */
 export interface ProjectView {
   id: string

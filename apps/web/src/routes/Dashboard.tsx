@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { OrbCanvas } from '../components/OrbCanvas'
 import { SectionHeader } from '../components/SectionHeader'
 import { BriefPanel } from '../components/dashboard/BriefPanel'
+import { BudgetPanel } from '../components/dashboard/BudgetPanel'
 import { FocusPanel } from '../components/dashboard/FocusPanel'
 import { HoverCard } from '../components/dashboard/HoverCard'
 import { LOOP_ORDER, badgeFor } from '../components/dashboard/loop'
@@ -490,16 +491,7 @@ export function Dashboard() {
                 ▾
               </span>
             </button>
-            {budgetOpen && (
-              <div
-                style={{ paddingTop: 10, font: '11px var(--font-mono)', color: 'var(--text-low)' }}
-              >
-                {/* Aucune source réelle cette phase : le suivi budgétaire (fenêtres
-                    5h/7j, coûts) arrive en J12 (plan Phase 3, « Hors périmètre »).
-                    Mieux vaut le dire que d'inventer un pourcentage. */}
-                Suivi budgétaire indisponible pour l&rsquo;instant · prévu en J12.
-              </div>
-            )}
+            {budgetOpen && <BudgetPanel />}
           </div>
         </div>
       </main>

@@ -57,6 +57,25 @@ export interface ProjectSummary {
  * `activeCount`, `pendingCount`) sont dérivés côté serveur — jamais
  * recalculés ici.
  */
+export interface BudgetGauge {
+  /** Pourcentage retenu pour décider : le max des deux fenêtres, majoration comprise. */
+  pct: number
+  /** `false` quand la mesure est périmée : la jauge s'affiche « inconnu ». */
+  known: boolean
+  fiveHourPct: number
+  sevenDayPct: number
+  ageMinutes: number | null
+}
+
+export interface BudgetView {
+  /** `null` quand le runtime n'expose aucune consommation : afficher « inconnu », jamais un zéro rassurant. */
+  gauge: BudgetGauge | null
+  reason: string
+  resetsAt: string | null
+  reserve: { state: 'intacte' | 'entamee'; pct: number; until: string | null }
+  thresholds: { pause: number; pauseNominal: number; resume: number }
+}
+
 export interface GlobeView {
   id: string
   name: string
@@ -120,6 +139,13 @@ export const api = {
     steps: (id: string) =>
       request<StepView[]>('GET', `/api/projects/${encodeURIComponent(id)}/steps`),
     runs: (id: string) => request<RunView[]>('GET', `/api/projects/${encodeURIComponent(id)}/runs`),
+  },
+  budget: {
+    /**
+     * La mesure est gratuite côté serveur (`runtime/usage.ts` interroge le SDK
+     * sans consommer de token) : cette route peut être rafraîchie sans coût.
+     */
+    get: () => request<BudgetView>('GET', '/api/budget'),
   },
   globes: {
     list: () => request<GlobeView[]>('GET', '/api/globes'),
