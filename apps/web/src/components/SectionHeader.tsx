@@ -36,8 +36,16 @@ export function SectionHeader({
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
         <span
           style={{
-            font: '600 var(--fs-label) var(--font-sans)',
-            letterSpacing: 'var(--ls-label)',
+            // Mono 10.5px / 0.18em, pas `--fs-label`/`--ls-label` en
+            // `--font-sans` : CLAUDE.md demande des « labels de section en MONO
+            // petites caps espacées (0.16-0.18em, --text-mid) », et les quatre
+            // prototypes qui en portent un (Dashboard, Inbox, Clients,
+            // Réglages) écrivent tous littéralement
+            // `font: 600 10.5px var(--font-mono); letter-spacing: 0.18em`.
+            // Les tokens `--fs-label`/`--ls-label` décrivent le gabarit
+            // générique du kit, pas ce que ces pages rendent.
+            font: '600 10.5px var(--font-mono)',
+            letterSpacing: '0.18em',
             textTransform: 'uppercase',
             color: 'var(--text-mid)',
           }}

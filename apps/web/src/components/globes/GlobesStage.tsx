@@ -288,6 +288,17 @@ export function GlobesStage({ globes }: { globes: GlobeView[] }) {
                   HOVER_RADIUS_NDC: 0,
                 }}
               />
+              {/* « Le clic sur le corps du globe » (Globes.dc.html : onClick
+                  sur le conteneur du globe, `g.open`). Un vrai lien en calque
+                  plutôt qu'un onClick sur la boîte : la destination est visible
+                  dans la barre d'état, l'entrée se fait au clavier, et le
+                  canvas dessous garde ses propres écouteurs. */}
+              <Link
+                to="/globes/$globeId"
+                params={{ globeId: g.id }}
+                aria-label={`Entrer dans le globe ${g.name}`}
+                style={{ position: 'absolute', inset: 0, zIndex: 1, borderRadius: 999 }}
+              />
             </div>
             <div
               style={{
@@ -325,6 +336,22 @@ export function GlobesStage({ globes }: { globes: GlobeView[] }) {
                   'opacity var(--dur-2) var(--ease), transform var(--dur-2) var(--ease-out)',
               }}
             >
+              {/* Globes.dc.html ~l. 67 : le bouton « Entrer → » manquait faute
+                  de destination — la route `/globes/$globeId` existe désormais. */}
+              <Link
+                to="/globes/$globeId"
+                params={{ globeId: g.id }}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 'var(--r-full)',
+                  border: '1px solid color-mix(in oklab, var(--accent) 45%, transparent)',
+                  background: 'color-mix(in oklab, var(--accent) 14%, rgba(9, 14, 22, 0.8))',
+                  color: 'var(--text-hi)',
+                  font: '500 12px var(--font-sans)',
+                }}
+              >
+                Entrer →
+              </Link>
               {g.pendingCount > 0 && (
                 <Link
                   to="/inbox"

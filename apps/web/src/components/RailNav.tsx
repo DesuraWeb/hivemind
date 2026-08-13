@@ -143,7 +143,12 @@ export function RailNav() {
           aria-label={label}
           className="rail-nav-link"
           style={itemStyle}
-          activeOptions={{ exact: true }}
+          // Seul « / » doit rester exact : sans ça, le Dashboard serait allumé
+          // partout. Les autres entrées s'allument aussi sur leurs routes
+          // filles — l'intérieur d'un globe et la fiche d'un projet vivent sous
+          // /globes, et les prototypes (Projets.dc.html l. 31, Projet.dc.html
+          // l. 31) y montrent bien l'icône Globes active.
+          activeOptions={{ exact: to === '/' }}
           activeProps={{ style: { ...itemStyle, ...activeItemStyle } }}
         >
           <Icon />

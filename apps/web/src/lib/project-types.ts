@@ -1,4 +1,4 @@
-import type { InboxType } from '@silithid/shared'
+import type { AutonomyMode, InboxType, RunState } from '@silithid/shared'
 
 export interface PendingCount {
   type: InboxType
@@ -37,4 +37,51 @@ export interface ProjectView {
   synth: string | null
   staging: string | null
   line: string
+  /**
+   * Slug du globe qui contient le projet (`projects.globe_id` est NOT NULL
+   * depuis la migration 0002 : jamais vide). Sert au fil d'Ariane « Globes /
+   * <globe> / <projet> » quand on arrive sur une fiche sans passer par
+   * l'intérieur du globe (⌘K, lien direct).
+   */
+  globe: string
+}
+
+/**
+ * Miroir front de `StepView` (apps/server/src/projects/repo.ts) : la forme
+ * rendue par `GET /api/projects/:slug/steps`, triée par `position`.
+ *
+ * `status` a cinq valeurs là où le pack DA (`Projet.dc.html`, `STEPS[].state`)
+ * n'en connaît que quatre (done / run / prod / todo) : `failed` n'a aucun
+ * visuel dans le prototype. Le mapping est fait par `stepTone`
+ * (components/project/steps.ts), pas ici.
+ */
+export interface StepView {
+  id: string
+  position: number
+  title: string
+  specs: string
+  autonomy: AutonomyMode | null
+  maxIterations: number
+  budgetTokens: number | null
+  status: 'pending' | 'running' | 'awaiting_human' | 'validated' | 'failed'
+  createdAt: string
+}
+
+/**
+ * Miroir front de `RunView` (apps/server/src/projects/repo.ts) : la forme
+ * rendue par `GET /api/projects/:slug/runs`, triée du plus récent au plus
+ * ancien. Pas de `worktreePath` — le serveur ne l'expose délibérément pas.
+ */
+export interface RunView {
+  id: string
+  stepId: string
+  iteration: number
+  state: RunState
+  branch: string | null
+  prNumber: number | null
+  resumeState: RunState | null
+  reviewRound: number
+  costTokens: number
+  startedAt: string
+  endedAt: string | null
 }

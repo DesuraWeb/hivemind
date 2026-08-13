@@ -5,7 +5,7 @@ import type {
   OptimizeAnswerResult,
   ResolveResult,
 } from './inbox-types'
-import type { ProjectView } from './project-types'
+import type { ProjectView, RunView, StepView } from './project-types'
 
 export class ApiError extends Error {
   constructor(
@@ -103,6 +103,23 @@ export const api = {
   },
   projects: {
     list: () => request<ProjectView[]>('GET', '/api/projects'),
+    /**
+     * Projets d'un seul globe (écran « intérieur de globe »). Signature
+     * distincte de `list()` plutôt qu'un paramètre optionnel : `list` est
+     * passée telle quelle en `queryFn` par Dashboard et CommandPalette, et
+     * React Query appelle `queryFn(context)` — un paramètre de filtre y
+     * recevrait le contexte de la requête, pas un filtre.
+     *
+     * Le filtrage est fait par le serveur (`?globe=`) : un globe peut porter
+     * 100+ projets, les charger tous pour en jeter la majorité serait payer
+     * la liste complète à chaque entrée dans un globe.
+     */
+    byGlobe: (globe: string) =>
+      request<ProjectView[]>('GET', `/api/projects?globe=${encodeURIComponent(globe)}`),
+    get: (id: string) => request<ProjectView>('GET', `/api/projects/${encodeURIComponent(id)}`),
+    steps: (id: string) =>
+      request<StepView[]>('GET', `/api/projects/${encodeURIComponent(id)}/steps`),
+    runs: (id: string) => request<RunView[]>('GET', `/api/projects/${encodeURIComponent(id)}/runs`),
   },
   globes: {
     list: () => request<GlobeView[]>('GET', '/api/globes'),
