@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import type { Kysely } from 'kysely'
 import type { PgBoss } from 'pg-boss'
 import { eventsRoutes } from './api/events'
+import { analyticsRoutes } from './api/routes/analytics'
 import { authRoutes } from './api/routes/auth'
 import { budgetRoutes } from './api/routes/budget'
 import { clientsRoutes } from './api/routes/clients'
@@ -83,6 +84,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(budgetRoutes, { db: deps.db, settings, adapter, boss })
   await app.register(clientsRoutes, { db: deps.db })
   await app.register(rolesRoutes, { db: deps.db, settings })
+  await app.register(analyticsRoutes, { db: deps.db, settings })
 
   return app
 }
