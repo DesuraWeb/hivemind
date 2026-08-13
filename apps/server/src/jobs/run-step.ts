@@ -13,10 +13,11 @@ export interface RunStepJobData {
 
 /**
  * Exécute le travail réel d'un état actif (appeler l'agent, git, GitHub…) et
- * rend l'événement qui en résulte. Aucun handler n'est encore enregistré pour
- * cette tâche — `framing.ts`, `coding.ts` et `reviewing.ts` (Tasks 9-11) les
- * fourniront. Volontairement hors DB : les effets de bord d'I/O externe ne
- * doivent jamais se trouver dans la même transaction que l'écriture d'état
+ * rend l'événement qui en résulte. Les six handlers (`framing.ts`,
+ * `coding.ts`, `reviewing.ts`, `deploying.ts`, `judging.ts`, `verdict.ts`)
+ * sont câblés en production par `../loop/registry.ts` (Task 5, Phase 4).
+ * Volontairement hors DB : les effets de bord d'I/O externe ne doivent
+ * jamais se trouver dans la même transaction que l'écriture d'état
  * (`applyEvent`).
  */
 export type StepHandler = (db: Kysely<Database>, runId: string) => Promise<LoopEvent>

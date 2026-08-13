@@ -4,6 +4,7 @@ import { loadEnv } from './env'
 import { createMailer } from './integrations/mailer'
 import { closeBrowser } from './integrations/playwright'
 import { createBoss, startBoss } from './jobs/boss'
+import { createStepRegistry } from './loop/registry'
 import { createRuntimeAdapter } from './runtime/index'
 
 const env = loadEnv()
@@ -23,7 +24,23 @@ const boss = createBoss(env)
 const app = await buildApp({ db, adapter, mailer, boss })
 boss.on('error', (err) => app.log.error(err, 'pg-boss'))
 
-await startBoss(boss, { db, adapter, mailer, alertTo })
+// Câblage du registre réel (Task 5, Phase 4, critère de fin) : jusqu'ici
+// `stepRegistry` était omis, donc vide (`registerRunStepWorker`, valeur par
+// défaut `{}`) — aucun run ne pouvait avancer tout seul en production, seuls
+// les tests et les scripts de smoke le remplissaient. `./loop/registry.ts`
+// documente pourquoi ces six entrées suffisent (les cinq autres états de
+// `RunState` n'ont structurellement pas besoin de handler).
+await startBoss(boss, {
+  db,
+  adapter,
+  mailer,
+  alertTo,
+  stepRegistry: createStepRegistry({
+    adapter,
+    worktreesRoot: env.WORKTREES_ROOT,
+    artifactsRoot: env.ARTIFACTS_ROOT,
+  }),
+})
 
 await app.listen({ port: env.PORT, host: '0.0.0.0' })
 

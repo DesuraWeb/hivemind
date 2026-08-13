@@ -1,10 +1,10 @@
 import type { LoopEvent } from '../../domain/run-state'
 import { ensureProjectRepo } from '../../git/repo'
-import { addRunWorktree } from '../../git/worktree'
+import { ensureRunWorktree } from '../../git/worktree'
 import type { StepHandler } from '../../jobs/run-step'
 import { collectStructured, frameSchema } from '../../runtime/structured'
 import type { RuntimeAdapter, ToolPolicy } from '../../runtime/types'
-import { appendMessage } from '../bus'
+import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
 import { resolveProjectRole } from '../roles'
 
 export interface FramingDeps {
@@ -49,6 +49,23 @@ export function clientSummary(client: ClientRow | undefined): string {
   return lines.join('\n')
 }
 
+/**
+ * Le dernier correctif garant→dev (Task 5, Phase 4) — écrit par `verdict.ts`
+ * sur `verdict_ecarts` (`kind: 'correction'`). Absent à l'itération 1 (aucun
+ * verdict n'a encore pu en produire un) : on lit sa PRÉSENCE dans le bus,
+ * jamais `runs.iteration >= 2` en dur, pour rester cohérent avec le reste de
+ * ce fichier et de `coding.ts`/`reviewing.ts`/`judging.ts`/`verdict.ts`, qui
+ * dérivent tous leur contexte des passations réellement écrites plutôt que
+ * d'un compteur — un run repris après un crash retrouve exactement le même
+ * comportement, sans dépendre de l'ordre d'exécution des effets.
+ */
+function findLatestCorrection(messages: StoredMessage[]): string | undefined {
+  const correction = [...messages]
+    .reverse()
+    .find((m) => m.kind === 'correction' && m.fromRole === 'garant' && m.toRole === 'dev')
+  return correction?.body
+}
+
 function buildPreamble(opts: {
   projectName: string
   projectContext: string | null
@@ -57,6 +74,7 @@ function buildPreamble(opts: {
   client: string
   iteration: number
   maxIterations: number
+  correction?: string
 }): string {
   return [
     '# Contexte projet',
@@ -69,6 +87,18 @@ function buildPreamble(opts: {
     `# Step à cadrer — ${opts.stepTitle}`,
     opts.specs,
     '',
+    ...(opts.correction
+      ? [
+          '# Correctif du garant (itération précédente)',
+          'Le tour précédent a produit des écarts. Voici le correctif que le garant a ' +
+            'déjà rédigé pour le dev — CORRIGE ce cadrage à partir de ce constat, ne ' +
+            'recadre pas le step à neuf comme si rien ne s’était passé : `dev_prompt` ' +
+            'doit reprendre ce correctif (au besoin complété par les specs ci-dessus),' +
+            ' pas seulement répéter le cadrage initial.',
+          opts.correction,
+          '',
+        ]
+      : []),
     '# Itération',
     `iteration = ${opts.iteration}`,
     `max_iterations = ${opts.maxIterations}`,
@@ -88,6 +118,13 @@ function buildPreamble(opts: {
  * `coding.ts` y travaille juste après, sur la même branche `run/<runId>`.
  * Le chemin est persisté dans `runs.worktree_path`/`runs.branch` pour que
  * `coding.ts` (et une reprise après crash) le retrouvent sans le redériver.
+ *
+ * Itération 2+ (Task 5, Phase 4) : ce même handler relit le bus pour un
+ * correctif garant→dev (`findLatestCorrection`) et, s'il en trouve un,
+ * l'injecte dans le préambule — le garant produit alors un `frame` CORRIGÉ
+ * plutôt qu'un cadrage à neuf. À l'itération 1, `readRunMessages` ne trouve
+ * jamais de correction (rien n'a encore pu en écrire une) : le comportement
+ * observable y est donc rigoureusement identique à avant cette tâche.
  */
 export function createFramingHandler(deps: FramingDeps): StepHandler {
   return async (db, runId) => {
@@ -119,13 +156,19 @@ export function createFramingHandler(deps: FramingDeps): StepHandler {
       : undefined
 
     const role = await resolveProjectRole(db, runRow.projectId, 'garant')
+    const correction = findLatestCorrection(await readRunMessages(db, runId))
 
     const repoPath = await ensureProjectRepo({
       worktreesRoot: deps.worktreesRoot,
       projectSlug: runRow.projectSlug,
       remoteUrl: githubRemoteUrl(runRow.repoFullName),
     })
-    const worktreePath = await addRunWorktree(repoPath, runId)
+    // `ensureRunWorktree`, pas `addRunWorktree` directement : à l'itération
+    // 2+, ce handler est réinvoqué sur un run dont le worktree du tour
+    // précédent est toujours là (jamais nettoyé, voir le commentaire de tête
+    // ci-dessus) — un `git worktree add` sur ce chemin échouerait sec
+    // (`git/worktree.ts`, commentaire de `ensureRunWorktree`).
+    const worktreePath = await ensureRunWorktree(repoPath, runId)
 
     await db
       .updateTable('runs')
@@ -151,6 +194,7 @@ export function createFramingHandler(deps: FramingDeps): StepHandler {
       client: clientSummary(client),
       iteration: runRow.iteration,
       maxIterations: runRow.maxIterations,
+      ...(correction ? { correction } : {}),
     })
 
     const frame = await collectStructured(deps.adapter, session, preamble, frameSchema, {

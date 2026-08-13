@@ -16,7 +16,12 @@ export interface BossDeps {
   adapter: RuntimeAdapter
   mailer: Mailer
   alertTo: string
-  /** Handlers de step déjà disponibles (aucun tant que Tasks 9-11 ne sont pas faites). */
+  /**
+   * Handlers de step à câbler sur le worker `run.step`. `index.ts` passe le
+   * registre réel (`../loop/registry.ts`, Task 5, Phase 4) ; omis, `{}` reste
+   * le défaut ci-dessous — c'est ce que gardent les tests qui n'exercent pas
+   * la boucle elle-même, et ce que remplissent ceux qui le font.
+   */
   stepRegistry?: StepRegistry
 }
 

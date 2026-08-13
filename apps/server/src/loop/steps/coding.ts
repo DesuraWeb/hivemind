@@ -1,9 +1,8 @@
 import { execFile } from 'node:child_process'
-import { stat } from 'node:fs/promises'
 import { promisify } from 'node:util'
 import type { LoopEvent } from '../../domain/run-state'
 import { ensureProjectRepo } from '../../git/repo'
-import { addRunWorktree, runWorktreePath } from '../../git/worktree'
+import { ensureRunWorktree } from '../../git/worktree'
 import { createPullRequest, getPullRequest } from '../../integrations/github'
 import type { StepHandler } from '../../jobs/run-step'
 import type { RuntimeAdapter } from '../../runtime/types'
@@ -32,24 +31,6 @@ const DEV_COMMIT_IDENTITY = [
   '-c',
   'user.email=dev@silithid.invalid',
 ]
-
-async function pathIsDirectory(path: string): Promise<boolean> {
-  return stat(path)
-    .then((s) => s.isDirectory())
-    .catch(() => false)
-}
-
-/**
- * Rattache le worktree du run — créé et persisté (`runs.worktree_path`) par
- * `framing.ts`, jamais retiré tant que le run vit. Le recrée seulement si le
- * répertoire a disparu entre les deux steps (crash) : `addRunWorktree` sait
- * ré-attacher la branche `run/<id>` déjà existante (voir `git/worktree.ts`).
- */
-async function ensureRunWorktree(repoPath: string, runId: string): Promise<string> {
-  const expected = runWorktreePath(repoPath, runId)
-  if (await pathIsDirectory(expected)) return expected
-  return addRunWorktree(repoPath, runId)
-}
 
 /** Filet de sécurité : commit tout ce que le dev a laissé non commité. */
 async function commitIfDirty(worktreePath: string, message: string): Promise<void> {

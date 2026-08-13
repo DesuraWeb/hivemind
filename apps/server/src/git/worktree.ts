@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { rm } from 'node:fs/promises'
+import { rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -72,6 +72,34 @@ export async function addRunWorktree(repoPath: string, runId: string): Promise<s
   }
 
   return worktreePath
+}
+
+async function pathIsDirectory(path: string): Promise<boolean> {
+  return stat(path)
+    .then((s) => s.isDirectory())
+    .catch(() => false)
+}
+
+/**
+ * Garantit que le worktree du dev existe et renvoie son chemin, SANS jamais
+ * retenter un `git worktree add` sur un répertoire déjà attaché sur disque —
+ * `addRunWorktree` échoue sec (« already exists ») dans ce cas, même quand
+ * c'est exactement la même branche qui y est déjà extraite (vérifié : voir
+ * l'historique de cette fonction). Deux appelants en ont besoin pour deux
+ * raisons différentes : `coding.ts` (Task 10) pour reprendre après un
+ * `review_ko` sur le worktree déjà posé par `framing.ts` ; `framing.ts`
+ * (Task 5, Phase 4) parce qu'une itération 2+ réinvoque CE MÊME handler sur
+ * un run dont le worktree du tour précédent n'a jamais été nettoyé (il reste
+ * ouvert tout le run, voir le commentaire de tête de `framing.ts`) — sans ce
+ * garde-fou, aucune itération corrective ne pourrait jamais cadrer une
+ * deuxième fois. Ne recrée réellement (`addRunWorktree`) que si le
+ * répertoire a disparu — le seul cas où c'est sûr : un crash entre deux
+ * passages du worker.
+ */
+export async function ensureRunWorktree(repoPath: string, runId: string): Promise<string> {
+  const expected = runWorktreePath(repoPath, runId)
+  if (await pathIsDirectory(expected)) return expected
+  return addRunWorktree(repoPath, runId)
 }
 
 /**
