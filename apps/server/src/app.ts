@@ -4,6 +4,7 @@ import type { PgBoss } from 'pg-boss'
 import { eventsRoutes } from './api/events'
 import { authRoutes } from './api/routes/auth'
 import { budgetRoutes } from './api/routes/budget'
+import { clientsRoutes } from './api/routes/clients'
 import { globesRoutes } from './api/routes/globes'
 import { healthRoutes } from './api/routes/health'
 import { inboxRoutes } from './api/routes/inbox'
@@ -79,6 +80,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(projectsRoutes, { db: deps.db, settings })
   await app.register(globesRoutes, { db: deps.db })
   await app.register(budgetRoutes, { db: deps.db, settings, adapter, boss })
+  await app.register(clientsRoutes, { db: deps.db })
 
   return app
 }
