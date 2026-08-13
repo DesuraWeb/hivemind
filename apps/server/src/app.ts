@@ -11,6 +11,7 @@ import { healthRoutes } from './api/routes/health'
 import { inboxRoutes } from './api/routes/inbox'
 import { projectsRoutes } from './api/routes/projects'
 import { rolesRoutes } from './api/routes/roles'
+import { runsRoutes } from './api/routes/runs'
 import { settingsRoutes } from './api/routes/settings'
 import { registerSession } from './auth/session'
 import { createSecretBox } from './crypto/secrets'
@@ -85,6 +86,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(clientsRoutes, { db: deps.db })
   await app.register(rolesRoutes, { db: deps.db, settings })
   await app.register(analyticsRoutes, { db: deps.db, settings })
+  await app.register(runsRoutes, { db: deps.db })
 
   return app
 }
