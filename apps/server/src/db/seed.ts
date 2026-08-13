@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ROLE_KEYS, type RoleKey } from '@silithid/shared'
 import type { Kysely } from 'kysely'
+import { DEFAULT_GUARDED_PATHS, GUARDED_PATHS_SETTINGS_KEY } from '../security/guarded-paths'
 import type { Database } from './types'
 
 const SEEDS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'seeds', 'role_templates')
@@ -94,6 +95,17 @@ export async function seedDefaultSettings(db: Kysely<Database>): Promise<void> {
   await db
     .insertInto('settings')
     .values({ key: 'hive.stack_rules', value: JSON.stringify(DEFAULT_STACK_RULES) })
+    .onConflict((oc) => oc.column('key').doNothing())
+    .execute()
+
+  // Le 4ᵉ gate (Task 6, Phase 4) : liste éditable sans redéploiement — voir
+  // security/guarded-paths.ts pour ce qu'elle contient et pourquoi.
+  await db
+    .insertInto('settings')
+    .values({
+      key: GUARDED_PATHS_SETTINGS_KEY,
+      value: JSON.stringify(DEFAULT_GUARDED_PATHS),
+    })
     .onConflict((oc) => oc.column('key').doNothing())
     .execute()
 }

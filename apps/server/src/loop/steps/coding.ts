@@ -3,9 +3,10 @@ import { promisify } from 'node:util'
 import type { LoopEvent } from '../../domain/run-state'
 import { ensureProjectRepo } from '../../git/repo'
 import { ensureRunWorktree } from '../../git/worktree'
-import { createPullRequest, getPullRequest } from '../../integrations/github'
+import { createPullRequest, getPullRequest, listPullRequestFiles } from '../../integrations/github'
 import type { StepHandler } from '../../jobs/run-step'
 import type { RuntimeAdapter } from '../../runtime/types'
+import { runSelfmodGate } from '../../security/selfmod-gate'
 import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
 import { resolveProjectRole } from '../roles'
 
@@ -216,6 +217,22 @@ export function createCodingHandler(deps: CodingDeps): StepHandler {
       .set({ branch, pr_number: pr.number, worktree_path: worktreePath })
       .where('id', '=', runId)
       .execute()
+
+    // Le 4ᵉ gate (Task 6, Phase 4) : comparé EN PARALLÈLE du flux ordinaire,
+    // pas à sa place — l'événement `pr_opened` ci-dessous continue de
+    // traverser `decide()` normalement, que ce gate trouve une correspondance
+    // ou non. Recalculé à chaque passage de ce handler (donc à chaque nouveau
+    // tour dev↔reviewer, pas seulement à la création) : un commit ajouté au
+    // deuxième tour qui touche la frontière de sécurité doit être vu tout
+    // autant qu'un commit du premier tour.
+    const changedFiles = await listPullRequestFiles(runRow.repoFullName, pr.number)
+    await runSelfmodGate(db, {
+      runId,
+      projectId: runRow.projectId,
+      prNumber: pr.number,
+      prUrl: pr.url,
+      files: changedFiles,
+    })
 
     // La passation dev→garant : le rapport, plus l'endroit où trouver la PR.
     await appendMessage(db, {

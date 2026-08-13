@@ -52,6 +52,15 @@ export interface PullRequestSummary {
   title: string
 }
 
+export interface PullRequestFile {
+  /** Chemin actuel du fichier dans le dépôt. */
+  path: string
+  /** Présent uniquement pour un fichier renommé (`status === 'renamed'`). */
+  previousPath?: string
+  /** brut GitHub : added|removed|modified|renamed|copied|changed|unchanged. */
+  status: string
+}
+
 export interface CheckRun {
   name: string
   /** brut GitHub : `queued`, `in_progress`, `completed`, ... */
@@ -138,6 +147,44 @@ export async function getPullRequest(
     'number,url,state,title',
   ])
   return JSON.parse(stdout) as PullRequestSummary
+}
+
+/**
+ * Liste les fichiers modifiés d'une PR, renommages compris (Task 6, Phase 4 —
+ * le 4ᵉ gate). `gh pr view --json files` (utilisé par `getPullRequest`
+ * ailleurs dans ce module) passe par le point GraphQL `PullRequestChangedFile`,
+ * qui n'expose que `path` — vérifié contre le schéma
+ * (`gh api graphql -f query='{ __type(name: "PullRequestChangedFile") {
+ * fields { name } } }'`) : pas de `previousFilename`. Un renommage de
+ * `tools.ts` vers un autre nom serait donc invisible au gate s'il ne lisait
+ * que cette sortie-là. L'API REST (`repos/:owner/:repo/pulls/:n/files`), elle,
+ * expose `previous_filename` pour un fichier renommé — c'est donc elle qu'on
+ * appelle ici, pas `gh pr view`.
+ *
+ * `--paginate` fait qu'un `gh api` sur un endpoint qui rend un tableau JSON
+ * imprime UNE page par appel HTTP (documenté par `gh api --help` : « Each
+ * page is a separate JSON array or object »), donc plusieurs tableaux
+ * concaténés sur stdout au-delà de la première page — `--slurp` les enveloppe
+ * dans un tableau englobant unique, exploitable par un seul `JSON.parse`.
+ */
+export async function listPullRequestFiles(
+  repoFullName: string,
+  number: number,
+): Promise<PullRequestFile[]> {
+  const { stdout } = await run('gh', [
+    'api',
+    `repos/${repoFullName}/pulls/${number}/files`,
+    '--paginate',
+    '--slurp',
+  ])
+  const pages = JSON.parse(stdout) as Array<
+    Array<{ filename: string; previous_filename?: string | null; status: string }>
+  >
+  return pages.flat().map((f) => ({
+    path: f.filename,
+    status: f.status,
+    ...(f.previous_filename ? { previousPath: f.previous_filename } : {}),
+  }))
 }
 
 /**
