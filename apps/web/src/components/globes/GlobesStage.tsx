@@ -74,11 +74,35 @@ export function GlobesStage({ globes }: { globes: GlobeView[] }) {
       globes.forEach((g, i) => {
         const el = hostRefs.current.get(g.id)
         const rank = ranks[i] ?? 0
-        const r = base * (ORBIT.R0 + ORBIT.R_STEP * rank)
-        const speed = ORBIT.SPEED * ORBIT.SPEED_FALLOFF ** rank
-        const a = t * speed + (phases[i] ?? 0)
         const px = sizeOf(g.projectCount, weights)
         const hostW = px + 50
+        // Marge de sécurité : le conteneur de l'orbe (OrbCanvas, observé par
+        // l'IntersectionObserver d'orb.js — vendor/orb.js ~L300, root et
+        // marge non configurables depuis l'extérieur) ne doit jamais friser
+        // le bord de la scène. Constaté à l'instrumentation : dès que la
+        // boîte quitte le cadre, son ratio d'intersection oscille pile/face
+        // d'une frame à l'autre et `toggleLoop` (orb.js) coupe/relance la
+        // boucle RAF en boucle → clignotement visible. R_STEP*rang n'est pas
+        // borné (le nombre de globes ne l'est pas non plus, cf.
+        // CreateGlobeForm), donc rang élevé ou fenêtre modeste suffisent à
+        // pousser l'orbite jusqu'au bord. On borne ici le rayon effectif
+        // (pas dans orbit.ts : ORBIT reprend le prototype telle quelle, cette
+        // contrainte est propre au montage React, cf. commentaire du
+        // composant plus haut) pour que même le globe le plus excentré reste
+        // à EDGE_MARGIN du bord, verticalement (le plus contraignant : nom
+        // au-dessus, méta + bouton « en attente » en dessous) comme
+        // horizontalement.
+        const EDGE_MARGIN = 32
+        const CHROME_BELOW = 90 // méta + bouton « en attente » sous l'orbe
+        const rMaxTop = (cy - px * 0.7 - EDGE_MARGIN) / ORBIT.SQUASH
+        const rMaxBottom = (h - cy - px * 0.3 - CHROME_BELOW - EDGE_MARGIN) / ORBIT.SQUASH
+        const rMaxX = cx - px / 2 - EDGE_MARGIN
+        const r = Math.max(
+          0,
+          Math.min(base * (ORBIT.R0 + ORBIT.R_STEP * rank), rMaxTop, rMaxBottom, rMaxX),
+        )
+        const speed = ORBIT.SPEED * ORBIT.SPEED_FALLOFF ** rank
+        const a = t * speed + (phases[i] ?? 0)
         const x = cx + Math.sin(a) * r
         const y = cy + Math.cos(a) * r * ORBIT.SQUASH
         if (el) {
