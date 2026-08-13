@@ -135,14 +135,14 @@ try {
   await preview.close()
 }
 
-console.log('── Vérité terrain ' + '─'.repeat(48))
+console.log(`── Vérité terrain ${'─'.repeat(48)}`)
 console.log('  critère 1 (lien Contact) ................ SATISFAIT')
 console.log('  critère 2 (titre « Nos services ») ...... SATISFAIT')
 console.log('  critère 3 (bouton visible 3 viewports) .. VIOLÉ en mobile uniquement')
 console.log('  attendu : 2 conformités · 1 écart mobile · verdict « ecarts »\n')
 
 const judging = createJudgingHandler({ adapter, artifactsRoot })
-console.log('── Le juge ' + '─'.repeat(55))
+console.log(`── Le juge ${'─'.repeat(55)}`)
 const judgeEvent = await judging(db, run.id)
 console.log(`  évènement émis : ${judgeEvent.type}`)
 
@@ -153,7 +153,7 @@ console.log(`\n${judgeMsg?.body ?? '(aucun rapport)'}\n`)
 await db.updateTable('runs').set({ state: 'verdict' }).where('id', '=', run.id).execute()
 
 const verdict = createVerdictHandler({ adapter })
-console.log('── Le garant ' + '─'.repeat(53))
+console.log(`── Le garant ${'─'.repeat(53)}`)
 const verdictEvent = await verdict(db, run.id)
 console.log(`  évènement émis : ${verdictEvent.type}`)
 
@@ -164,7 +164,7 @@ const verdictMsg = afterVerdict
 console.log(`\n${verdictMsg?.body ?? '(aucun verdict)'}\n`)
 if (verdictMsg?.meta) console.log(`  meta : ${JSON.stringify(verdictMsg.meta)}\n`)
 
-console.log('── Verdict du diagnostic ' + '─'.repeat(41))
+console.log(`── Verdict du diagnostic ${'─'.repeat(41)}`)
 console.log(`  le juge a émis      : ${judgeEvent.type}`)
 console.log(`  le garant a émis    : ${verdictEvent.type}`)
 console.log('  À confronter à la vérité terrain ci-dessus.')
