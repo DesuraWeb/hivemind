@@ -8,6 +8,7 @@ import { sql } from 'kysely'
 import { afterAll, afterEach, beforeAll, expect, test } from 'vitest'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
+import { createLocalPreviewTarget } from '../src/deploy/local-preview'
 import { databaseUrl, loadEnv } from '../src/env'
 import { closeBrowser } from '../src/integrations/playwright'
 import { startStaticPreview } from '../src/integrations/preview'
@@ -152,7 +153,7 @@ test('createDeployingHandler émet ci_red sur un worktree vide (aucun index.html
   // ni `dist/`, ni `build/`, ni `index.html` à la racine.
   const runId = await createFixtureRun(emptyWorktree)
 
-  const handler = createDeployingHandler({ artifactsRoot })
+  const handler = createDeployingHandler({ artifactsRoot, target: createLocalPreviewTarget() })
   const event = await handler(db, runId)
 
   expect(event.type).toBe('ci_red')
@@ -165,11 +166,89 @@ test('createDeployingHandler émet ci_red quand runs.worktree_path est vide', as
   const artifactsRoot = await tempDir('silithid-preview-artifacts-null-')
   const runId = await createFixtureRun(null)
 
-  const handler = createDeployingHandler({ artifactsRoot })
+  const handler = createDeployingHandler({ artifactsRoot, target: createLocalPreviewTarget() })
   const event = await handler(db, runId)
 
   expect(event.type).toBe('ci_red')
   if (event.type === 'ci_red') {
     expect(event.reason).toContain('aucun worktree enregistré')
   }
+})
+
+/**
+ * Depuis la Phase 5 (Task 3), le handler `deploying` ne sait plus COMMENT on
+ * déploie : il reçoit une `DeployTarget`. Ces trois tests le prouvent avec des
+ * cibles factices — aucun serveur démarré, aucun token.
+ */
+
+test('une cible qui échoue produit ci_red en reprenant SA raison', async () => {
+  const runId = await createFixtureRun(await tempDir('silithid-target-fail-'))
+  const handler = createDeployingHandler({
+    artifactsRoot: await tempDir('silithid-target-fail-art-'),
+    target: {
+      kind: 'faux-echec',
+      async deploy() {
+        return { ok: false, reason: 'le serveur de recette a refusé la connexion SSH' }
+      },
+    },
+  })
+
+  const event = await handler(db, runId)
+
+  expect(event.type).toBe('ci_red')
+  // La raison de la cible remonte telle quelle : c'est ce qu'un humain lira
+  // dans l'alerte pour savoir quoi réparer. Une raison générique du handler
+  // effacerait la seule information utile.
+  if (event.type === 'ci_red') {
+    expect(event.reason).toBe('le serveur de recette a refusé la connexion SSH')
+  }
+})
+
+test('release() est appelé même quand la capture échoue', async () => {
+  const runId = await createFixtureRun(await tempDir('silithid-target-release-'))
+  let released = false
+  const handler = createDeployingHandler({
+    artifactsRoot: await tempDir('silithid-target-release-art-'),
+    target: {
+      kind: 'faux-injoignable',
+      async deploy() {
+        return {
+          ok: true,
+          // Port fermé : la capture va lever. Un release() sauté ici, c'est un
+          // port qui fuit à chaque run raté.
+          url: 'http://127.0.0.1:1',
+          description: 'cible factice injoignable',
+          release: async () => {
+            released = true
+          },
+        }
+      },
+    },
+  })
+
+  await expect(handler(db, runId)).rejects.toThrow()
+  expect(released).toBe(true)
+})
+
+test("un déploiement raté n'écrit aucun message d'audit trompeur", async () => {
+  const runId = await createFixtureRun(await tempDir('silithid-target-audit-'))
+  const handler = createDeployingHandler({
+    artifactsRoot: await tempDir('silithid-target-audit-art-'),
+    target: {
+      kind: 'faux-echec',
+      async deploy() {
+        return { ok: false, reason: 'peu importe' }
+      },
+    },
+  })
+
+  await handler(db, runId)
+
+  // Rien n'a été déployé : la timeline ne doit pas laisser croire le contraire.
+  const messages = await db
+    .selectFrom('messages')
+    .select('id')
+    .where('run_id', '=', runId)
+    .execute()
+  expect(messages).toHaveLength(0)
 })

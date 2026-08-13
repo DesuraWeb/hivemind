@@ -25,6 +25,7 @@ import { afterAll, afterEach, beforeAll, expect, test } from 'vitest'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
 import { seedRoleTemplates } from '../src/db/seed'
+import { createLocalPreviewTarget } from '../src/deploy/local-preview'
 import { databaseUrl, loadEnv } from '../src/env'
 import { projectRepoPath } from '../src/git/repo'
 import { closeBrowser } from '../src/integrations/playwright'
@@ -306,7 +307,7 @@ test(
       framing: createFramingHandler({ adapter: observingAdapter, worktreesRoot }),
       coding: createFakeCodingHandler(),
       reviewing: createReviewingHandler({ adapter: observingAdapter, worktreesRoot }),
-      deploying: createDeployingHandler({ artifactsRoot }),
+      deploying: createDeployingHandler({ artifactsRoot, target: createLocalPreviewTarget() }),
       judging: createJudgingHandler({ adapter: observingAdapter, artifactsRoot }),
       verdict: createVerdictHandler({ adapter: observingAdapter }),
     }
@@ -453,7 +454,7 @@ test(
       framing: createFramingHandler({ adapter, worktreesRoot }),
       coding: createFakeCodingHandler(),
       reviewing: createReviewingHandler({ adapter, worktreesRoot }),
-      deploying: createDeployingHandler({ artifactsRoot }),
+      deploying: createDeployingHandler({ artifactsRoot, target: createLocalPreviewTarget() }),
       judging: createJudgingHandler({ adapter, artifactsRoot }),
       verdict: createVerdictHandler({ adapter }),
     }

@@ -1,81 +1,45 @@
 /**
- * DÉCISION D'ARCHITECTURE (Task 2, Phase 4) — CECI N'EST PAS LE STAGING RÉEL.
+ * L'état `deploying` : rendre le code du run visible à une URL, puis la
+ * capturer pour le juge.
  *
- * Le staging réel (workflow GitHub, rsync vers cPanel) arrive à J11. En
- * attendant, cet état sert le worktree du run EN LOCAL sur un port éphémère
- * (`../../integrations/preview.ts`) pour donner au juge visuel quelque chose
- * à capturer aujourd'hui. C'est fidèle à la machine à états (l'état
- * `deploying` fait vraiment quelque chose et émet `ci_green`/`ci_red`), ça
- * n'anticipe rien de J11, et personne ne doit le prendre pour
- * l'implémentation définitive du déploiement.
+ * DEPUIS LA PHASE 5 (Task 3), ce handler ne sait plus COMMENT on déploie. Il
+ * reçoit une `DeployTarget` (`../../deploy/types.ts`) et s'en sert. L'aperçu
+ * local qui était codé ici depuis la Phase 4 est devenu une implémentation
+ * parmi d'autres (`../../deploy/local-preview.ts`) — c'est encore celle par
+ * défaut, tant qu'aucun staging réel n'est configuré.
  *
- * DÉCISION SUR LA DURÉE DE VIE DE L'APERÇU (question posée par le plan) —
- * l'aperçu ne survit PAS entre `deploying` et `judging` : ce handler
- * démarre le serveur, capture LUI-MÊME les pages (`pages_to_judge` rendues
- * par le garant en `framing`, lues depuis le bus) avec `capturePages`
- * (Task 1), enregistre les artifacts en base (`recordCapturedPages`), puis
- * arrête le serveur avant de rendre la main. `judging.ts` (Task 3, non
- * implémenté ici) n'aura donc besoin d'aucun serveur vivant : il relira les
- * captures déjà sur disque via la table `artifacts`.
+ * DÉCISION SUR LA DURÉE DE VIE (Phase 4, toujours valable) — la capture a lieu
+ * DANS ce passage, jamais plus tard : ce handler déploie, capture lui-même les
+ * pages (`pages_to_judge` rendues par le garant en `framing`, lues depuis le
+ * bus), enregistre les artifacts, puis relâche la cible avant de rendre la
+ * main. `judging.ts` n'a donc besoin d'aucune ressource vivante : il relit les
+ * captures sur disque via la table `artifacts`.
  *
- * Pourquoi pas l'option inverse (le serveur survit jusqu'à ce que `judging`
- * l'arrête) : `deploying` et `judging` sont deux passages DISTINCTS du
- * worker (Task « stepOnce » — potentiellement à des minutes d'écart, sur un
- * job pg-boss retryable indépendamment). Si le process crashait entre les
- * deux, un serveur qui aurait survécu à `deploying` resterait orphelin
- * indéfiniment — exactement le bug de fuite de port/descripteur que le plan
- * met en garde contre. En capturant tout de suite, la durée de vie du
- * serveur ne dépasse jamais un seul `stepOnce` : un crash ne peut plus le
- * laisser tourner, `judging` peut être retenté autant de fois que
- * nécessaire sans jamais rouvrir de port, et rien de spécifique au juge
- * (Task 3, hors périmètre ici) n'a besoin d'être implémenté pour que ce
- * handler soit complet et testable seul.
+ * Pourquoi pas l'option inverse (la ressource survit jusqu'à `judging`) :
+ * `deploying` et `judging` sont deux passages DISTINCTS du worker,
+ * potentiellement à des minutes d'écart, sur des jobs pg-boss retryables
+ * indépendamment. Si le process crashait entre les deux, un serveur d'aperçu
+ * survivant resterait orphelin indéfiniment. En capturant tout de suite, sa
+ * durée de vie ne dépasse jamais un seul `stepOnce`.
+ *
+ * Noter que `release()` ne défait PAS le déploiement : sur un staging réel le
+ * site reste en ligne, c'est tout l'intérêt. Voir la note de tête de
+ * `../../deploy/types.ts`.
  */
 
-import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { recordCapturedPages } from '../../artifacts/store'
+import type { DeployTarget } from '../../deploy/types'
 import type { LoopEvent } from '../../domain/run-state'
 import { capturePages } from '../../integrations/playwright'
-import { startStaticPreview } from '../../integrations/preview'
 import type { StepHandler } from '../../jobs/run-step'
 import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
 
 export interface DeployingDeps {
-  /** Racine de stockage des captures (`ARTIFACTS_ROOT`), même convention que `capture.test.ts`. */
+  /** Racine de stockage des captures (`ARTIFACTS_ROOT`). */
   artifactsRoot: string
-}
-
-/**
- * Ordre de recherche de la racine servable, documenté ici puisque le plan
- * demande explicitement d'en décider un et de l'écrire : `public/` d'abord
- * (convention la plus courante pour un site déjà statique — c'est le cas du
- * sandbox, cf. plan « ajouter un dossier public/ »), puis `dist/` et
- * `build/` (sorties de build les plus fréquentes, Vite et CRA
- * respectivement), et enfin la racine du worktree elle-même si aucun de ces
- * trois dossiers n'existe (site statique minimal sans étape de build). Le
- * premier candidat qui contient réellement un `index.html` gagne — un
- * dossier `dist/` vide ou un `public/` qui ne contient que des images ne
- * doit pas être choisi à la place d'une racine qui, elle, sert vraiment
- * quelque chose.
- */
-const CANDIDATE_DIRS = ['public', 'dist', 'build'] as const
-
-async function hasIndexHtml(dir: string): Promise<boolean> {
-  try {
-    const info = await stat(join(dir, 'index.html'))
-    return info.isFile()
-  } catch {
-    return false
-  }
-}
-
-async function findServableRoot(worktreePath: string): Promise<string | undefined> {
-  for (const dir of CANDIDATE_DIRS) {
-    const candidate = join(worktreePath, dir)
-    if (await hasIndexHtml(candidate)) return candidate
-  }
-  return (await hasIndexHtml(worktreePath)) ? worktreePath : undefined
+  /** Où déployer. `registry.ts` passe la cible du projet ; par défaut, l'aperçu local. */
+  target: DeployTarget
 }
 
 /** Les `pages_to_judge` rendues par le garant en `framing` (même passation que `coding.ts`/`reviewing.ts` lisent pour `acceptance_criteria`). */
@@ -86,24 +50,19 @@ function findPagesToJudge(messages: StoredMessage[]): string[] {
   const raw = frameMessage?.meta.pages_to_judge
   const pages = Array.isArray(raw) ? raw.filter((p): p is string => typeof p === 'string') : []
   // Si le garant n'a rendu aucune page explicite, on capture au moins la
-  // racine plutôt que de ne rien capturer du tout : `findServableRoot` vient
-  // de vérifier qu'un `index.html` y répond, donc `/` est nécessairement
-  // servable à ce stade.
+  // racine plutôt que de ne rien capturer du tout : la cible vient de dire
+  // qu'elle sert quelque chose, donc `/` est nécessairement atteignable.
   return pages.length > 0 ? pages : ['/']
 }
 
-/**
- * Handler réel de l'état `deploying` (Task 2, Phase 4). Voir le commentaire
- * de tête de fichier pour ce que cet état remplace (le staging réel, J11) et
- * pour la justification de la durée de vie du serveur (capture immédiate,
- * jamais survivant à ce seul passage).
- */
 export function createDeployingHandler(deps: DeployingDeps): StepHandler {
   return async (db, runId) => {
     const runRow = await db
       .selectFrom('runs')
-      .select(['worktree_path as worktreePath'])
-      .where('id', '=', runId)
+      .innerJoin('steps', 'steps.id', 'runs.step_id')
+      .innerJoin('projects', 'projects.id', 'steps.project_id')
+      .select(['runs.worktree_path as worktreePath', 'projects.slug as projectSlug'])
+      .where('runs.id', '=', runId)
       .executeTakeFirstOrThrow()
 
     if (!runRow.worktreePath) {
@@ -113,39 +72,37 @@ export function createDeployingHandler(deps: DeployingDeps): StepHandler {
       } satisfies LoopEvent
     }
 
-    const servableRoot = await findServableRoot(runRow.worktreePath)
-    if (!servableRoot) {
-      return {
-        type: 'ci_red',
-        reason:
-          `run ${runId} : aucun index.html trouvé dans public/, dist/, build/ ni à la racine ` +
-          `de ${runRow.worktreePath} — rien à servir`,
-      } satisfies LoopEvent
+    const deployed = await deps.target.deploy({
+      runId,
+      worktreePath: runRow.worktreePath,
+      projectSlug: runRow.projectSlug,
+    })
+    if (!deployed.ok) {
+      return { type: 'ci_red', reason: deployed.reason } satisfies LoopEvent
     }
 
-    const preview = await startStaticPreview(servableRoot)
     try {
       const messages = await readRunMessages(db, runId)
       const pages = findPagesToJudge(messages)
 
       const artifactsDir = join(deps.artifactsRoot, runId)
-      const captures = await capturePages(preview.url, pages, artifactsDir)
+      const captures = await capturePages(deployed.url, pages, artifactsDir)
       const records = await recordCapturedPages(db, runId, deps.artifactsRoot, captures)
 
-      // Message d'audit : trace l'URL réellement servie même si le serveur
-      // est déjà arrêté au moment où quiconque relit la timeline — c'est le
-      // `finally` ci-dessous qui s'en charge, systématiquement.
+      // Message d'audit : trace l'URL réellement servie et par quelle voie,
+      // même si la ressource est déjà relâchée quand quelqu'un relit la
+      // timeline.
       await appendMessage(db, {
         runId,
         fromRole: 'system',
         toRole: 'system',
         kind: 'info',
         body:
-          `Aperçu local servi sur ${preview.url} (racine : ${servableRoot}) — ` +
-          `${records.length} artifact(s) capturé(s) pour ${pages.length} page(s).`,
+          `${deployed.description} — ${records.length} artifact(s) capturé(s) ` +
+          `pour ${pages.length} page(s).`,
         meta: {
-          url: preview.url,
-          servableRoot,
+          url: deployed.url,
+          target: deps.target.kind,
           pages,
           artifactIds: records.map((r) => r.id),
         },
@@ -153,11 +110,10 @@ export function createDeployingHandler(deps: DeployingDeps): StepHandler {
 
       return { type: 'ci_green' } satisfies LoopEvent
     } finally {
-      // Toujours arrêter le serveur, y compris si `capturePages` ou
-      // `recordCapturedPages` lève : un serveur oublié bloque un port et
-      // fuit un descripteur à chaque run — sur une machine qui tourne des
-      // semaines, c'est ce qui finit par tuer le process (note du plan).
-      await preview.close()
+      // Toujours relâcher, y compris si la capture lève. Pour l'aperçu local
+      // c'est ce qui évite qu'un port et un descripteur fuient à chaque run ;
+      // pour un staging réel, c'est un appel sans effet.
+      await deployed.release()
     }
   }
 }

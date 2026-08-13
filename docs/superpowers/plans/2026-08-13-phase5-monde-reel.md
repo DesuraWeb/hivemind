@@ -105,9 +105,15 @@ Conscience collective (phase dédiée, la suivante) · orbe v2 avec focus · les
 
 ## Ce que j'attends de Florian
 
-Rien ne bloque les Tasks 1, 2, 4 et 5. Deux questions bloquent la Task 3, et deux règles restent en suspens depuis le 13/08 :
+Rien ne bloque les Tasks 1, 2, 4 et 5. Deux questions bloquent la Task 3 :
 
 1. **Le staging du dépôt pilote** : où vit-il, et par quelle voie on y dépose (SSH/rsync, FTP cPanel, git pull côté serveur, autre) ?
 2. **Les accès** : à mettre dans le coffre. À ne jamais coller dans un message — un chemin de dépôt, ou le nom d'une entrée de gestionnaire de mots de passe.
-3. **PrestaShop** : les contraintes sur le tunnel de commande et le checkout (`RÈGLE MANQUANTE` dans `hive.stack_rules`).
-4. **Le Koin** : Pest ou PHPUnit (`RÈGLE MANQUANTE`).
+
+### Les deux `RÈGLE MANQUANTE` sont closes (13/08)
+
+Florian : « je m'en fous de PrestaShop et du Koin ». Les deux marqueurs sont donc retirés de `hive.stack_rules` — ce ne sont plus des trous, c'est un périmètre.
+
+Ce qui reste est ce qu'il a réellement énoncé : on ne touche jamais au core PrestaShop, et sur Laravel l'eager loading par défaut plus le respect des conventions de l'existant. Le dépôt pilote est `Desura.fr`, en WordPress : c'est la stack qui compte pour cette phase, et ses règles sont complètes.
+
+Le mécanisme qui fait dire « je ne sais pas » plutôt qu'inventer reste en place — il n'a simplement plus rien à signaler sur ces deux stacks.

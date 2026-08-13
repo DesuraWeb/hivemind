@@ -16,6 +16,8 @@
  * (`stepOnce` retourne avant même de consulter le registre).
  */
 
+import { createLocalPreviewTarget } from '../deploy/local-preview'
+import type { DeployTarget } from '../deploy/types'
 import type { StepRegistry } from '../jobs/run-step'
 import type { RuntimeAdapter } from '../runtime/types'
 import { createCodingHandler } from './steps/coding'
@@ -31,6 +33,12 @@ export interface StepRegistryDeps {
   worktreesRoot: string
   /** `ARTIFACTS_ROOT` — racine de stockage des captures (Task 1, Phase 4). */
   artifactsRoot: string
+  /**
+   * Où déployer avant de capturer. Omis, c'est l'aperçu local — le bon défaut
+   * pour un projet sans hébergement de recette, et le seul disponible tant que
+   * le staging réel n'est pas configuré (Phase 5, Task 3).
+   */
+  deployTarget?: DeployTarget
 }
 
 /** Construit le `StepRegistry` réel — les six handlers d'état, un `RuntimeAdapter` partagé. */
@@ -42,7 +50,13 @@ export function createStepRegistry(deps: StepRegistryDeps): StepRegistry {
       adapter: deps.adapter,
       worktreesRoot: deps.worktreesRoot,
     }),
-    deploying: createDeployingHandler({ artifactsRoot: deps.artifactsRoot }),
+    // Cible de déploiement par défaut : l'aperçu local. Elle sera choisie par
+    // projet quand le staging réel existera (Phase 5, Task 3, en attente des
+    // accès de Florian) — le contrat `DeployTarget` est déjà là pour ça.
+    deploying: createDeployingHandler({
+      artifactsRoot: deps.artifactsRoot,
+      target: deps.deployTarget ?? createLocalPreviewTarget(),
+    }),
     judging: createJudgingHandler({ adapter: deps.adapter, artifactsRoot: deps.artifactsRoot }),
     verdict: createVerdictHandler({ adapter: deps.adapter }),
   }
