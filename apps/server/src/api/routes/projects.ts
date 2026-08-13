@@ -36,9 +36,21 @@ export async function projectsRoutes(
   app: FastifyInstance,
   deps: ProjectsRoutesDeps,
 ): Promise<void> {
-  app.get('/api/projects', { preHandler: app.requireAuth }, async () => {
+  app.get('/api/projects', { preHandler: app.requireAuth }, async (req) => {
     const rate = await eurPerMtok(deps.settings)
-    return listProjects(deps.db, rate)
+    const all = await listProjects(deps.db, rate)
+
+    // `?globe=<slug>` : l'écran « intérieur de globe » n'affiche que les
+    // projets du globe où l'on vient d'entrer. Le filtre est appliqué ici et
+    // non côté client parce qu'un globe peut contenir 100+ projets (note du
+    // pack DA sur Projets.dc.html) : les envoyer tous pour en jeter la moitié
+    // ferait grossir la réponse sans raison. Un slug inconnu rend une liste
+    // vide, pas une erreur : c'est la page qui décide quoi en dire.
+    const globe = (req.query as { globe?: unknown }).globe
+    if (typeof globe === 'string' && globe.length > 0) {
+      return all.filter((p) => p.globe === globe)
+    }
+    return all
   })
 
   app.get('/api/projects/:id', { preHandler: app.requireAuth }, async (req, reply) => {

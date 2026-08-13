@@ -44,6 +44,14 @@ export interface ProjectView {
   synth: string | null
   staging: string | null
   line: string
+  /**
+   * Slug du globe qui contient le projet. Exposé pour que l'écran « intérieur
+   * de globe » (Projets.dc.html) puisse filtrer sans un second appel par
+   * projet. La colonne `projects.globe_id` est NOT NULL depuis la migration
+   * 0002 : un projet appartient toujours à un globe, ce champ n'est jamais
+   * vide.
+   */
+  globe: string
 }
 
 interface ProjectRow {
@@ -55,6 +63,7 @@ interface ProjectRow {
   tint: string | null
   synth: string | null
   staging_url: string | null
+  globe_slug: string
 }
 
 interface CurrentRun {
@@ -67,19 +76,25 @@ interface CurrentRun {
 }
 
 function projectRowQuery(db: Kysely<Database>) {
-  return db
-    .selectFrom('projects')
-    .leftJoin('clients', 'clients.id', 'projects.client_id')
-    .select([
-      'projects.id as id',
-      'projects.slug as slug',
-      'projects.name as name',
-      'clients.name as client_name',
-      'projects.stack as stack',
-      'projects.tint as tint',
-      'projects.synth as synth',
-      'projects.staging_url as staging_url',
-    ])
+  return (
+    db
+      .selectFrom('projects')
+      .leftJoin('clients', 'clients.id', 'projects.client_id')
+      // `innerJoin` et non `leftJoin` : `globe_id` est NOT NULL, une jointure
+      // permissive laisserait croire le contraire au reste du code.
+      .innerJoin('globes', 'globes.id', 'projects.globe_id')
+      .select([
+        'projects.id as id',
+        'projects.slug as slug',
+        'projects.name as name',
+        'clients.name as client_name',
+        'projects.stack as stack',
+        'projects.tint as tint',
+        'projects.synth as synth',
+        'projects.staging_url as staging_url',
+        'globes.slug as globe_slug',
+      ])
+  )
 }
 
 /** Run le plus récent (toutes étapes confondues) du projet — c'est lui qui porte le statut affiché. */
@@ -186,6 +201,7 @@ async function toProjectView(
 
   return {
     id: row.slug,
+    globe: row.globe_slug,
     name: row.name,
     client: row.client_name,
     stack: row.stack,

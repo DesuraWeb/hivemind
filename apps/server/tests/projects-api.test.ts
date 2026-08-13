@@ -232,6 +232,8 @@ test('GET /api/projects/:id : forme complète, comparée champ à champ à koin 
       'synth',
       'staging',
       'line',
+      // Ajouté pour l'écran « intérieur de globe » : il filtre là-dessus.
+      'globe',
     ].sort(),
   )
 })
@@ -383,4 +385,45 @@ test('GET /api/projects/:id/runs rend les runs sans exposer worktree_path (chemi
   expect(body[0]?.state).toBe('coding')
   expect(JSON.stringify(body)).not.toContain('worktree')
   expect(JSON.stringify(body)).not.toContain('/Users/florian')
+})
+
+test('GET /api/projects?globe=<slug> ne rend que les projets de ce globe', async () => {
+  const dedans = `dedans-${randomUUID()}`
+  const dehors = `dehors-${randomUUID()}`
+  await createProjectFixture({ slug: dehors })
+
+  // `createProjectFixture` range tout dans le premier globe : sans un second
+  // globe créé ici, le filtre passerait sans rien prouver.
+  const autreGlobe = await db
+    .insertInto('globes')
+    .values({ name: 'Globe filtre', slug: `globe-filtre-${randomUUID()}` })
+    .returning(['id', 'slug'])
+    .executeTakeFirstOrThrow()
+  const step = await db
+    .insertInto('projects')
+    .values({
+      globe_id: autreGlobe.id,
+      name: dedans,
+      slug: dedans,
+      repo_full_name: 'desura/x',
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow()
+  await db
+    .insertInto('steps')
+    .values({ project_id: step.id, position: 1, title: 'Step 1', specs: '## specs' })
+    .execute()
+
+  expect((await get(`/api/projects/${dedans}`)).json().globe).toBe(autreGlobe.slug)
+
+  const filtres = (await get(`/api/projects?globe=${autreGlobe.slug}`)).json()
+  expect(filtres.map((p: { id: string }) => p.id)).toEqual([dedans])
+
+  // Un slug inconnu rend une liste vide, pas une erreur : c'est la page qui
+  // decide quoi afficher pour un globe sans projet.
+  expect((await get('/api/projects?globe=globe-qui-nexiste-pas')).json()).toEqual([])
+
+  // Sans filtre, les deux sont la : le filtre ne doit pas devenir implicite.
+  const tous = (await get('/api/projects')).json().map((p: { id: string }) => p.id)
+  expect(tous).toEqual(expect.arrayContaining([dedans, dehors]))
 })
