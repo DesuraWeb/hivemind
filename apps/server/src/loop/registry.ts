@@ -8,8 +8,8 @@
  * actifs et couverts ci-dessous (`framing`, `coding`, `reviewing`,
  * `deploying`, `judging`, `verdict`) ; `design_wait` est un état ACTIF
  * (`domain/run-state.ts`, `ACTIVE_STATES`) mais qu'AUCUNE transition de
- * `decide()` ne produit encore (juge visuel = J8, hors périmètre de la Phase
- * 3 qui l'a introduit) — il ne peut donc jamais être atteint tant que rien
+ * `decide()` ne produit encore (le juge visuel existe depuis la Phase 4 et ne
+ * transitionne pas par cet état) — il ne peut donc jamais être atteint tant que rien
  * n'y transitionne, câbler un handler dessus serait spéculatif ; les quatre
  * restants (`awaiting_human`, `done`, `failed`, `paused_budget`) sont dans
  * `NO_REQUEUE_STATES` et n'ont structurellement pas besoin de handler

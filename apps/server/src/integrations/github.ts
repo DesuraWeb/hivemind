@@ -18,8 +18,8 @@ const run = promisify(execFile)
  * `git` interroge de lui-même sur une URL `https://github.com/...` — aucun
  * jeton ne transite par ce fichier ni par `git/repo.ts`.
  *
- * **Note J15** : agents et GitHub basculeront tous deux sur des jetons dédiés
- * à J15 (le stockage chiffré existe déjà — `src/settings/store.ts`,
+ * **À faire, sans phase assignée** : agents et GitHub basculeront tous deux
+ * sur des jetons dédiés (le stockage chiffré existe déjà — `src/settings/store.ts`,
  * `setSecret`/`getSecret`). Ce jour-là, ce fichier remplace ses appels
  * `execFile('gh', ...)` par des appels HTTP authentifiés par le jeton stocké
  * (`@octokit/rest` ou `fetch` nu) — l'API exposée ici

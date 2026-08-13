@@ -36,12 +36,10 @@ export function loopFromRunState(state: RunState | null): LoopStatus {
 /**
  * Rôle qui possède l'étape en cours, d'après les handlers réellement câblés
  * (loop/steps/*.ts) : framing → garant, coding → dev, reviewing → reviewer.
- * judging/verdict n'ont pas encore de handler (juge visuel J8, verdict/
- * itérations J9 — hors périmètre Phase 3) mais `role_templates` définit déjà
- * la clé 'judge' pour cette étape du pipeline, donc on l'utilise. deploying
- * n'a pas de rôle des 6 définis qui lui soit propre (staging/gate prod J11,
- * hors périmètre) ; on le rattache à 'dev', dont le code est en cours de
- * déploiement. design_wait n'a aucune règle cette phase (brief : juge visuel
+ * judging et verdict ont leurs handlers depuis la Phase 4 ; `role_templates`
+ * définit la clé 'judge' pour cette étape du pipeline, donc on l'utilise pour
+ * les deux. deploying n'a aucun des 6 rôles qui lui soit propre ; on le
+ * rattache à 'dev', dont le code est en cours de déploiement. design_wait n'a aucune règle cette phase (brief : juge visuel
  * hors périmètre) : aucun rôle ne lui est attribué.
  */
 const ROLE_BY_ACTIVE_STATE: Partial<Record<RunState, RoleKey>> = {

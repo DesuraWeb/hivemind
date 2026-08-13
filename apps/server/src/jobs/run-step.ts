@@ -29,7 +29,7 @@ export type StepRegistry = Partial<Record<RunState, StepHandler>>
  * (Task 8, Step 4) : ce n'est pas une règle métier — la règle qui *produit*
  * ces états (épuisement de la boucle reviewer, budget, etc.) vit dans
  * `decide()`. Ceci n'est que le routage de la file : dans ces états, plus
- * personne n'attend le worker (un humain, ou le scheduler de budget en J12).
+ * personne n'attend le worker (un humain, ou le scheduler de budget).
  */
 const NO_REQUEUE_STATES: ReadonlySet<RunState> = new Set([
   'awaiting_human',

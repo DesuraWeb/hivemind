@@ -220,8 +220,8 @@ export function decide(state: RunState, event: LoopEvent, ctx: RunContext): Deci
       break
 
     case 'design_wait':
-      // Aucune règle spécifique dans cette phase (juge visuel = J8, hors
-      // périmètre) : seuls les événements génériques ci-dessus s'appliquent.
+      // Aucune règle spécifique : seuls les événements génériques ci-dessus
+      // s'appliquent. Aucune transition ne mène ici à ce jour.
       break
 
     default:

@@ -8,7 +8,7 @@ import { loopFromRunState } from '../projects/derive'
  * Globes route déjà tout par slug (`Inbox.dc.html`, `Dashboard.dc.html`).
  *
  * `nodes` n'existe pas plus pour un globe que pour un projet (plan Phase 3 :
- * ce sera dérivé de l'activité à J13, quand la conscience collective aura sa
+ * ce sera dérivé de l'activité quand la conscience collective aura sa
  * propre volumétrie). En attendant, la taille de l'orbite se calcule sur
  * `projectCount` — un vrai nombre, pas une invention — documenté ci-dessous
  * plutôt que caché derrière un nom qui suggérerait une mesure de conscience

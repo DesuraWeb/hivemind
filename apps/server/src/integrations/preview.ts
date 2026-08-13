@@ -2,7 +2,8 @@
  * DÉCISION D'ARCHITECTURE (Task 2, Phase 4) — CECI N'EST PAS LE STAGING RÉEL.
  *
  * Le juge visuel a besoin d'une URL SERVIE pour capturer des pages. Le vrai
- * staging (workflow GitHub, rsync vers cPanel) arrive à J11. En attendant,
+ * staging réel est la Task 3 de la Phase 5, en attente des accès de Florian.
+ * En attendant,
  * ce module sert le worktree du run EN LOCAL, sur la machine qui exécute le
  * worker, sur un port éphémère (`listen(0, ...)`) — le temps d'une capture,
  * puis s'arrête. C'est un remplacement temporaire assumé, pas une

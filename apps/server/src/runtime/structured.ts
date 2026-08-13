@@ -82,7 +82,7 @@ export type Frame = z.infer<typeof frameSchema>
 
 /**
  * Verdict du garant après reviewer + juge visuel. Figé par le garant du
- * projet (plan, contrat 3) mais implémenté en Phase 4 (J9) : type seulement
+ * projet (plan, contrat 3) mais implémenté en Phase 4 : type seulement
  * ici, rien ne le construit ni ne le consomme dans cette tâche.
  */
 export const verdictSchema = z.object({
