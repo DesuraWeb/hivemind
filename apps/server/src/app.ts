@@ -9,6 +9,7 @@ import { clientsRoutes } from './api/routes/clients'
 import { globesRoutes } from './api/routes/globes'
 import { healthRoutes } from './api/routes/health'
 import { inboxRoutes } from './api/routes/inbox'
+import { journalRoutes } from './api/routes/journal'
 import { projectsRoutes } from './api/routes/projects'
 import { rolesRoutes } from './api/routes/roles'
 import { runsRoutes } from './api/routes/runs'
@@ -87,6 +88,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(rolesRoutes, { db: deps.db, settings })
   await app.register(analyticsRoutes, { db: deps.db, settings })
   await app.register(runsRoutes, { db: deps.db })
+  await app.register(journalRoutes, { db: deps.db })
 
   return app
 }
