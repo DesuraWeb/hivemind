@@ -153,6 +153,20 @@ Silithid peut modifier son propre code : son dépôt est un dépôt comme un aut
 - [ ] La liste des chemins surveillés vit dans un réglage (`settings['security.guarded_paths']`), pas en dur : elle grandira.
 - [ ] **Test** : une PR touchant `tools.ts` lève l'item ; une PR ordinaire n'en lève pas ; la liste est bien lue depuis les réglages.
 
+### Fait le 13/08 (`d9f3c62`) — deux écarts au plan, assumés
+
+`src/security/guarded-paths.ts` (la liste + son schéma) · `src/security/selfmod-gate.ts` (la détection et l'item) · `coding.ts` appelle le gate après résolution de la PR · `tests/gate-selfmod.test.ts` (12 tests).
+
+**Écart 1 — `run-state.ts` n'a pas été touché**, contrairement à ce qu'annonçait la ligne `Files:` ci-dessus. Un nouvel `Effect` aurait fait passer l'item par la machine à états, c'est-à-dire par le fichier même que ce gate protège. `inbox/repo.ts::createInboxItem` est le chemin direct déjà prévu pour les items qui ne naissent pas d'un `Effect` : `pr_opened` continue de traverser `decide()` sans savoir que ce gate existe, et l'item est levé strictement en parallèle. C'est la sémantique demandée (« pas une interdiction »), obtenue sans élargir la surface de la machine à états.
+
+**Écart 2 — la colonne `roles.tools` est représentée par `src/loop/roles.ts`**, son seul point d'écriture dans le code (`resolveProjectRole`, qui matérialise `role_templates.tools`). Un `grep` sur `insertInto('roles')` / `updateTable('roles')` dans tout `src/` ne renvoie que cette ligne : protéger ce fichier protège aujourd'hui tout changement du *comment* la colonne est peuplée. **Cette équivalence est datée** : le jour où une route d'administration des rôles apparaît, son fichier doit rejoindre la liste — c'est précisément pourquoi elle vit dans un réglage.
+
+Choix d'item : `type: 'alert'`, `subtype: 'security_selfmod'`. `approval` était exclu par l'énoncé ; `alert` a déjà un précédent non bloquant (`health/auth-check.ts`), trie en tête de l'inbox et porte une couleur dédiée — distinct d'un `approval:step_end` **sans** rien changer dans `apps/web/`.
+
+Deux détails que la relecture a rattrapés : les fichiers changés sont lus par l'**API REST** (`gh api .../pulls/:n/files`) et non `gh pr view --json files`, dont le schéma GraphQL n'expose pas `previous_filename` — sans quoi un renommage *away* d'un chemin surveillé serait invisible. Et le gate est recalculé **à chaque passage** du handler, pas seulement à la création de la PR : un commit ajouté après un `review_ko` compte autant que le premier.
+
+Limite connue, non corrigée : `AlertPanel.tsx` affiche des actions pensées pour les alertes bloquantes (« Relancer la boucle »). Ici le run n'est pas `awaiting_human`, donc elles ne font que résoudre l'item. Inoffensif, à revoir quand `apps/web/` sera libre.
+
 ---
 
 ## Doute levé le 13/08 — les deux rôles fonctionnent
