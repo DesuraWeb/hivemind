@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { OrbCanvas } from '../components/OrbCanvas'
 import { SectionHeader } from '../components/SectionHeader'
 import { BriefPanel } from '../components/dashboard/BriefPanel'
+import { FocusPanel } from '../components/dashboard/FocusPanel'
 import { HoverCard } from '../components/dashboard/HoverCard'
 import { LOOP_ORDER, badgeFor } from '../components/dashboard/loop'
 import { SEM } from '../components/inbox/constants'
@@ -12,7 +13,7 @@ import { api } from '../lib/api'
 import { subscribeToEvents } from '../lib/events'
 import type { InboxItemView } from '../lib/inbox-types'
 import type { ProjectView } from '../lib/project-types'
-import type { OrbProject } from '../vendor/orb'
+import type { OrbInstance, OrbProject } from '../vendor/orb'
 
 const PROJECTS_QUERY_KEY = ['projects'] as const
 const INBOX_QUERY_KEY = ['inbox'] as const
@@ -48,10 +49,14 @@ function oldestOf(items: InboxItemView[], type: string): InboxItemView | null {
  * orbe (OrbCanvas → orb.js vendor), branchée sur `/api/projects` et
  * `/api/inbox`, rafraîchie par le SSE déjà en place — jamais de polling.
  *
- * N'implémente PAS le focus au clic de l'orbe (J13, cf. plan) : `onHover`
- * alimente la carte verre suiveuse (comportement natif d'orb.js, pas une
- * fonctionnalité de focus), mais aucun clic sur un cluster ni sur une ligne
- * de la liste « Boucles » ne déclenche `orb.focus()`.
+ * Focus au clic : un seul point d'entrée, `toggleFocus`, exactement comme
+ * `_toggleFocus` du prototype. Deux sources le déclenchent et restent donc
+ * synchronisées sur le même état — un cluster de l'orbe et une ligne de la
+ * liste « Boucles » — et il pilote à la fois l'état React (panneau de verre,
+ * ligne surlignée) et la caméra (`orb.focus(id)`, transition complète déjà
+ * écrite dans le vendor). Recliquer le même projet, cliquer dans le vide de
+ * l'orbe ou le × du panneau relâchent. La carte suiveuse est coupée pendant
+ * le focus : le panneau fixe prend le relais.
  */
 export function Dashboard() {
   const queryClient = useQueryClient()
@@ -90,11 +95,46 @@ export function Dashboard() {
     slug ? (projectsById.get(slug)?.name ?? slug) : '·'
 
   const orbHostRef = useRef<HTMLDivElement>(null)
+  const orbRef = useRef<OrbInstance | null>(null)
+  const [focused, setFocused] = useState<string | null>(null)
   const [hover, setHover] = useState<{ project: ProjectView; left: number; top: number } | null>(
     null,
   )
+
+  /**
+   * Point d'entrée unique du focus (`_toggleFocus` du prototype) : bascule
+   * l'état, puis demande la transition de caméra au vendor. Passer `null` à
+   * `orb.focus` déclenche le retour idle (UNFOCUS_DUR, rotation reprise).
+   */
+  const toggleFocus = (id: string) => {
+    const next = focused === id ? null : id
+    setFocused(next)
+    orbRef.current?.focus(next)
+    // Le prototype ne coupe la carte suiveuse qu'au prochain `onHover` : si le
+    // curseur ne bouge plus après le clic, elle reste affichée par-dessus
+    // l'orbe en focus. On la coupe tout de suite (« pas de carte suiveuse en
+    // focus », docs/design/CLAUDE.md).
+    if (next) setHover(null)
+  }
+  const releaseFocus = () => {
+    setFocused(null)
+    orbRef.current?.focus(null)
+  }
+
+  const focusedProject = focused ? (projectsById.get(focused) ?? null) : null
+  // Le projet focalisé peut disparaître d'un rafraîchissement SSE : sans ce
+  // garde-fou l'orbe resterait bloquée sur un cluster qui n'existe plus.
+  useEffect(() => {
+    if (focused && !projectsById.has(focused)) {
+      setFocused(null)
+      orbRef.current?.focus(null)
+    }
+  }, [focused, projectsById])
+
   const handleHover = (op: OrbProject | null, x: number, y: number) => {
-    if (!op) {
+    // En focus, la carte suiveuse est désactivée : le panneau fixe prend le
+    // relais (Dashboard.dc.html, `onHover`).
+    if (!op || focused) {
       setHover(null)
       return
     }
@@ -241,7 +281,24 @@ export function Dashboard() {
             overflow: 'hidden',
           }}
         >
-          {orbProjects.length > 0 && <OrbCanvas projects={orbProjects} onHover={handleHover} />}
+          {orbProjects.length > 0 && (
+            <OrbCanvas
+              projects={orbProjects}
+              onHover={handleHover}
+              // Cliquer dans le vide (aucun cluster sous le curseur) relâche.
+              onClusterClick={(id) => {
+                if (id) toggleFocus(id)
+                else releaseFocus()
+              }}
+              // La scène est reconstruite quand la liste de clusters change :
+              // on récupère la nouvelle instance et on lui réapplique le focus
+              // courant, sinon l'état React et la caméra divergeraient.
+              onReady={(orb) => {
+                orbRef.current = orb
+                if (focused) orb.focus(focused)
+              }}
+            />
+          )}
           <div
             style={{
               position: 'absolute',
@@ -255,6 +312,7 @@ export function Dashboard() {
             }}
           >
             <BriefPanel summary={briefSummary} time={clock.split(' · ')[1] ?? ''} />
+            {focusedProject && <FocusPanel project={focusedProject} onRelease={releaseFocus} />}
           </div>
         </div>
 
@@ -289,10 +347,12 @@ export function Dashboard() {
               const badge = badgeFor(p.loop)
               const rowOp = p.loop === 'pause' || p.loop === 'done' ? 0.55 : 1
               const shortLine = `step ${p.step[0]}/${p.step[1]}${p.duree !== '·' ? ` · ${p.duree}` : ''}`
+              const isFocused = focused === p.id
               return (
-                <Link
+                <button
                   key={p.id}
-                  to="/inbox"
+                  type="button"
+                  onClick={() => toggleFocus(p.id)}
                   title={p.line}
                   style={{
                     opacity: rowOp,
@@ -301,11 +361,19 @@ export function Dashboard() {
                     gap: 11,
                     padding: '11px 12px',
                     borderRadius: 'var(--r-md)',
-                    border: '1px solid transparent',
+                    border: `1px solid ${
+                      isFocused
+                        ? 'color-mix(in oklab, var(--accent) 45%, transparent)'
+                        : 'transparent'
+                    }`,
+                    background: isFocused
+                      ? 'color-mix(in oklab, var(--accent) 9%, transparent)'
+                      : 'transparent',
                     cursor: 'pointer',
                     textAlign: 'left',
                     width: '100%',
                     boxSizing: 'border-box',
+                    transition: 'all var(--dur-1) var(--ease)',
                   }}
                 >
                   <span
@@ -369,7 +437,7 @@ export function Dashboard() {
                       {shortLine}
                     </span>
                   </span>
-                </Link>
+                </button>
               )
             })}
             {sortedProjects.length === 0 && (
