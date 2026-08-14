@@ -105,6 +105,109 @@ export interface BudgetView {
   thresholds: { pause: number; pauseNominal: number; resume: number }
 }
 
+// --- Types des écrans restants (journal, analytics, run en direct, coffre) ---
+
+export interface JournalNightEntry {
+  id: string
+  at: string
+  role: string
+  toRole: string
+  kind: string
+  text: string
+  projectId: string | null
+  projectName: string | null
+  runId: string
+}
+
+export interface JournalDecisionEntry {
+  id: string
+  at: string
+  kind: string
+  subtype: string | null
+  title: string
+  response: unknown
+  projectId: string | null
+  projectName: string | null
+  /** Toujours `false` : révoquer suppose de savoir DÉFAIRE chaque type de décision. */
+  revocable: false
+}
+
+export interface JournalView {
+  window: { since: string; until: string }
+  retentionDays: number
+  night: JournalNightEntry[]
+  decisions: JournalDecisionEntry[]
+}
+
+export interface AnalyticsView {
+  days: number
+  totalTokens: number
+  totalEur: number
+  daily: { day: string; tokens: number }[]
+  perProject: {
+    id: string
+    name: string
+    tint: string | null
+    tokens: number
+    eur: number
+    stepsDone: number
+  }[]
+}
+
+export interface StepCostView {
+  position: number
+  title: string
+  tokens: number
+  eur: number
+}
+
+export interface RunTimelineEntry {
+  id: string
+  fromRole: string
+  toRole: string
+  kind: string
+  body: string
+  meta: Record<string, unknown>
+  at: string
+}
+
+export interface RunDetailView {
+  id: string
+  project: { id: string; name: string }
+  step: { position: number; title: string }
+  state: string
+  resumeState: string | null
+  iteration: [number, number]
+  reviewRound: number
+  branch: string | null
+  prNumber: number | null
+  costTokens: number
+  startedAt: string
+  endedAt: string | null
+  /** `null` tant que le run tourne : c'est au front d'animer depuis `startedAt`. */
+  durationSeconds: number | null
+  timeline: RunTimelineEntry[]
+  artifacts: { id: string; kind: string; path: string; meta: unknown; at: string }[]
+}
+
+export interface VaultEntryView {
+  key: string
+}
+
+export interface HiveMessageView {
+  id: string
+  from: string
+  body: string
+  at: string
+}
+
+export interface StartedRun {
+  runId: string
+  stepId: string
+  position: number
+  title: string
+}
+
 export interface GlobeView {
   id: string
   name: string
@@ -251,5 +354,57 @@ export const api = {
   globes: {
     list: () => request<GlobeView[]>('GET', '/api/globes'),
     create: (input: CreateGlobeInput) => request<GlobeView>('POST', '/api/globes', input),
+  },
+  journal: {
+    /** `hours` est borné côté serveur par la rétention annoncée (90 j). */
+    get: (hours?: number) =>
+      request<JournalView>('GET', `/api/journal${hours ? `?hours=${hours}` : ''}`),
+  },
+  analytics: {
+    get: (days?: number) =>
+      request<AnalyticsView>('GET', `/api/analytics${days ? `?days=${days}` : ''}`),
+    steps: (projectId: string) =>
+      request<StepCostView[]>('GET', `/api/analytics/steps/${encodeURIComponent(projectId)}`),
+  },
+  vault: {
+    /** Inventaire seul : aucune valeur de secret ne transite jamais par l'API. */
+    list: () => request<VaultEntryView[]>('GET', '/api/vault'),
+  },
+  hive: {
+    messages: () => request<HiveMessageView[]>('GET', '/api/hive/messages'),
+    /**
+     * Un tour de conversation. Coûte des tokens : à n'appeler que sur envoi
+     * explicite, jamais à la frappe.
+     */
+    ask: (text: string) =>
+      request<{ reply: HiveMessageView; costTokens: number }>('POST', '/api/hive/messages', {
+        text,
+      }),
+  },
+  runs: {
+    get: (id: string) => request<RunDetailView>('GET', `/api/runs/${encodeURIComponent(id)}`),
+    /** Démarre la boucle sur un step. 409 si un run occupe déjà ce step. */
+    start: (stepId: string) =>
+      request<StartedRun>('POST', `/api/steps/${encodeURIComponent(stepId)}/start`),
+    pause: (id: string) =>
+      request<{ id: string; state: string }>('POST', `/api/runs/${encodeURIComponent(id)}/pause`),
+    resume: (id: string) =>
+      request<{ id: string; state: string }>('POST', `/api/runs/${encodeURIComponent(id)}/resume`),
+    stop: (id: string, reason?: string) =>
+      request<{ id: string; state: string }>(
+        'POST',
+        `/api/runs/${encodeURIComponent(id)}/stop`,
+        reason ? { reason } : undefined,
+      ),
+    /**
+     * Écrit une consigne dans le bus. Elle n'est PAS lue par la session en
+     * cours : les handlers lisent le bus au démarrage de leur invocation. Le
+     * geste utile est pause · consigne · reprise.
+     */
+    instruct: (id: string, role: string, text: string) =>
+      request<{ readAt: string }>('POST', `/api/runs/${encodeURIComponent(id)}/instruct`, {
+        role,
+        text,
+      }),
   },
 }

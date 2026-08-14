@@ -1,13 +1,21 @@
 import { createRootRoute, createRoute, createRouter } from '@tanstack/react-router'
 import { Layout } from './components/Layout'
+import { Ambient } from './routes/Ambient'
+import { Analytics } from './routes/Analytics'
 import { Clients } from './routes/Clients'
+import { Conscience } from './routes/Conscience'
 import { Creation } from './routes/Creation'
 import { Dashboard } from './routes/Dashboard'
 import { GlobeInterior } from './routes/GlobeInterior'
 import { Globes } from './routes/Globes'
 import { Inbox } from './routes/Inbox'
+import { Journal } from './routes/Journal'
+import { Onboarding } from './routes/Onboarding'
 import { Project } from './routes/Project'
+import { Protocole } from './routes/Protocole'
 import { Reglages } from './routes/Reglages'
+import { RevueMatin } from './routes/RevueMatin'
+import { RunLive } from './routes/RunLive'
 
 // Routage code-first (pas de génération de fichiers de routes) : cinq routes
 // posées par la Task 6, quatre d'entre elles restent des pages vides pour
@@ -96,6 +104,62 @@ const reglagesRoute = createRoute({
   component: Reglages,
 })
 
+/**
+ * Les écrans restants du pack. Les chemins sont posés ici en une fois, avec
+ * des composants encore vides pour certains : plusieurs sessions les
+ * remplissent en parallèle, et se partager ce fichier les mettrait en
+ * conflit. Une route déclarée avant son écran ne coûte rien ; deux sessions
+ * qui réécrivent le même `routeTree` coûtent une résolution manuelle.
+ */
+const journalRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/journal',
+  component: Journal,
+})
+
+const analyticsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/analytics',
+  component: Analytics,
+})
+
+const runLiveRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/runs/$runId',
+  component: RunLive,
+})
+
+const revueMatinRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/revue',
+  component: RevueMatin,
+})
+
+const ambientRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/ambient',
+  component: Ambient,
+})
+
+const onboardingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/onboarding',
+  component: Onboarding,
+})
+
+/** Deux pages de spécification, sans état ni API : la mémoire et le pipeline. */
+const conscienceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/conscience',
+  component: Conscience,
+})
+
+const protocoleRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/protocole',
+  component: Protocole,
+})
+
 const routeTree = rootRoute.addChildren([
   dashboardRoute,
   inboxRoute,
@@ -105,6 +169,14 @@ const routeTree = rootRoute.addChildren([
   creationRoute,
   clientsRoute,
   reglagesRoute,
+  journalRoute,
+  analyticsRoute,
+  runLiveRoute,
+  revueMatinRoute,
+  ambientRoute,
+  onboardingRoute,
+  conscienceRoute,
+  protocoleRoute,
 ])
 
 export const router = createRouter({ routeTree })
