@@ -136,6 +136,13 @@ export interface CollectStructuredOptions {
   toolDescription: string
   /** Nombre maximal d'échanges avant d'abandonner. Défaut 3 (plan, Step 3). */
   maxAttempts?: number
+  /**
+   * Serveurs MCP à exposer EN PLUS de l'outil de sortie structurée, pour ce
+   * seul échange — `client_kb` par exemple. Fusionnés, jamais substitués :
+   * l'outil de sortie structurée reste disponible quoi qu'il arrive, sans quoi
+   * l'agent n'aurait plus de moyen de rendre sa réponse.
+   */
+  extra?: SendOptions
 }
 
 /**
@@ -174,8 +181,11 @@ export async function collectStructured<Shape extends z.ZodRawShape>(
   )
   const server = createSdkMcpServer({ name: serverName, tools: [structuredTool] })
   const sendOpts: SendOptions = {
-    extraMcpServers: { [serverName]: server },
-    extraAllowedTools: [`mcp__${serverName}__${opts.toolName}`],
+    extraMcpServers: { ...opts.extra?.extraMcpServers, [serverName]: server },
+    extraAllowedTools: [
+      ...(opts.extra?.extraAllowedTools ?? []),
+      `mcp__${serverName}__${opts.toolName}`,
+    ],
   }
 
   let currentPrompt = prompt

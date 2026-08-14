@@ -5,6 +5,7 @@ import { ensureProjectRepo } from '../../git/repo'
 import { ensureRunWorktree } from '../../git/worktree'
 import { createPullRequest, getPullRequest, listPullRequestFiles } from '../../integrations/github'
 import type { StepHandler } from '../../jobs/run-step'
+import { createClientKbSurface, roleUsesClientKb } from '../../knowledge/client-kb'
 import type { RuntimeAdapter } from '../../runtime/types'
 import { runSelfmodGate } from '../../security/selfmod-gate'
 import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
@@ -208,7 +209,12 @@ export function createCodingHandler(deps: CodingDeps): StepHandler {
       onEvent: () => {},
     })
 
-    const result = await deps.adapter.send(session, prompt)
+    // Même raison que dans `framing.ts` : `dev.md` dit « avant toute question,
+    // consulte la fiche client », et l'outil n'était jamais fourni.
+    const kb = roleUsesClientKb(role.tools)
+      ? createClientKbSurface({ db, tools: role.tools })
+      : null
+    const result = await deps.adapter.send(session, prompt, kb ? kb.sendOptions : undefined)
     const report = result.text.trim() || '(le développeur n’a renvoyé aucun texte de rapport)'
 
     await commitIfDirty(worktreePath, `feat: ${commitSummary(frame.body)}`)

@@ -2,6 +2,7 @@ import type { LoopEvent } from '../../domain/run-state'
 import { ensureProjectRepo } from '../../git/repo'
 import { ensureRunWorktree } from '../../git/worktree'
 import type { StepHandler } from '../../jobs/run-step'
+import { createClientKbSurface, roleUsesClientKb } from '../../knowledge/client-kb'
 import { collectStructured, frameSchema } from '../../runtime/structured'
 import type { RuntimeAdapter, ToolPolicy } from '../../runtime/types'
 import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
@@ -205,9 +206,17 @@ export function createFramingHandler(deps: FramingDeps): StepHandler {
       ...(correction ? { correction } : {}),
     })
 
+    // Le prompt du garant lui dit « avant de poser une question, consulte la
+    // fiche client ». L'outil n'existait pas : la consigne était impossible à
+    // suivre, et chaque run reposait des questions déjà répondues.
+    const kb = roleUsesClientKb(role.tools)
+      ? createClientKbSurface({ db, tools: role.tools })
+      : null
+
     const frame = await collectStructured(deps.adapter, session, preamble, frameSchema, {
       toolName: 'submit_frame',
       toolDescription: 'Rend le cadrage du step (dev_prompt, acceptance_criteria, pages_to_judge).',
+      ...(kb ? { extra: kb.sendOptions } : {}),
     })
 
     // La passation garant→dev : c'est elle que coding.ts (et le dev) lira.
