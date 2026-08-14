@@ -153,3 +153,12 @@ textarea::placeholder {
 .clients-search:focus {
   border-color: color-mix(in oklab, var(--accent) 60%, transparent);
 }
+
+/* Écran Réglages (Reglages.dc.html) : mêmes états, boutons fantômes et champs. */
+.reglages-ghost:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.reglages-field:focus {
+  border-color: color-mix(in oklab, var(--accent) 60%, transparent);
+}

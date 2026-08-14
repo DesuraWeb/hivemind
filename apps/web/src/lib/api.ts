@@ -336,6 +336,13 @@ function toQuery(filters: InboxListFilters): string {
   return qs ? `?${qs}` : ''
 }
 
+/** Résultat de `GET /api/health/auth` (`AuthHealthcheckResult`, health/auth-check.ts). */
+export interface AuthHealthView {
+  ok: boolean
+  /** Présent seulement en échec : la cause telle que le runtime l'a rendue. */
+  error?: string
+}
+
 export const api = {
   me: () => request<Me>('GET', '/api/me'),
   login: (login: string, password: string) =>
@@ -450,5 +457,25 @@ export const api = {
         role,
         text,
       }),
+  },
+  settings: {
+    /** Tous les réglages, valeurs scellées remplacées par `***` (store.listPublic). */
+    list: () => request<Record<string, unknown>>('GET', '/api/settings'),
+    /**
+     * Écrit un réglage public. Les secrets passent par le même endpoint avec
+     * `secret: true` — l'écran Réglages ne s'en sert pas : on n'envoie pas un
+     * secret depuis un champ de formulaire pour l'afficher ensuite en `***`.
+     */
+    set: (key: string, value: unknown) =>
+      request<{ ok: true }>('PUT', '/api/settings', { key, value }),
+  },
+  health: {
+    /**
+     * Ouvre réellement une session agent (`adapter.healthcheck()`) : c'est le
+     * seul signal fiable d'une authentification valide, et c'est aussi une
+     * invocation payante. À la demande uniquement, jamais en rafraîchissement
+     * automatique. En échec, le serveur lève une alerte inbox + un email.
+     */
+    auth: () => request<AuthHealthView>('GET', '/api/health/auth'),
   },
 }
