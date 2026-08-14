@@ -5,6 +5,7 @@ import type { StepHandler } from '../../jobs/run-step'
 import { collectStructured, frameSchema } from '../../runtime/structured'
 import type { RuntimeAdapter, ToolPolicy } from '../../runtime/types'
 import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
+import { findPendingInstructions, instructionsBlock } from '../instructions'
 import { resolveProjectRole } from '../roles'
 
 export interface FramingDeps {
@@ -75,6 +76,7 @@ function buildPreamble(opts: {
   iteration: number
   maxIterations: number
   correction?: string
+  instructions: string[]
 }): string {
   return [
     '# Contexte projet',
@@ -99,6 +101,7 @@ function buildPreamble(opts: {
           '',
         ]
       : []),
+    ...instructionsBlock(opts.instructions, '# Consigne de pilotage'),
     '# Itération',
     `iteration = ${opts.iteration}`,
     `max_iterations = ${opts.maxIterations}`,
@@ -156,7 +159,11 @@ export function createFramingHandler(deps: FramingDeps): StepHandler {
       : undefined
 
     const role = await resolveProjectRole(db, runRow.projectId, 'garant')
-    const correction = findLatestCorrection(await readRunMessages(db, runId))
+    // Une seule lecture du bus pour les deux besoins : le correctif du verdict
+    // précédent, et les consignes humaines encore en attente pour le garant.
+    const messages = await readRunMessages(db, runId)
+    const correction = findLatestCorrection(messages)
+    const instructions = findPendingInstructions(messages, 'garant')
 
     const repoPath = await ensureProjectRepo({
       worktreesRoot: deps.worktreesRoot,
@@ -194,6 +201,7 @@ export function createFramingHandler(deps: FramingDeps): StepHandler {
       client: clientSummary(client),
       iteration: runRow.iteration,
       maxIterations: runRow.maxIterations,
+      instructions,
       ...(correction ? { correction } : {}),
     })
 

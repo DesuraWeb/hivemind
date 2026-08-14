@@ -14,6 +14,14 @@ export type LoopEvent =
   | { type: 'human_resolved' }
   | { type: 'budget_pause' }
   | { type: 'budget_resume' }
+  /**
+   * Pause décidée par un humain. Volontairement distincte de `budget_pause` :
+   * le scheduler de budget reprend tous les runs en `paused_budget` dès que la
+   * jauge repasse sous le seuil de reprise (cas nominal, tick de 5 min), donc
+   * ranger une pause manuelle dans cet état la ferait lever toute seule.
+   */
+  | { type: 'manual_pause' }
+  | { type: 'manual_resume' }
   | { type: 'aborted'; reason: string }
 
 export interface RunContext {
@@ -46,7 +54,7 @@ export type Effect =
   | { type: 'reset_review_round' }
   | { type: 'remember_resume_state'; state: RunState }
   | { type: 'clear_resume_state' }
-  | { type: 'end_run'; outcome: 'done' | 'failed' }
+  | { type: 'end_run'; outcome: 'done' | 'failed' | 'stopped' }
 
 export type Decision =
   | { kind: 'transition'; to: RunState; effects: Effect[] }
@@ -63,7 +71,8 @@ function transition(to: RunState, effects: Effect[]): Decision {
 
 // États dans lesquels la boucle avance encore (ni en pause, ni en attente
 // humaine, ni terminaux). Les événements génériques (question, budget_pause,
-// aborted) ne s'appliquent que depuis l'un de ces états.
+// manual_pause) ne s'appliquent que depuis l'un de ces états. `aborted` fait
+// exception : il est traité avant, depuis TOUT état non terminal.
 const ACTIVE_STATES: readonly RunState[] = [
   'framing',
   'coding',
@@ -76,8 +85,22 @@ const ACTIVE_STATES: readonly RunState[] = [
 
 export function decide(state: RunState, event: LoopEvent, ctx: RunContext): Decision {
   // Règle 2 : aucun événement ne fait sortir d'un état terminal.
-  if (state === 'done' || state === 'failed') {
+  if (state === 'done' || state === 'failed' || state === 'stopped') {
     return invalid(`état terminal ${state} : aucun événement accepté`)
+  }
+
+  // Traité avant les blocs d'état : un arrêt humain doit pouvoir aboutir depuis
+  // TOUT état non terminal, pas seulement depuis un état actif. Un run en
+  // attente d'une réponse que Florian ne veut pas donner, ou qu'il vient de
+  // mettre en pause pour regarder ce qu'il fait, doit pouvoir être arrêté —
+  // sinon le seul recours resterait d'attendre `max_iterations`, c'est-à-dire
+  // exactement le manque que cette route vient combler.
+  //
+  // `stopped` et non `failed` : l'humain a décidé, ce n'est pas un échec.
+  // Aucun item d'inbox non plus, pour la même raison — il n'a pas à être
+  // notifié de sa propre décision.
+  if (event.type === 'aborted') {
+    return transition('stopped', [{ type: 'end_run', outcome: 'stopped' }])
   }
 
   if (state === 'awaiting_human') {
@@ -96,6 +119,17 @@ export function decide(state: RunState, event: LoopEvent, ctx: RunContext): Deci
       return transition(ctx.resumeState, [{ type: 'clear_resume_state' }])
     }
     return invalid(`événement ${event.type} invalide depuis paused_budget`)
+  }
+
+  if (state === 'paused_human') {
+    // Seul `manual_resume` sort d'ici : `budget_resume` y est refusé, et c'est
+    // la garantie recherchée — le scheduler de budget ne peut pas lever une
+    // pause décidée par un humain, même s'il l'essayait.
+    if (event.type === 'manual_resume') {
+      if (!ctx.resumeState) return invalid('manual_resume sans resume_state à restaurer')
+      return transition(ctx.resumeState, [{ type: 'clear_resume_state' }])
+    }
+    return invalid(`événement ${event.type} invalide depuis paused_human`)
   }
 
   // À partir d'ici, `state` est l'un des ACTIVE_STATES.
@@ -132,10 +166,11 @@ export function decide(state: RunState, event: LoopEvent, ctx: RunContext): Deci
     return transition('paused_budget', [{ type: 'remember_resume_state', state }])
   }
 
-  if (event.type === 'aborted') {
-    // Arrêt demandé par l'humain (POST /api/runs/:id/stop, brief §8). Aucun
-    // item d'inbox : c'est lui qui a décidé, il n'a pas à en être informé.
-    return transition('failed', [{ type: 'end_run', outcome: 'failed' }])
+  if (event.type === 'manual_pause') {
+    // Même mémorisation que la pause budgétaire, dans la même colonne : on
+    // n'est jamais en pause manuelle ET en pause budgétaire à la fois, puisque
+    // les deux ne partent que d'un état actif.
+    return transition('paused_human', [{ type: 'remember_resume_state', state }])
   }
 
   switch (state) {

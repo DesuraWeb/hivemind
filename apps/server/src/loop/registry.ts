@@ -4,16 +4,17 @@
  * `stepOnce` (`../jobs/run-step.ts`) lève explicitement si aucun handler
  * n'est enregistré pour l'état courant du run : un état sans entrée ici
  * laisserait un run coincé, sans le moindre message d'erreur avant l'échec du
- * job pg-boss. `RUN_STATES` (`@silithid/shared`) compte onze états ; six sont
+ * job pg-boss. `RUN_STATES` (`@silithid/shared`) compte treize états ; six sont
  * actifs et couverts ci-dessous (`framing`, `coding`, `reviewing`,
  * `deploying`, `judging`, `verdict`) ; `design_wait` est un état ACTIF
  * (`domain/run-state.ts`, `ACTIVE_STATES`) mais qu'AUCUNE transition de
  * `decide()` ne produit encore (le juge visuel existe depuis la Phase 4 et ne
  * transitionne pas par cet état) — il ne peut donc jamais être atteint tant que rien
- * n'y transitionne, câbler un handler dessus serait spéculatif ; les quatre
- * restants (`awaiting_human`, `done`, `failed`, `paused_budget`) sont dans
- * `NO_REQUEUE_STATES` et n'ont structurellement pas besoin de handler
- * (`stepOnce` retourne avant même de consulter le registre).
+ * n'y transitionne, câbler un handler dessus serait spéculatif ; les six
+ * restants (`awaiting_human`, `done`, `failed`, `paused_budget`,
+ * `paused_human`, `stopped`) sont dans `NO_REQUEUE_STATES` et n'ont
+ * structurellement pas besoin de handler (`stepOnce` retourne avant même de
+ * consulter le registre).
  */
 
 import { createLocalPreviewTarget } from '../deploy/local-preview'

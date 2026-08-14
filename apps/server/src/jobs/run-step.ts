@@ -34,8 +34,14 @@ export type StepRegistry = Partial<Record<RunState, StepHandler>>
 const NO_REQUEUE_STATES: ReadonlySet<RunState> = new Set([
   'awaiting_human',
   'paused_budget',
+  // Comme `paused_budget` : le worker cesse de se ré-enfiler, donc la reprise
+  // doit ré-enfiler le run elle-même (`POST /api/runs/:id/resume`). Sans ce
+  // coup de pouce, le run repartirait en base sans que personne ne le fasse
+  // avancer — le piège dans lequel le scheduler de budget est tombé.
+  'paused_human',
   'done',
   'failed',
+  'stopped',
 ])
 
 export interface StepOnceResult {

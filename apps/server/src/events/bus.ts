@@ -30,7 +30,25 @@ export interface BudgetTickEvent {
   projectId: string
 }
 
-export type BusEvent = InboxNewEvent | InboxResolvedEvent | RunStateEvent | BudgetTickEvent
+/**
+ * Une passation s'est ajoutée à la timeline d'un run, sans que son état change
+ * — aujourd'hui une consigne injectée par un humain. Distinct de `run.state` :
+ * l'écran « Run en direct » doit recharger sa timeline, mais rien n'a bougé
+ * dans le pipeline, et publier `run.state` pour ça mentirait sur ce qui s'est
+ * passé.
+ */
+export interface RunMessageEvent {
+  type: 'run.message'
+  runId: string
+  projectId: string
+}
+
+export type BusEvent =
+  | InboxNewEvent
+  | InboxResolvedEvent
+  | RunStateEvent
+  | BudgetTickEvent
+  | RunMessageEvent
 
 export type BusListener = (event: BusEvent) => void
 

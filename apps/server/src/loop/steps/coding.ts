@@ -8,6 +8,7 @@ import type { StepHandler } from '../../jobs/run-step'
 import type { RuntimeAdapter } from '../../runtime/types'
 import { runSelfmodGate } from '../../security/selfmod-gate'
 import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
+import { findPendingInstructions, instructionsBlock } from '../instructions'
 import { resolveProjectRole } from '../roles'
 
 const run = promisify(execFile)
@@ -180,6 +181,7 @@ export function createCodingHandler(deps: CodingDeps): StepHandler {
     })
     const worktreePath = runRow.worktreePath ?? (await ensureRunWorktree(repoPath, runId))
     const reviewFeedback = findLatestReviewFeedback(messages)
+    const instructions = findPendingInstructions(messages, 'dev')
 
     const prompt = [
       frame.body,
@@ -192,6 +194,9 @@ export function createCodingHandler(deps: CodingDeps): StepHandler {
         ? ['', '## Retours du reviewer à corriger (tour précédent)', reviewFeedback]
         : []),
       '',
+      // Rendu vide sans consigne : le prompt d'un run ordinaire reste
+      // rigoureusement identique à ce qu'il était avant cette tâche.
+      ...instructionsBlock(instructions, '## Consigne de pilotage'),
       `Tu es déjà dans le worktree du run, sur la branche \`${branch}\` extraite depuis \`${runRow.defaultBranch}\`. Termine ta réponse par un rapport texte (ce que tu as fait, tes zones de doute) : l'ouverture de la pull request est prise en charge par l'orchestrateur, inutile de l'ouvrir toi-même.`,
     ].join('\n')
 

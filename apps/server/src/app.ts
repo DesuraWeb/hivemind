@@ -88,7 +88,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(clientsRoutes, { db: deps.db })
   await app.register(rolesRoutes, { db: deps.db, settings })
   await app.register(analyticsRoutes, { db: deps.db, settings })
-  await app.register(runsRoutes, { db: deps.db })
+  await app.register(runsRoutes, { db: deps.db, boss })
   await app.register(journalRoutes, { db: deps.db })
   await app.register(hiveRoutes, { db: deps.db, adapter, cwd: env.WORKTREES_ROOT })
 

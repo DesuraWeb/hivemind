@@ -33,6 +33,20 @@ test('loopFromRunState : paused_budget rend "pause"', () => {
   expect(loopFromRunState('paused_budget')).toBe('pause')
 })
 
+test('loopFromRunState : paused_human rend "pause" aussi', () => {
+  // À l'échelle d'une ligne de liste, la seule chose qui compte est qu'un
+  // geste humain soit attendu. La distinction budget/humain reste lisible sur
+  // l'écran « Run en direct », qui rend `state` tel quel.
+  expect(loopFromRunState('paused_human')).toBe('pause')
+})
+
+test('loopFromRunState : stopped rend "stop", JAMAIS "fail"', () => {
+  // Un arrêt décidé est une décision, un échec est un constat. Les afficher
+  // pareil ferait lire « échec » là où Florian a simplement coupé court.
+  expect(loopFromRunState('stopped')).toBe('stop')
+  expect(loopFromRunState('stopped')).not.toBe('fail')
+})
+
 test('loopFromRunState : failed rend "fail"', () => {
   expect(loopFromRunState('failed')).toBe('fail')
 })
@@ -73,10 +87,18 @@ test('deriveRole : awaiting_human lit resume_state, pas l état courant', () => 
   expect(deriveRole('awaiting_human', 'verdict')).toBe('juge')
 })
 
-test('deriveRole : paused_budget, done et failed n affichent personne au travail', () => {
+test('deriveRole : paused_budget, done, failed et stopped n affichent personne au travail', () => {
   expect(deriveRole('paused_budget', 'coding')).toBeNull()
   expect(deriveRole('done', null)).toBeNull()
   expect(deriveRole('failed', null)).toBeNull()
+  expect(deriveRole('stopped', 'coding')).toBeNull()
+})
+
+test('deriveRole : paused_human lit resume_state, pour dire QUI a ete interrompu', () => {
+  // « tu as mis le dev en pause » se lit ; « pause » tout seul ne dit pas ce
+  // qui a été interrompu.
+  expect(deriveRole('paused_human', 'coding')).toBe('dev')
+  expect(deriveRole('paused_human', 'framing')).toBe('garant')
 })
 
 test('deriveRole : un projet sans run (state null) n a pas de rôle', () => {
@@ -103,7 +125,7 @@ test('formatConso : aucun tiret cadratin dans la chaîne rendue (règle DA stric
 
 test('formatDuree : "·" pour tout loop différent de "run"', () => {
   const started = new Date(Date.now() - 5 * 60_000)
-  for (const loop of ['wait', 'fail', 'done', 'pause', 'demarrage'] as const) {
+  for (const loop of ['wait', 'fail', 'done', 'pause', 'demarrage', 'stop'] as const) {
     expect(formatDuree(loop, started)).toBe('·')
   }
 })
@@ -172,6 +194,21 @@ test('buildLine : webmaster (pause) — correspond exactement à data.js', () =>
     pending: [],
   })
   expect(line).toBe('step 2/6 · pause')
+})
+
+test('buildLine : un run arrete se lit « arrêté », pas « échec »', () => {
+  const line = buildLine({
+    step: [3, 6],
+    loop: 'stop',
+    role: null,
+    iteration: null,
+    duree: '·',
+    pending: [],
+  })
+  expect(line).toBe('step 3/6 · arrêté')
+  expect(line).not.toContain('échec')
+  // Règle DA stricte : le séparateur est « · », jamais un tiret cadratin.
+  expect(line).not.toContain('—')
 })
 
 test('buildLine : calanques (fail, itér. 4/4) — correspond exactement à data.js', () => {

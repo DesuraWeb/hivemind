@@ -4,7 +4,7 @@ import type { InboxType, RoleKey, RunState } from '@silithid/shared'
  * Statut *projet* agrégé depuis l'état du run courant. Jamais stocké : deux
  * sources de vérité divergeraient au premier crash (plan Phase 3, Task 4).
  */
-export type LoopStatus = 'run' | 'wait' | 'fail' | 'done' | 'pause' | 'demarrage'
+export type LoopStatus = 'run' | 'wait' | 'fail' | 'done' | 'pause' | 'demarrage' | 'stop'
 
 /**
  * Correspondance états de run → statut projet.
@@ -12,8 +12,9 @@ export type LoopStatus = 'run' | 'wait' | 'fail' | 'done' | 'pause' | 'demarrage
  *   framing, coding, design_wait, reviewing, deploying, judging, verdict
  *                                            → 'run'   (la boucle avance encore ; même partition qu'`ACTIVE_STATES` de domain/run-state.ts)
  *   awaiting_human                          → 'wait'  (bloqué sur une réponse humaine)
- *   paused_budget                           → 'pause' (bloqué sur le budget)
+ *   paused_budget, paused_human             → 'pause' (bloqué, budget ou décision humaine)
  *   failed                                  → 'fail'
+ *   stopped                                 → 'stop'
  *   done                                    → 'done'
  *
  * Un projet SANS AUCUN run (aucun step encore démarré) reçoit 'demarrage'.
@@ -21,14 +22,26 @@ export type LoopStatus = 'run' | 'wait' | 'fail' | 'done' | 'pause' | 'demarrage
  * une pause est une décision, un projet neuf est une invitation à démarrer.
  * Les deux appellent des gestes opposés (reprendre vs lancer).
  *
- * Statut ajouté après coup, absent de l'énum `badgeFor` de data.js : le pack
- * DA n'a donc pas de visuel pour lui, c'est un manque à combler côté design.
+ * Les deux pauses partagent 'pause' : à l'échelle d'une ligne de liste, la
+ * seule chose qui compte est qu'un geste humain soit attendu pour repartir.
+ * La distinction budget/humain reste lisible sur l'écran « Run en direct »,
+ * qui rend `state` tel quel — la dupliquer ici forcerait un second visuel de
+ * badge pour une nuance que la liste n'a pas à porter.
+ *
+ * 'stop' en revanche ne partage RIEN avec 'fail' : un arrêt décidé est une
+ * décision, un échec est un constat. Les afficher pareil ferait lire « échec »
+ * là où Florian a simplement coupé court.
+ *
+ * Statuts ajoutés après coup, absents de l'énum `badgeFor` de data.js : le
+ * pack DA n'a donc pas de visuel pour eux, c'est un manque à combler côté
+ * design.
  */
 export function loopFromRunState(state: RunState | null): LoopStatus {
   if (state === null) return 'demarrage'
   if (state === 'awaiting_human') return 'wait'
-  if (state === 'paused_budget') return 'pause'
+  if (state === 'paused_budget' || state === 'paused_human') return 'pause'
   if (state === 'failed') return 'fail'
+  if (state === 'stopped') return 'stop'
   if (state === 'done') return 'done'
   return 'run'
 }
@@ -68,18 +81,23 @@ function roleForActiveState(state: RunState | null): string | null {
 }
 
 /**
- * `awaiting_human` n'est pas lui-même piloté par un rôle : on lit
- * `resume_state` (l'étape à laquelle le run reprendra) pour savoir qui a été
- * interrompu. `paused_budget`, `done` et `failed` n'ont personne « au
- * travail » à afficher : pause budgétaire décidée hors contexte de rôle,
- * états terminaux où plus aucun agent n'avance la boucle. L'historique de
- * qui a échoué reste consultable via `messages` (piste d'audit), pas dans ce
- * résumé de liste.
+ * `awaiting_human` et `paused_human` ne sont pas eux-mêmes pilotés par un
+ * rôle : on lit `resume_state` (l'étape à laquelle le run reprendra) pour
+ * savoir qui a été interrompu. Pour une pause manuelle c'est même l'essentiel
+ * de l'information — « tu as mis le dev en pause » se lit, « pause » tout seul
+ * ne dit pas ce qui a été interrompu.
+ *
+ * `paused_budget`, `done`, `failed` et `stopped` n'ont personne « au travail »
+ * à afficher : pause budgétaire décidée hors contexte de rôle, états terminaux
+ * où plus aucun agent n'avance la boucle. L'historique de qui a échoué reste
+ * consultable via `messages` (piste d'audit), pas dans ce résumé de liste.
  */
 export function deriveRole(state: RunState | null, resumeState: RunState | null): string | null {
   if (state === null) return null
-  if (state === 'awaiting_human') return roleForActiveState(resumeState)
-  if (state === 'paused_budget' || state === 'done' || state === 'failed') return null
+  if (state === 'awaiting_human' || state === 'paused_human') return roleForActiveState(resumeState)
+  if (state === 'paused_budget' || state === 'done' || state === 'failed' || state === 'stopped') {
+    return null
+  }
   return roleForActiveState(state)
 }
 
@@ -160,6 +178,11 @@ export function buildLine(input: LineInput): string {
       return `${stepPart} · terminé`
     case 'pause':
       return `${stepPart} · pause`
+    // « arrêté », jamais « échec » : la ligne constate une décision, pas une
+    // panne. Le run ne repartira pas, mais personne n'a à chercher ce qui a
+    // cassé.
+    case 'stop':
+      return `${stepPart} · arrêté`
     // Un projet neuf : la ligne invite à lancer, elle ne constate pas un arrêt.
     case 'demarrage':
       return `${stepPart} · prêt à démarrer`
