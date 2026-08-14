@@ -50,6 +50,19 @@ textarea::placeholder {
 }
 
 /* Rail nav : hover discret sur les icônes inactives (repris du pack DA). */
+.rail-nav {
+  /* Gouttière horizontale du rail. Resserrée sur mobile pour laisser 44 px aux
+     cibles sans élargir le rail (largeur FIXE 60 px, CLAUDE.md). */
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.rail-nav-link {
+  /* 18 px d'icône + 2 × 9 = 36 px. Élargi sur mobile par la media query en
+     bas de ce fichier ; ici plutôt qu'en style inline, qui gagnerait. */
+  padding: 9px;
+}
+
 .rail-nav-link:hover {
   background: rgba(214, 228, 247, 0.05);
   color: var(--text-hi);
@@ -161,4 +174,32 @@ textarea::placeholder {
 
 .reglages-field:focus {
   border-color: color-mix(in oklab, var(--accent) 60%, transparent);
+}
+
+/*
+ * Cibles tactiles du rail nav.
+ *
+ * Le rail fait 60 px de large, largeur FIXE imposée par CLAUDE.md. Avec
+ * `padding: 16px 10px` sur l'aside et `padding: 9px` sur chaque lien, une
+ * icône de 18 px donne une cible de 36 px : en dessous des 44 px que le pack
+ * exige sur mobile (« Inbox mobile.dc.html »).
+ *
+ * Deux conditions, pas une : un pointeur grossier (vrai tactile) OU un
+ * viewport sous 720 px, le même seuil que `useIsMobile`. Le pointeur seul ne
+ * suffit pas — un navigateur de bureau redimensionné à 375 px se déclare
+ * `pointer: fine`, et c'est précisément dans cette configuration qu'on teste.
+ * Élargir les cibles sur une fenêtre étroite ne coûte rien.
+ *
+ * On récupère les 8 px manquants en resserrant la gouttière de l'aside :
+ * 60 − 2 × 8 = 44 exactement, sans élargir le rail (largeur FIXE, CLAUDE.md).
+ */
+@media (pointer: coarse), (max-width: 720px) {
+  .rail-nav {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .rail-nav-link {
+    padding: 13px;
+  }
 }

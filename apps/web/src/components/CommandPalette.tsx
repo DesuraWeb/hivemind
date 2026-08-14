@@ -46,6 +46,10 @@ const ACTIONS: { label: string; hint: string; to: string }[] = [
   { label: 'Réglages', hint: 'diagnostic, budget, coffre', to: '/reglages' },
   { label: 'Clients', hint: 'base de connaissances', to: '/clients' },
   { label: 'Globes', hint: 'espaces de conscience', to: '/globes' },
+  // Sans cette entrée, l'écran n'est atteignable qu'en tapant son URL : il n'a
+  // ni redirection au premier lancement (rien côté serveur ne dit qu'une
+  // instance est neuve) ni place dans le rail.
+  { label: 'Mise en route de l’instance', hint: 'runtime, intégrations', to: '/onboarding' },
 ]
 
 const PROJECTS_QUERY_KEY = ['projects'] as const

@@ -67,9 +67,15 @@ export function Layout() {
           <div
             style={{
               position: 'absolute',
-              left: 'calc(50% - 240px)',
+              // `left: calc(50% - 240px); width: 480px` est le mécanisme exact
+              // du pack — mais il déborde sous 480 px de large, et le contenu
+              // se faisait rogner sur mobile. On borne la largeur et on centre
+              // par translation : au-dessus de 480 px le rendu est identique
+              // au pixel près, en dessous le strip rentre.
+              left: '50%',
+              transform: 'translateX(-50%)',
               bottom: 12,
-              width: 480,
+              width: 'min(480px, calc(100% - 16px))',
               display: 'flex',
               justifyContent: 'center',
               zIndex: 30,

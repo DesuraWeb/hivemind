@@ -82,11 +82,16 @@ const NAV_ITEMS = [
   { to: '/reglages', label: 'Réglages', Icon: ReglagesIcon },
 ] as const
 
+/**
+ * Le `padding` n'est PAS ici : il vit dans `.rail-nav-link` (global.css), pour
+ * qu'une media query puisse l'élargir sur mobile. Un style inline bat toute
+ * feuille de style sans `!important` — c'est ce qui rendait les cibles
+ * tactiles impossibles à corriger proprement.
+ */
 const itemStyle: CSSProperties = {
   display: 'flex',
   justifyContent: 'center',
   alignItems: 'center',
-  padding: 9,
   borderRadius: 'var(--r-md)',
   border: '1px solid transparent',
   background: 'transparent',
@@ -107,13 +112,18 @@ export function RailNav() {
   const avatarLetter = me.login.charAt(0).toUpperCase()
   return (
     <aside
+      className="rail-nav"
       style={{
         width: 60,
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
         gap: 4,
-        padding: '16px 10px',
+        // Vertical seulement : la gouttière horizontale vit dans `.rail-nav`
+        // (global.css), pour la même raison que le padding des liens — un
+        // style inline gagnerait sur la media query mobile.
+        paddingTop: 16,
+        paddingBottom: 16,
         boxSizing: 'border-box',
         background: 'transparent',
         overflow: 'hidden',
