@@ -11,7 +11,11 @@ export default defineConfig({
       // Aucun test n'appelle un vrai modèle : la suite ne consomme pas de tokens.
       RUNTIME_ADAPTER: 'fake',
     },
-    fileParallelism: false, // les tests partagent une base Postgres
+    fileParallelism: false, // les fichiers d'un même processus partagent la base
+    // Verrou consultatif : sérialise aussi entre PROCESSUS. Plusieurs sessions
+    // lancent `pnpm test` en même temps sur ce dépôt, et chaque fichier
+    // commence par un `drop schema`. Voir apps/server/tests/setup.ts.
+    setupFiles: ['./apps/server/tests/setup.ts'],
     hookTimeout: 30_000,
   },
 })
