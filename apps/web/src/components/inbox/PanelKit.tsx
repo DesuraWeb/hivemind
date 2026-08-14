@@ -58,6 +58,12 @@ export function PanelButton({ variant = 'secondary', style, children, ...rest }:
   const [hover, hoverProps] = useHover()
   return (
     <button
+      // Marque l'action principale du panneau pour qui pilote au clavier : la
+      // Revue du matin (routes/RevueMatin.tsx) mappe « entrée » dessus sans
+      // rien savoir du type d'item ni de l'état local du panneau (texte tapé,
+      // corps d'email édité…), qui reste la propriété du panneau. Sans repère,
+      // il faudrait dupliquer une action principale par type ici.
+      {...(variant === 'primary' ? { 'data-panel-primary': 'true' } : {})}
       type="button"
       {...hoverProps}
       {...rest}

@@ -19,7 +19,7 @@ import type { PanelProps } from './panels/types'
  * alert) + l'affordance approval·savoir (jamais alimentée) + un repli
  * générique pour les autres sous-types d'approbation.
  */
-function pickPanel(item: InboxItemView): (props: PanelProps) => ReactElement {
+export function pickPanel(item: InboxItemView): (props: PanelProps) => ReactElement {
   if (item.type === 'question') return QuestionPanel
   if (item.type === 'verdict') return VerdictPanel
   if (item.type === 'alert') return AlertPanel
