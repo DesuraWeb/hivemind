@@ -248,6 +248,51 @@ test('le gate step_end ne saute jamais hors mode auto (autonomy heritee du proje
   expect(items[0]?.subtype).toBe('step_end')
 })
 
+/** Le statut du step porté par un run — c'est ce que lit la timeline. */
+async function stepStatus(runId: string): Promise<string> {
+  const row = await db
+    .selectFrom('steps')
+    .innerJoin('runs', 'runs.step_id', 'steps.id')
+    .select('steps.status as status')
+    .where('runs.id', '=', runId)
+    .executeTakeFirstOrThrow()
+  return row.status
+}
+
+/** `startRun` passe le step à `running` ; on reproduit cet état de départ. */
+async function markStepRunning(runId: string): Promise<void> {
+  await db
+    .updateTable('steps')
+    .set({ status: 'running' })
+    .where('id', '=', db.selectFrom('runs').select('step_id').where('id', '=', runId))
+    .execute()
+}
+
+test('end_run outcome done : le step passe a validated', async () => {
+  const runId = await createRun({ autonomy: 'auto' })
+  await db.updateTable('runs').set({ state: 'verdict' }).where('id', '=', runId).execute()
+  await markStepRunning(runId)
+
+  const { state } = await applyEvent(db, runId, { type: 'verdict_conforme' })
+  expect(state).toBe('done')
+
+  // `validated`, pas `done` : l'énum de `steps.status` n'a jamais eu de `done`
+  // (migration 0001), c'est l'état terminal du RUN qui porte ce nom.
+  expect(await stepStatus(runId)).toBe('validated')
+})
+
+test('end_run outcome failed : le step passe a failed', async () => {
+  const runId = await createRun({ maxIterations: 1 })
+  await db.updateTable('runs').set({ state: 'verdict' }).where('id', '=', runId).execute()
+  await markStepRunning(runId)
+
+  // Itérations épuisées (1/1) : les écarts ne relancent plus, ils échouent.
+  const { state } = await applyEvent(db, runId, { type: 'verdict_ecarts' })
+  expect(state).toBe('failed')
+
+  expect(await stepStatus(runId)).toBe('failed')
+})
+
 test('un run introuvable leve une erreur explicite', async () => {
   await expect(
     applyEvent(db, '00000000-0000-0000-0000-000000000000', { type: 'frame_ready' }),

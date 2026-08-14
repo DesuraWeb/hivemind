@@ -205,12 +205,26 @@ async function applyEffect(
         .execute()
       return
 
-    case 'end_run':
+    case 'end_run': {
       await trx
         .updateTable('runs')
         .set({ ended_at: new Date() })
         .where('id', '=', ctx.runId)
         .execute()
+
+      // `steps.status` doit suivre la fin du run, sinon un step reste affiché
+      // « en cours » pour toujours : `loop/start.ts` le passe à `running` au
+      // démarrage, et rien ne le remettait. Un step arrêté doit surtout
+      // redevenir `pending` — il est de nouveau libre, et c'est ce qui permet
+      // de le relancer.
+      const status =
+        effect.outcome === 'done' ? 'validated' : effect.outcome === 'failed' ? 'failed' : 'pending'
+      await trx
+        .updateTable('steps')
+        .set({ status })
+        .where('id', '=', trx.selectFrom('runs').select('step_id').where('id', '=', ctx.runId))
+        .execute()
       return
+    }
   }
 }

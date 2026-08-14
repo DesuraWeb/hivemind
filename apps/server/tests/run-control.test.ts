@@ -447,3 +447,29 @@ test('demarrer exige une session', async () => {
   const res = await app.inject({ method: 'POST', url: `/api/steps/${stepId}/start` })
   expect(res.statusCode).toBe(401)
 })
+
+test('la fin d un run remet steps.status : un step arrete redevient libre', async () => {
+  const stepId = await seedStep()
+  const { runId } = (await post(`/api/steps/${stepId}/start`, {})).json()
+
+  const before = await db
+    .selectFrom('steps')
+    .select('status')
+    .where('id', '=', stepId)
+    .executeTakeFirstOrThrow()
+  expect(before.status).toBe('running')
+
+  await post(`/api/runs/${runId}/stop`, {})
+
+  const after = await db
+    .selectFrom('steps')
+    .select('status')
+    .where('id', '=', stepId)
+    .executeTakeFirstOrThrow()
+  // `pending` et non `failed` : un arret n'est pas un echec, et le step doit
+  // redevenir relancable. Sans ca il resterait affiche « en cours » a jamais.
+  expect(after.status).toBe('pending')
+
+  // Et il est reellement relancable : c'est tout l'interet.
+  expect((await post(`/api/steps/${stepId}/start`, {})).statusCode).toBe(201)
+})
