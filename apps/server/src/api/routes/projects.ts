@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { Kysely } from 'kysely'
 import { z } from 'zod'
 import type { Database } from '../../db/types'
+import { UnknownGlobeError, createProject } from '../../projects/create'
 import {
   getProjectBySlug,
   getProjectIdBySlug,
@@ -17,6 +18,34 @@ export interface ProjectsRoutesDeps {
 }
 
 const params = z.object({ id: z.string().min(1) })
+
+/**
+ * Corps de création. Le slug n'y figure pas : il se dérive du nom côté
+ * serveur (cf. `projects/create.ts`). Laisser l'appelant le choisir ferait de
+ * l'écran de création une API publique, avec ses conflits à gérer.
+ */
+const createBody = z.object({
+  globe: z.string().min(1),
+  name: z.string().min(1).max(120),
+  repoFullName: z.string().regex(/^[\w.-]+\/[\w.-]+$/, 'attendu : owner/name'),
+  clientId: z.string().uuid().optional(),
+  stack: z.string().max(120).optional(),
+  tint: z.string().max(32).optional(),
+  stagingUrl: z.string().max(255).optional(),
+  steps: z
+    .array(
+      z.object({
+        title: z.string().min(1).max(200),
+        specs: z.string().min(1),
+        // `auto` ne porte que sur l'itération dev↔reviewer : la mise en prod
+        // reste un gate quel que soit ce champ (cf. deploy/prod-gate.ts).
+        autonomy: z.enum(['gated', 'auto']).optional(),
+        maxIterations: z.number().int().min(1).max(20).optional(),
+      }),
+    )
+    .max(50)
+    .optional(),
+})
 
 /**
  * Taux de conversion tokens → euros (`settings['pricing.eur_per_mtok']`,
@@ -51,6 +80,51 @@ export async function projectsRoutes(
       return all.filter((p) => p.globe === globe)
     }
     return all
+  })
+
+  app.post('/api/projects', { preHandler: app.requireAuth }, async (req, reply) => {
+    const parsed = createBody.safeParse(req.body)
+    if (!parsed.success) {
+      // Les erreurs zod telles quelles : l'écran de création doit pouvoir dire
+      // QUEL champ ne va pas, pas seulement que « ça n'a pas marché ».
+      return reply.code(400).send({ error: 'requete_invalide', details: parsed.error.issues })
+    }
+
+    const { globe, name, repoFullName, clientId, stack, tint, stagingUrl, steps } = parsed.data
+    try {
+      // `exactOptionalPropertyTypes` : une clé optionnelle absente doit être
+      // absente, jamais présente et valant undefined. Même parade que la route
+      // de création de globe.
+      const created = await createProject(deps.db, {
+        globeSlug: globe,
+        name,
+        repoFullName,
+        ...(clientId !== undefined ? { clientId } : {}),
+        ...(stack !== undefined ? { stack } : {}),
+        ...(tint !== undefined ? { tint } : {}),
+        ...(stagingUrl !== undefined ? { stagingUrl } : {}),
+        // Normalisé ici plutôt que d'assouplir `CreateStepInput` :
+        // `exactOptionalPropertyTypes` refuse une clé présente valant
+        // `undefined`, et le type du domaine a raison de l'exiger. C'est la
+        // frontière HTTP qui doit s'adapter, pas le domaine.
+        ...(steps !== undefined
+          ? {
+              steps: steps.map((step) => ({
+                title: step.title,
+                specs: step.specs,
+                autonomy: step.autonomy ?? null,
+                ...(step.maxIterations !== undefined ? { maxIterations: step.maxIterations } : {}),
+              })),
+            }
+          : {}),
+      })
+      return reply.code(201).send(created)
+    } catch (err) {
+      if (err instanceof UnknownGlobeError) {
+        return reply.code(404).send({ error: 'globe_introuvable' })
+      }
+      throw err
+    }
   })
 
   app.get('/api/projects/:id', { preHandler: app.requireAuth }, async (req, reply) => {

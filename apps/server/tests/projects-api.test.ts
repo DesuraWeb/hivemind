@@ -427,3 +427,104 @@ test('GET /api/projects?globe=<slug> ne rend que les projets de ce globe', async
   const tous = (await get('/api/projects')).json().map((p: { id: string }) => p.id)
   expect(tous).toEqual(expect.arrayContaining([dedans, dehors]))
 })
+
+// --- Creation d'un projet (POST /api/projects) ---
+
+function post(url: string, payload: Record<string, unknown>) {
+  return app.inject({ method: 'POST', url, payload, cookies: { hm_session: cookie } })
+}
+
+test('POST /api/projects sans cookie renvoie 401', async () => {
+  const res = await app.inject({ method: 'POST', url: '/api/projects', payload: {} })
+  expect(res.statusCode).toBe(401)
+})
+
+test('cree un projet et ses steps, dans l ordre du tableau', async () => {
+  const globe = await db.selectFrom('globes').select('slug').executeTakeFirstOrThrow()
+  const nom = `Boutique ${randomUUID().slice(0, 8)}`
+
+  const res = await post('/api/projects', {
+    globe: globe.slug,
+    name: nom,
+    repoFullName: 'DesuraWeb/boutique',
+    stack: 'Astro',
+    steps: [
+      { title: 'Socle et deploiement', specs: '## Specs' },
+      { title: 'Pages produits', specs: '## Specs', autonomy: 'auto', maxIterations: 6 },
+    ],
+  })
+
+  expect(res.statusCode).toBe(201)
+  const body = res.json()
+  expect(body.stepCount).toBe(2)
+
+  const steps = (await get(`/api/projects/${body.slug}/steps`)).json()
+  // La position vient de l'ordre du tableau : deux steps a la meme position
+  // rendraient la timeline ambigue.
+  expect(steps.map((s: { position: number; title: string }) => [s.position, s.title])).toEqual([
+    [1, 'Socle et deploiement'],
+    [2, 'Pages produits'],
+  ])
+
+  const projet = (await get(`/api/projects/${body.slug}`)).json()
+  expect(projet.stack).toBe('Astro')
+  expect(projet.globe).toBe(globe.slug)
+})
+
+test('deux projets du meme nom : le slug se desambiguise, jamais un 409', async () => {
+  const globe = await db.selectFrom('globes').select('slug').executeTakeFirstOrThrow()
+  const nom = `Meme nom ${randomUUID().slice(0, 8)}`
+
+  const a = await post('/api/projects', {
+    globe: globe.slug,
+    name: nom,
+    repoFullName: 'DesuraWeb/a',
+  })
+  const b = await post('/api/projects', {
+    globe: globe.slug,
+    name: nom,
+    repoFullName: 'DesuraWeb/b',
+  })
+
+  expect(a.statusCode).toBe(201)
+  // Personne n'a a comprendre pourquoi son nom serait « deja pris » : c'est un
+  // ecran de creation, pas une API publique ou l'appelant choisit son id.
+  expect(b.statusCode).toBe(201)
+  expect(b.json().slug).toBe(`${a.json().slug}-2`)
+})
+
+test('un globe inconnu est un 404, pas un globe cree au passage', async () => {
+  const res = await post('/api/projects', {
+    globe: 'globe-qui-nexiste-pas',
+    name: 'Projet orphelin',
+    repoFullName: 'DesuraWeb/x',
+  })
+  expect(res.statusCode).toBe(404)
+  expect(res.json().error).toBe('globe_introuvable')
+})
+
+test('un depot mal forme est refuse, en disant quel champ', async () => {
+  const globe = await db.selectFrom('globes').select('slug').executeTakeFirstOrThrow()
+  const res = await post('/api/projects', {
+    globe: globe.slug,
+    name: 'Projet',
+    repoFullName: 'pas-un-chemin-github',
+  })
+  expect(res.statusCode).toBe(400)
+  // L'ecran de creation doit pouvoir dire QUEL champ ne va pas.
+  expect(JSON.stringify(res.json().details)).toContain('repoFullName')
+})
+
+test('un projet cree sans step apparait quand meme, pret a demarrer', async () => {
+  const globe = await db.selectFrom('globes').select('slug').executeTakeFirstOrThrow()
+  const res = await post('/api/projects', {
+    globe: globe.slug,
+    name: `Sans step ${randomUUID().slice(0, 8)}`,
+    repoFullName: 'DesuraWeb/vide',
+  })
+  expect(res.statusCode).toBe(201)
+
+  const projet = (await get(`/api/projects/${res.json().slug}`)).json()
+  expect(projet.loop).toBe('demarrage')
+  expect(projet.line).toContain('prêt à démarrer')
+})
