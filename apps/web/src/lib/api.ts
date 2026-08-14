@@ -282,6 +282,45 @@ export interface RoleTemplateView {
   modifiedAt: null
 }
 
+/**
+ * Miroir front de `ClientView` (apps/server/src/clients/repo.ts) : la fiche
+ * complète rendue par `GET /api/clients`.
+ *
+ * Deux absences sont volontaires côté serveur et se lisent ici :
+ * `accessKeys` ne porte que les NOMS des accès (aucune valeur de secret ne
+ * sort de l'API), et `knowledge` n'a ni version ni score de rappel — rien de
+ * tout cela n'est mesuré, l'écran doit le dire plutôt que d'afficher un « v1 »
+ * et un compteur à zéro.
+ */
+export interface ClientKnowledgeView {
+  question: string
+  answer: string
+  /** Item d'inbox d'où vient la réponse, quand il est connu. */
+  sourceItemId: string | null
+  at: string | null
+}
+
+export interface ClientContactView {
+  name: string | null
+  role: string | null
+  email: string | null
+  phone: string | null
+}
+
+export interface ClientView {
+  id: string
+  name: string
+  siret: string | null
+  /** Ton attendu, injecté dans le cadrage de chaque step (loop/steps/framing.ts). */
+  tone: string | null
+  contacts: ClientContactView[]
+  knowledge: ClientKnowledgeView[]
+  /** Noms des accès détenus dans le coffre. **Jamais les valeurs.** */
+  accessKeys: string[]
+  /** Projets rattachés : `id` est le slug public. */
+  projects: { id: string; name: string }[]
+}
+
 export interface InboxListFilters {
   status?: InboxStatus
   type?: InboxType
@@ -339,7 +378,12 @@ export const api = {
     create: (input: CreateProjectInput) => request<CreatedProject>('POST', '/api/projects', input),
   },
   clients: {
-    list: () => request<ClientSummary[]>('GET', '/api/clients'),
+    /**
+     * La fiche complète, pas un résumé : `ClientView` contient `ClientSummary`
+     * (l'écran de création n'y lit toujours que `id`/`name`), et l'écran
+     * Clients a besoin du reste — la route rend déjà tout.
+     */
+    list: () => request<ClientView[]>('GET', '/api/clients'),
   },
   roleTemplates: {
     list: () => request<RoleTemplateView[]>('GET', '/api/role-templates'),
