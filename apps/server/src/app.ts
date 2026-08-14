@@ -8,6 +8,7 @@ import { budgetRoutes } from './api/routes/budget'
 import { clientsRoutes } from './api/routes/clients'
 import { globesRoutes } from './api/routes/globes'
 import { healthRoutes } from './api/routes/health'
+import { hiveRoutes } from './api/routes/hive'
 import { inboxRoutes } from './api/routes/inbox'
 import { journalRoutes } from './api/routes/journal'
 import { projectsRoutes } from './api/routes/projects'
@@ -89,6 +90,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(analyticsRoutes, { db: deps.db, settings })
   await app.register(runsRoutes, { db: deps.db })
   await app.register(journalRoutes, { db: deps.db })
+  await app.register(hiveRoutes, { db: deps.db, adapter, cwd: env.WORKTREES_ROOT })
 
   return app
 }
