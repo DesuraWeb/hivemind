@@ -6,6 +6,7 @@ import { buildApp } from '../src/app'
 import { createUser } from '../src/auth/users'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
+import { seedRoleTemplates } from '../src/db/seed'
 import { databaseUrl, loadEnv } from '../src/env'
 import { createInboxItem } from '../src/inbox/repo'
 
@@ -527,4 +528,106 @@ test('un projet cree sans step apparait quand meme, pret a demarrer', async () =
   const projet = (await get(`/api/projects/${res.json().slug}`)).json()
   expect(projet.loop).toBe('demarrage')
   expect(projet.line).toContain('prêt à démarrer')
+})
+
+// --- Equipe et configuration (onglets Equipe / Config de la fiche projet) ---
+
+/**
+ * Ce fichier ne seede pas les templates dans son `beforeAll` (les autres tests
+ * n'en ont pas besoin). On les pose ici, une fois : `seedRoleTemplates` est
+ * idempotent.
+ */
+let templatesSeeded = false
+async function ensureTemplates(): Promise<void> {
+  if (templatesSeeded) return
+  await seedRoleTemplates(db)
+  templatesSeeded = true
+}
+
+function patch(url: string, payload: Record<string, unknown>) {
+  return app.inject({ method: 'PATCH', url, payload, cookies: { hm_session: cookie } })
+}
+
+test("l'equipe liste les roles non materialises comme tels", async () => {
+  await ensureTemplates()
+  const slug = `equipe-${randomUUID()}`
+  await createProjectFixture({ slug })
+
+  const body = (await get(`/api/projects/${slug}/roles`)).json()
+  expect(body.length).toBeGreaterThan(0)
+  // Aucun run n'a tourne : `resolveProjectRole` n'a rien materialise. L'ecran
+  // doit pouvoir dire « ce qui s'appliquera », pas « ce qui s'applique ».
+  expect(body.every((r: { materialise: boolean }) => r.materialise === false)).toBe(true)
+  expect(body.every((r: { drift: boolean }) => r.drift === false)).toBe(true)
+  // Ordre du pipeline, pas alphabetique.
+  expect(body[0].key).toBe('garant')
+})
+
+test('un role materialise et modifie signale son ecart au template', async () => {
+  await ensureTemplates()
+  const slug = `drift-${randomUUID()}`
+  await createProjectFixture({ slug })
+  const projectId = await db
+    .selectFrom('projects')
+    .select('id')
+    .where('slug', '=', slug)
+    .executeTakeFirstOrThrow()
+  const template = await db
+    .selectFrom('role_templates')
+    .select(['id', 'system_prompt as systemPrompt'])
+    .where('key', '=', 'dev')
+    .executeTakeFirstOrThrow()
+
+  await db
+    .insertInto('roles')
+    .values({
+      project_id: projectId.id,
+      template_id: template.id,
+      key: 'dev',
+      system_prompt: `${template.systemPrompt}\n\nConsigne propre a ce projet.`,
+      tools: JSON.stringify({ bash: true, fs: 'write', mcp: [] }),
+    })
+    .execute()
+
+  const body = (await get(`/api/projects/${slug}/roles`)).json()
+  const dev = body.find((r: { key: string }) => r.key === 'dev')
+  expect(dev.materialise).toBe(true)
+  expect(dev.drift).toBe(true)
+  // Les autres restent des templates, sans ecart.
+  expect(body.find((r: { key: string }) => r.key === 'garant').drift).toBe(false)
+})
+
+test('la config du projet est modifiable, le slug et le depot ne le sont pas', async () => {
+  const slug = `config-${randomUUID()}`
+  await createProjectFixture({ slug })
+
+  const res = await patch(`/api/projects/${slug}`, { stack: 'Astro', autonomyDefault: 'auto' })
+  expect(res.statusCode).toBe(200)
+  expect((await get(`/api/projects/${slug}`)).json().stack).toBe('Astro')
+
+  // Le slug vit dans toutes les URL, le depot conditionne les worktrees deja
+  // clones : ce sont des gestes a part entiere, pas des champs de formulaire.
+  const refus = await patch(`/api/projects/${slug}`, { slug: 'autre', repoFullName: 'x/y' })
+  expect(refus.statusCode).toBe(200)
+  expect(refus.json().updated).toBe(false)
+})
+
+test("un step ne se modifie pas sous les pieds d'une boucle qui tourne", async () => {
+  const slug = `step-patch-${randomUUID()}`
+  await createProjectFixture({ slug, run: { state: 'coding', stepPosition: 1 } })
+  const steps = (await get(`/api/projects/${slug}/steps`)).json()
+  const stepId = steps[0].id
+
+  // Le run du fixture porte sur le step 1 : changer son cadrage maintenant
+  // ferait rendre un verdict contre des criteres qui ont bouge.
+  const bloque = await patch(`/api/steps/${stepId}`, { maxIterations: 8 })
+  expect(bloque.statusCode).toBe(409)
+  expect(bloque.json().error).toBe('run_en_cours')
+
+  // Un step sans run actif se modifie.
+  const libre = steps[1]
+  const ok = await patch(`/api/steps/${libre.id}`, { maxIterations: 8, autonomy: null })
+  expect(ok.statusCode).toBe(200)
+  const apres = (await get(`/api/projects/${slug}/steps`)).json()
+  expect(apres.find((s: { id: string }) => s.id === libre.id).maxIterations).toBe(8)
 })

@@ -10,6 +10,7 @@ import {
   listRuns,
   listSteps,
 } from '../../projects/repo'
+import { listProjectTeam } from '../../projects/team'
 import type { SettingsStore } from '../../settings/store'
 
 export interface ProjectsRoutesDeps {
@@ -137,6 +138,20 @@ export async function projectsRoutes(
     return project
   })
 
+  /**
+   * L'équipe du projet. Un rôle non encore matérialisé y figure avec
+   * `materialise: false` : c'est ce qui s'appliquera, pas ce qui s'applique
+   * (les rôles se matérialisent au premier run qui les résout).
+   */
+  app.get('/api/projects/:id/roles', { preHandler: app.requireAuth }, async (req, reply) => {
+    const parsed = params.safeParse(req.params)
+    if (!parsed.success) return reply.code(400).send({ error: 'id_invalide' })
+
+    const projectId = await getProjectIdBySlug(deps.db, parsed.data.id)
+    if (!projectId) return reply.code(404).send({ error: 'projet_introuvable' })
+    return listProjectTeam(deps.db, projectId)
+  })
+
   app.get('/api/projects/:id/steps', { preHandler: app.requireAuth }, async (req, reply) => {
     const parsed = params.safeParse(req.params)
     if (!parsed.success) return reply.code(400).send({ error: 'id_invalide' })
@@ -153,5 +168,97 @@ export async function projectsRoutes(
     const projectId = await getProjectIdBySlug(deps.db, parsed.data.id)
     if (!projectId) return reply.code(404).send({ error: 'projet_introuvable' })
     return listRuns(deps.db, projectId)
+  })
+
+  const patchProjectBody = z.object({
+    stack: z.string().max(120).nullable().optional(),
+    tint: z.string().max(32).nullable().optional(),
+    stagingUrl: z.string().max(255).nullable().optional(),
+    /** Mode par défaut des steps qui n'en fixent pas. `auto` ne porte JAMAIS sur la prod. */
+    autonomyDefault: z.enum(['gated', 'auto']).optional(),
+  })
+
+  /**
+   * Onglet « Config » de la fiche projet. Volontairement restreint : ni le
+   * nom, ni le slug, ni le dépôt. Le slug est dans toutes les URL et un
+   * changement de dépôt invaliderait les worktrees déjà clonés — ce sont des
+   * gestes à part entière, pas des champs de formulaire.
+   */
+  app.patch('/api/projects/:id', { preHandler: app.requireAuth }, async (req, reply) => {
+    const p = params.safeParse(req.params)
+    if (!p.success) return reply.code(400).send({ error: 'id_invalide' })
+    const body = patchProjectBody.safeParse(req.body)
+    if (!body.success) {
+      return reply.code(400).send({ error: 'requete_invalide', details: body.error.issues })
+    }
+
+    const projectId = await getProjectIdBySlug(deps.db, p.data.id)
+    if (!projectId) return reply.code(404).send({ error: 'projet_introuvable' })
+
+    const { stack, tint, stagingUrl, autonomyDefault } = body.data
+    const patch = {
+      ...(stack !== undefined ? { stack } : {}),
+      ...(tint !== undefined ? { tint } : {}),
+      ...(stagingUrl !== undefined ? { staging_url: stagingUrl } : {}),
+      ...(autonomyDefault !== undefined ? { autonomy_default: autonomyDefault } : {}),
+    }
+    // Un corps vide n'est pas une erreur, mais ce n'est pas une écriture non
+    // plus : `updateTable` sans `set` échouerait côté Kysely.
+    if (Object.keys(patch).length === 0) return { updated: false }
+
+    await deps.db.updateTable('projects').set(patch).where('id', '=', projectId).execute()
+    return { updated: true }
+  })
+
+  const patchStepBody = z.object({
+    title: z.string().min(1).max(200).optional(),
+    specs: z.string().min(1).optional(),
+    autonomy: z.enum(['gated', 'auto']).nullable().optional(),
+    maxIterations: z.number().int().min(1).max(20).optional(),
+  })
+
+  /**
+   * Modifie un step. `autonomy: null` le fait hériter du projet.
+   *
+   * Refusé sur un step dont un run est en cours : changer le cadrage ou le
+   * nombre d'itérations sous les pieds d'une boucle qui tourne produirait un
+   * verdict rendu contre des critères qui ont bougé.
+   */
+  app.patch('/api/steps/:id', { preHandler: app.requireAuth }, async (req, reply) => {
+    const p = params.safeParse(req.params)
+    if (!p.success) return reply.code(400).send({ error: 'id_invalide' })
+    const body = patchStepBody.safeParse(req.body)
+    if (!body.success) {
+      return reply.code(400).send({ error: 'requete_invalide', details: body.error.issues })
+    }
+
+    const step = await deps.db
+      .selectFrom('steps')
+      .select('id')
+      .where('id', '=', p.data.id)
+      .executeTakeFirst()
+    if (!step) return reply.code(404).send({ error: 'step_introuvable' })
+
+    const active = await deps.db
+      .selectFrom('runs')
+      .select(['id', 'state'])
+      .where('step_id', '=', p.data.id)
+      .where('ended_at', 'is', null)
+      .executeTakeFirst()
+    if (active) {
+      return reply.code(409).send({ error: 'run_en_cours', runId: active.id, state: active.state })
+    }
+
+    const { title, specs, autonomy, maxIterations } = body.data
+    const patch = {
+      ...(title !== undefined ? { title } : {}),
+      ...(specs !== undefined ? { specs } : {}),
+      ...(autonomy !== undefined ? { autonomy } : {}),
+      ...(maxIterations !== undefined ? { max_iterations: maxIterations } : {}),
+    }
+    if (Object.keys(patch).length === 0) return { updated: false }
+
+    await deps.db.updateTable('steps').set(patch).where('id', '=', p.data.id).execute()
+    return { updated: true }
   })
 }
