@@ -105,6 +105,32 @@ textarea::placeholder {
   animation: hiveOrbit 5s linear infinite;
 }
 
+/* Scène de création (Creation.dc.html) : états :focus / :hover que les styles
+   inline React ne savent pas porter. */
+.creation-field:focus {
+  border-color: color-mix(in oklab, var(--accent) 60%, transparent);
+}
+
+.creation-cta:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.creation-ghost:hover {
+  color: var(--text-hi);
+  border-color: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+/* Respiration lente de l'orbe au centre de la scène de création. */
+@keyframes chapoBob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
 /* Pastille pulsée d'une boucle active (indicateur d'état flottant, Task 7/8). */
 @keyframes chapoPulse {
   0%,

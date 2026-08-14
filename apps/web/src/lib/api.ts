@@ -7,13 +7,38 @@ import type {
 } from './inbox-types'
 import type { ProjectView, RunView, StepView } from './project-types'
 
+/**
+ * Un champ refusé par la validation du serveur : `POST /api/projects` rend
+ * `400 { error, details }` où `details` sont les `issues` zod telles quelles
+ * (`{ path, message }`). L'écran de création doit pouvoir dire QUEL champ ne
+ * va pas — d'où ce transport jusqu'à l'UI plutôt qu'un « ça n'a pas marché ».
+ */
+export interface ApiErrorDetail {
+  /** Chemin du champ fautif, aplati : `name`, `steps.1.specs`… */
+  path: string
+  message: string
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly details: ApiErrorDetail[] = [],
   ) {
     super(message)
   }
+}
+
+/** Les `issues` zod sont du JSON non typé : on ne garde que ce qui est lisible. */
+function toDetails(raw: unknown): ApiErrorDetail[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((entry): ApiErrorDetail[] => {
+    if (typeof entry !== 'object' || entry === null) return []
+    const issue = entry as { path?: unknown; message?: unknown }
+    if (typeof issue.message !== 'string' || issue.message.length === 0) return []
+    const path = Array.isArray(issue.path) ? issue.path.map(String).join('.') : ''
+    return [{ path, message: issue.message }]
+  })
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -28,8 +53,12 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       : {}),
   })
   if (!res.ok) {
-    const payload = (await res.json().catch(() => ({}))) as { error?: string }
-    throw new ApiError(res.status, payload.error ?? `HTTP ${res.status}`)
+    const payload = (await res.json().catch(() => ({}))) as { error?: string; details?: unknown }
+    throw new ApiError(
+      res.status,
+      payload.error ?? `HTTP ${res.status}`,
+      toDetails(payload.details),
+    )
   }
   return (await res.json()) as T
 }
@@ -91,6 +120,65 @@ export interface CreateGlobeInput {
   color?: string
 }
 
+/**
+ * Un step à la création (`POST /api/projects`). `specs` est obligatoire côté
+ * serveur : un step sans specs serait un step qu'aucun agent ne peut prendre.
+ * `autonomy` ne porte QUE sur l'itération dev↔reviewer — la mise en prod reste
+ * un gate quelle que soit sa valeur.
+ */
+export interface CreateProjectStepInput {
+  title: string
+  specs: string
+  autonomy?: 'gated' | 'auto'
+  maxIterations?: number
+}
+
+/**
+ * Corps de `POST /api/projects`. `globe` est le slug du globe d'accueil, et
+ * `repoFullName` (`owner/nom`) désigne un dépôt qui doit **déjà exister** :
+ * le serveur enregistre un projet, il ne crée aucun dépôt.
+ */
+export interface CreateProjectInput {
+  globe: string
+  name: string
+  repoFullName: string
+  clientId?: string
+  stack?: string
+  tint?: string
+  stagingUrl?: string
+  steps?: CreateProjectStepInput[]
+}
+
+export interface CreatedProject {
+  id: string
+  slug: string
+  name: string
+  globeSlug: string
+  stepCount: number
+}
+
+/**
+ * Sous-ensemble de `ClientView` (apps/server/src/clients/repo.ts) dont l'écran
+ * de création a besoin : de quoi remplir un menu déroulant. `id` est l'UUID de
+ * la fiche — c'est lui que `POST /api/projects` attend en `clientId`. Même
+ * parti que `ProjectSummary` : les autres champs sont ignorés, pas absents.
+ */
+export interface ClientSummary {
+  id: string
+  name: string
+}
+
+/** Miroir front de `RoleTemplateView` (apps/server/src/api/routes/roles.ts). */
+export interface RoleTemplateView {
+  key: string
+  projectType: string
+  version: number
+  model: string | null
+  usedByProjects: number
+  /** Toujours `null` : la table n'a aucune colonne d'horodatage (cf. serveur). */
+  modifiedAt: null
+}
+
 export interface InboxListFilters {
   status?: InboxStatus
   type?: InboxType
@@ -139,6 +227,19 @@ export const api = {
     steps: (id: string) =>
       request<StepView[]>('GET', `/api/projects/${encodeURIComponent(id)}/steps`),
     runs: (id: string) => request<RunView[]>('GET', `/api/projects/${encodeURIComponent(id)}/runs`),
+    /**
+     * Crée un projet et ses steps · rien d'autre. Aucun dépôt GitHub n'est
+     * créé, aucun staging n'est provisionné, aucun accès n'est déposé dans le
+     * coffre (cf. `apps/server/src/projects/create.ts`) : l'écran de création
+     * ne doit rien promettre de plus.
+     */
+    create: (input: CreateProjectInput) => request<CreatedProject>('POST', '/api/projects', input),
+  },
+  clients: {
+    list: () => request<ClientSummary[]>('GET', '/api/clients'),
+  },
+  roleTemplates: {
+    list: () => request<RoleTemplateView[]>('GET', '/api/role-templates'),
   },
   budget: {
     /**

@@ -1,4 +1,5 @@
-import { Outlet } from '@tanstack/react-router'
+import { Outlet, useRouterState } from '@tanstack/react-router'
+import { CommandPalette } from './CommandPalette'
 import { HiveStrip } from './HiveStrip'
 import { RailNav } from './RailNav'
 import '../vendor/ambiance'
@@ -8,6 +9,14 @@ import '../vendor/ambiance'
 // centre. Reprend le gabarit des prototypes (Dashboard.dc.html, Inbox.dc.html) :
 // même formule de halo, même montage de l'ambiance.
 export function Layout() {
+  // « Création garde sa scène intégrée » (CLAUDE.md) : le pack n'importe pas
+  // MajordomeStrip dans Creation.dc.html, l'oscilloscope, le micro et le champ
+  // y font partie de la scène. Deux oscilloscopes à l'écran donneraient deux
+  // Hive. La palette ⌘K, elle, reste de toutes les pages : elle est montée à
+  // part ici plutôt que perdue avec le strip.
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const ownStrip = pathname === '/creation'
+
   return (
     <div
       style={{
@@ -52,20 +61,24 @@ export function Layout() {
             width: 480px; display: flex; justify-content: center; pointer-events:
             none — pour que les clics traversent la bande vide autour du strip,
             seul le contenu (HiveStrip, pointer-events: auto) reste cliquable. */}
-        <div
-          style={{
-            position: 'absolute',
-            left: 'calc(50% - 240px)',
-            bottom: 12,
-            width: 480,
-            display: 'flex',
-            justifyContent: 'center',
-            zIndex: 30,
-            pointerEvents: 'none',
-          }}
-        >
-          <HiveStrip />
-        </div>
+        {ownStrip ? (
+          <CommandPalette />
+        ) : (
+          <div
+            style={{
+              position: 'absolute',
+              left: 'calc(50% - 240px)',
+              bottom: 12,
+              width: 480,
+              display: 'flex',
+              justifyContent: 'center',
+              zIndex: 30,
+              pointerEvents: 'none',
+            }}
+          >
+            <HiveStrip />
+          </div>
+        )}
       </div>
     </div>
   )

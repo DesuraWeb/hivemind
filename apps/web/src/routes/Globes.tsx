@@ -1,8 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
-import { CreateGlobeForm } from '../components/globes/CreateGlobeForm'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
+import { useEffect } from 'react'
 import { GlobesStage } from '../components/globes/GlobesStage'
-import { ApiError, type CreateGlobeInput, api } from '../lib/api'
+import { api } from '../lib/api'
 import { subscribeToEvents } from '../lib/events'
 
 const GLOBES_QUERY_KEY = ['globes'] as const
@@ -18,12 +18,16 @@ const GLOBES_QUERY_KEY = ['globes'] as const
  * contrairement aux autres écrans) : c'est le parti du prototype
  * (`Globes.dc.html`) — la scène occupe tout l'espace disponible, le header
  * flotte dessus plutôt que de lui retirer de la hauteur.
+ *
+ * « + Nouveau globe » mène à la scène de création (`/creation`), comme dans le
+ * pack où le bouton pointe sur `Creation.dc.html`. Le popover qui tenait lieu
+ * de création est supprimé : deux chemins pour créer un globe, dont un qui ne
+ * sait faire ni les projets ni la conversation, c'était le formulaire de
+ * dépannage d'une phase où la scène n'existait pas.
  */
 export function Globes() {
   const queryClient = useQueryClient()
   const globesQuery = useQuery({ queryKey: GLOBES_QUERY_KEY, queryFn: api.globes.list })
-  const [creating, setCreating] = useState(false)
-  const [createError, setCreateError] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     return subscribeToEvents((evt) => {
@@ -32,18 +36,6 @@ export function Globes() {
       }
     })
   }, [queryClient])
-
-  const createMutation = useMutation({
-    mutationFn: (input: CreateGlobeInput) => api.globes.create(input),
-    onSuccess: () => {
-      setCreating(false)
-      setCreateError(undefined)
-      void queryClient.invalidateQueries({ queryKey: GLOBES_QUERY_KEY })
-    },
-    onError: (err: unknown) => {
-      setCreateError(err instanceof ApiError ? err.message : 'création impossible')
-    },
-  })
 
   const globes = globesQuery.data ?? []
   const totalProjects = globes.reduce((s, g) => s + g.projectCount, 0)
@@ -84,12 +76,9 @@ export function Globes() {
             {totalActive > 1 ? 's' : ''}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setCreateError(undefined)
-            setCreating((v) => !v)
-          }}
+        <Link
+          to="/creation"
+          search={{}}
           style={{
             display: 'inline-flex',
             padding: '7px 15px',
@@ -103,19 +92,10 @@ export function Globes() {
           }}
         >
           + Nouveau globe
-        </button>
+        </Link>
       </header>
 
       <GlobesStage globes={globes} />
-
-      {creating && (
-        <CreateGlobeForm
-          submitting={createMutation.isPending}
-          onCancel={() => setCreating(false)}
-          onSubmit={(input) => createMutation.mutate(input)}
-          {...(createError ? { error: createError } : {})}
-        />
-      )}
 
       <div
         style={{

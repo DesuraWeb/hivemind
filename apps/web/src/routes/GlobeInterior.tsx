@@ -150,6 +150,27 @@ export function GlobeInterior() {
             attente
           </span>
         </div>
+        {/* Projets.dc.html ~l. 43 : « + Nouveau projet » → Creation.dc.html.
+            Le globe d'accueil est déjà connu ici : il part en recherche avec
+            le mode, pour que la scène ouvre directement le script projet. */}
+        <Link
+          to="/creation"
+          search={{ mode: 'projet', globe: globeId }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '7px 15px',
+            borderRadius: 'var(--r-full)',
+            border: '1px solid color-mix(in oklab, var(--accent) 40%, transparent)',
+            background: 'var(--accent-soft)',
+            color: 'var(--text-hi)',
+            font: '500 12.5px var(--font-sans)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          + Nouveau projet
+        </Link>
       </header>
 
       <main

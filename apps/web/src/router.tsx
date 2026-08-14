@@ -1,6 +1,7 @@
 import { createRootRoute, createRoute, createRouter } from '@tanstack/react-router'
 import { Layout } from './components/Layout'
 import { Clients } from './routes/Clients'
+import { Creation } from './routes/Creation'
 import { Dashboard } from './routes/Dashboard'
 import { GlobeInterior } from './routes/GlobeInterior'
 import { Globes } from './routes/Globes'
@@ -51,6 +52,38 @@ const projectRoute = createRoute({
   component: Project,
 })
 
+/**
+ * Scène de création (`Creation.dc.html`), à la racine et non sous `/globes`.
+ *
+ * Elle précède l'existence de ce qu'elle crée : en mode globe, il n'y a aucun
+ * `$globeId` sous lequel se ranger, et l'écran commence justement par choisir
+ * entre un projet et un globe. Un chemin `/globes/nouveau` mentirait sur les
+ * deux tableaux (fil d'Ariane inexistant, moitié des cas hors sujet).
+ *
+ * Le contexte se porte donc en recherche, pas en segment : `?mode=` préchoisit
+ * le script quand l'appelant sait déjà quoi créer (« + Nouveau projet » depuis
+ * l'intérieur d'un globe), `?globe=` présélectionne le globe d'accueil. Les
+ * deux sont facultatifs — `/creation` nu rend l'écran du pack, avec son choix
+ * au centre.
+ */
+export interface CreationSearch {
+  mode?: 'projet' | 'globe'
+  globe?: string
+}
+
+const creationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/creation',
+  // `exactOptionalPropertyTypes` : une clé absente est absente, jamais
+  // présente et valant `undefined`.
+  validateSearch: (search: Record<string, unknown>): CreationSearch => {
+    const mode = search.mode === 'projet' || search.mode === 'globe' ? search.mode : null
+    const globe = typeof search.globe === 'string' && search.globe !== '' ? search.globe : null
+    return { ...(mode ? { mode } : {}), ...(globe ? { globe } : {}) }
+  },
+  component: Creation,
+})
+
 const clientsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/clients',
@@ -69,6 +102,7 @@ const routeTree = rootRoute.addChildren([
   globesRoute,
   globeInteriorRoute,
   projectRoute,
+  creationRoute,
   clientsRoute,
   reglagesRoute,
 ])
