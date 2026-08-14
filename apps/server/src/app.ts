@@ -77,6 +77,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     adapter,
     mailer,
     alertTo: env.ALERT_EMAIL_TO ?? 'alerts@exemple.test',
+    settings,
   })
   await app.register(authRoutes, { db: deps.db })
   await app.register(settingsRoutes, { settings })
