@@ -17,6 +17,7 @@ import { applyEvent } from '../src/loop/orchestrator'
 import { createFakeAdapter } from '../src/runtime/fake'
 import { collectStructured, frameSchema } from '../src/runtime/structured'
 import type { ToolPolicy } from '../src/runtime/types'
+import { stopBoss } from './stop-boss'
 
 const env = loadEnv()
 const db = createDb(createPool(databaseUrl(env)))
@@ -43,7 +44,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close()
-  await boss.stop()
+  await stopBoss(boss)
   await db.destroy()
 })
 

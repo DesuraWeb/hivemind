@@ -31,6 +31,7 @@ import { RUN_STEP_QUEUE } from '../src/jobs/run-step'
 import { readRunMessages } from '../src/loop/bus'
 import { resolveToolPolicy } from '../src/runtime/tools'
 import type { ToolPolicy } from '../src/runtime/types'
+import { stopBoss } from './stop-boss'
 
 /**
  * Task 5, Phase 5 · « le communicant rédige, il n'envoie jamais ».
@@ -70,7 +71,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close()
-  await boss.stop()
+  await stopBoss(boss)
   await db.destroy()
 })
 

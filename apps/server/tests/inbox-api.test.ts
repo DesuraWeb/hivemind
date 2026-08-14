@@ -11,6 +11,7 @@ import { type CreateInboxItemInput, createInboxItem } from '../src/inbox/repo'
 import { createBoss } from '../src/jobs/boss'
 import { RUN_STEP_QUEUE } from '../src/jobs/run-step'
 import { applyEvent } from '../src/loop/orchestrator'
+import { stopBoss } from './stop-boss'
 
 const env = loadEnv()
 const db = createDb(createPool(databaseUrl(env)))
@@ -37,7 +38,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close()
-  await boss.stop()
+  await stopBoss(boss)
   await db.destroy()
 })
 

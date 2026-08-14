@@ -18,6 +18,7 @@ import { databaseUrl, loadEnv } from '../src/env'
 import { createBoss } from '../src/jobs/boss'
 import { RUN_STEP_QUEUE } from '../src/jobs/run-step'
 import type { UsageSnapshot } from '../src/runtime/types'
+import { stopBoss } from './stop-boss'
 
 /**
  * Le déblocage de la réserve. Aucun token : `usage()` est simulée, et les
@@ -58,7 +59,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close()
-  await boss.stop()
+  await stopBoss(boss)
   await db.destroy()
 })
 

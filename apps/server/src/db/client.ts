@@ -4,27 +4,23 @@ import { databaseUrl, loadEnv } from '../env'
 import type { Database } from './types'
 
 /**
- * `max: 1` en test, 10 sinon.
+ * Un pool de 10 connexions, en test comme en production.
  *
- * Ce n'est pas une optimisation, c'est une correction. Chaque fichier de test
- * commence par `drop schema public cascade; create schema public;` — et
- * PostgreSQL met en cache les identifiants de relations **par connexion**. La
- * connexion qui exécute le DDL invalide son propre cache ; les autres
- * connexions du pool, ouvertes avant, gardent des plans qui pointent des
- * tables détruites. Le test suivant qui tombe sur l'une d'elles échoue avec
- * `relation "x" does not exist`, alors que la table existe.
+ * J'ai essayé `max: 1` en test, pour contrer un cache d'identifiants de
+ * relations par connexion que je soupçonnais après un `drop schema`. C'était
+ * une mauvaise idée sur deux plans. L'hypothèse n'a jamais été prouvée — la
+ * vraie cause était plusieurs processus vitest concurrents, réglée par le
+ * verrou consultatif (`tests/setup.ts`). Et surtout, une seule connexion
+ * **casse le worker pg-boss** : `applyEvent` ouvre une transaction qui retient
+ * la connexion, et le run reste immobile. Mesuré, pas supposé.
  *
- * D'où un symptôme trompeur : intermittent, variable d'une exécution à
- * l'autre, jamais reproductible en lançant le fichier seul (un seul fichier
- * ouvre peu de connexions). Il a été attribué trois fois à des « sessions
- * parallèles qui se marchent dessus » avant qu'on regarde vraiment.
- *
- * Une seule connexion par pool en test : celle qui détruit le schéma est
- * celle qui le relit. Le coût est nul, la suite étant déjà sérialisée par
- * `fileParallelism: false` pour cette même raison de base partagée.
+ * Ce que ça a révélé au passage et qui reste à creuser : si une seule
+ * connexion suffit à bloquer, c'est qu'un chemin réclame une seconde connexion
+ * pendant qu'une transaction est ouverte. Masqué à 10, mais latent sous
+ * charge.
  */
 export function createPool(connectionString: string): pg.Pool {
-  return new pg.Pool({ connectionString, max: process.env.NODE_ENV === 'test' ? 1 : 10 })
+  return new pg.Pool({ connectionString, max: 10 })
 }
 
 export function createDb(pool: pg.Pool): Kysely<Database> {

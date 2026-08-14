@@ -16,6 +16,7 @@ import {
   instructionsBlock,
 } from '../src/loop/instructions'
 import { loopFromRunState } from '../src/projects/derive'
+import { stopBoss } from './stop-boss'
 
 const env = loadEnv()
 const db = createDb(createPool(databaseUrl(env)))
@@ -44,7 +45,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close()
-  await boss.stop()
+  await stopBoss(boss)
   await db.destroy()
 })
 

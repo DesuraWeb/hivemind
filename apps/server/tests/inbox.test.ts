@@ -16,6 +16,7 @@ import { createBoss } from '../src/jobs/boss'
 import { RUN_STEP_QUEUE } from '../src/jobs/run-step'
 import { readRunMessages } from '../src/loop/bus'
 import { applyEvent } from '../src/loop/orchestrator'
+import { stopBoss } from './stop-boss'
 
 const env = loadEnv()
 const db = createDb(createPool(databaseUrl(env)))
@@ -30,7 +31,7 @@ beforeAll(async () => {
   await boss.createQueue(RUN_STEP_QUEUE)
 })
 afterAll(async () => {
-  await boss.stop()
+  await stopBoss(boss)
   await db.destroy()
 })
 

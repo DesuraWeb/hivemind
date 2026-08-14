@@ -8,6 +8,7 @@ import { createMailer } from '../src/integrations/mailer'
 import { AUTH_HEALTHCHECK_QUEUE, BUDGET_PROBE_QUEUE, createBoss, startBoss } from '../src/jobs/boss'
 import { RUN_STEP_QUEUE } from '../src/jobs/run-step'
 import { createFakeAdapter } from '../src/runtime/fake'
+import { stopBoss } from './stop-boss'
 
 // La sonde de budget ne lit que des clés publiques : un stub suffit ici, ces
 // deux tests ne portent que sur les queues et les crons.
@@ -59,7 +60,7 @@ test('demarre, cree les queues, planifie les crons, et s arrete proprement', asy
     expect(tables.rows.map((r) => r.schema)).toContain('pgboss')
     expect(tables.rows.map((r) => r.schema)).not.toContain('public')
   } finally {
-    await boss.stop()
+    await stopBoss(boss)
   }
 })
 
@@ -71,5 +72,5 @@ test('demarrer un second boss puis l arreter ne laisse rien en travers (redemarr
   await startBoss(boss, { db, adapter, mailer, alertTo: 'alerts@exemple.test', settings })
   // Deux appels createQueue/schedule sur les mêmes noms (déjà créés par le
   // test précédent) : idempotent, ne doit pas lever.
-  await boss.stop()
+  await stopBoss(boss)
 })

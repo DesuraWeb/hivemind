@@ -52,11 +52,43 @@ beforeAll(async () => {
   await client.connect()
   // Bloquant, volontairement : on attend son tour plutôt que d'échouer.
   await client.query('select pg_advisory_lock($1)', [LOCK_ID])
+
+  // Purge des jobs pg-boss.
+  //
+  // `drop schema public cascade` (fait par chaque fichier) NE TOUCHE PAS au
+  // schéma `pgboss` : les jobs de toutes les exécutions précédentes s'y
+  // accumulent. Mesuré : 847 jobs suffisaient à empêcher le worker d'en
+  // consommer un seul, et un run restait immobile en `framing` — panne
+  // indiscernable d'un « ça ne fait rien », qui a coûté une heure à
+  // diagnostiquer.
+  //
+  // On vide les jobs plutôt que de détruire le schéma : le recréer à chaque
+  // fichier coûterait plusieurs secondes × 50. `to_regclass` évite d'échouer
+  // au tout premier passage, quand le schéma n'existe pas encore.
+  await client.query(`
+    do $$
+    begin
+      if to_regclass('pgboss.job') is not null then
+        delete from pgboss.job;
+      end if;
+    end $$;
+  `)
 }, 120_000)
 
 afterAll(async () => {
   if (!client) return
   try {
+    // Purge AUSSI à la sortie, avant de rendre le verrou : un fichier ne doit
+    // rien laisser derrière lui. Un job `created` oublié est repris par le
+    // worker du fichier suivant, contre un schéma `public` déjà détruit.
+    await client.query(`
+      do $$
+      begin
+        if to_regclass('pgboss.job') is not null then
+          delete from pgboss.job;
+        end if;
+      end $$;
+    `)
     await client.query('select pg_advisory_unlock($1)', [LOCK_ID])
   } finally {
     // La déconnexion relâche le verrou de toute façon : un processus tué au
