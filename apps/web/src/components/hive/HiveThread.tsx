@@ -89,7 +89,19 @@ export function HiveThread({ open, messages, pending, error, onClose }: HiveThre
             }}
           />
           <span style={{ font: '600 12.5px var(--font-sans)', color: 'var(--text-hi)' }}>Hive</span>
-          <span style={{ font: '10px var(--font-mono)', color: 'var(--ok)' }}>● en ligne</span>
+          {/* Le pack affiche « ● en ligne ». Personne ne mesure ça : rien ne
+              surveille le runtime en continu, et le seul contrôle qui le
+              ferait (`/api/health/auth`) ouvre une vraie session d'agent, donc
+              il coûte. On n'affirme donc rien tant qu'il ne s'est rien passé,
+              et on ne parle que de ce qu'on vient d'observer. */}
+          {pending && (
+            <span style={{ font: '10px var(--font-mono)', color: 'var(--text-low)' }}>répond…</span>
+          )}
+          {!pending && error && (
+            <span style={{ font: '10px var(--font-mono)', color: 'var(--sem-alert)' }}>
+              ● injoignable
+            </span>
+          )}
           <button
             type="button"
             onClick={onClose}
