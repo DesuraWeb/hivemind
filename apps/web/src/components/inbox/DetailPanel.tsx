@@ -38,6 +38,13 @@ export interface DetailPanelProps {
   resolving: boolean
   onResolve: (id: string, response: InboxResponsePayload) => void
   onClose: () => void
+  /**
+   * `colonne` (défaut) : le panneau tient la moitié droite de l'écran, séparé
+   * de la liste par un filet vertical. `feuille` : il est le contenu d'un
+   * bottom-sheet — plus de filet (il n'y a plus rien à sa gauche), plus de
+   * croix (le voile et la poignée ferment), et des marges de pouce.
+   */
+  variant?: 'colonne' | 'feuille'
 }
 
 export function DetailPanel({
@@ -46,8 +53,15 @@ export function DetailPanel({
   resolving,
   onResolve,
   onClose,
+  variant = 'colonne',
 }: DetailPanelProps) {
+  const sheet = variant === 'feuille'
+
   if (!item) {
+    // En feuille, l'absence de sélection n'a rien à afficher : la feuille est
+    // hors écran. Un « sélectionnez un item » y serait un message adressé à
+    // personne.
+    if (sheet) return null
     return (
       <section
         style={{
@@ -76,7 +90,7 @@ export function DetailPanel({
         minWidth: 0,
         display: 'flex',
         flexDirection: 'column',
-        borderLeft: '1px solid var(--line)',
+        borderLeft: sheet ? 'none' : '1px solid var(--line)',
       }}
     >
       <div
@@ -84,7 +98,7 @@ export function DetailPanel({
           display: 'flex',
           alignItems: 'flex-start',
           gap: 12,
-          padding: '6px 18px 16px 26px',
+          padding: sheet ? '0 18px 12px' : '6px 18px 16px 26px',
           borderBottom: '1px solid var(--line)',
         }}
       >
@@ -110,26 +124,30 @@ export function DetailPanel({
             {projectName} · {item.agent ?? '·'} · {formatAge(item.blockedSince)}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Fermer le panneau"
-          style={{
-            marginLeft: 'auto',
-            width: 26,
-            height: 26,
-            flexShrink: 0,
-            borderRadius: 'var(--r-sm)',
-            border: '1px solid transparent',
-            background: 'transparent',
-            color: 'var(--text-mid)',
-            cursor: 'pointer',
-            fontSize: 15,
-            lineHeight: 1,
-          }}
-        >
-          ×
-        </button>
+        {/* En feuille, la croix disparaît : le voile et la poignée ferment, et
+            une cible de 26px n'a rien à faire sur un écran tactile. */}
+        {!sheet && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fermer le panneau"
+            style={{
+              marginLeft: 'auto',
+              width: 26,
+              height: 26,
+              flexShrink: 0,
+              borderRadius: 'var(--r-sm)',
+              border: '1px solid transparent',
+              background: 'transparent',
+              color: 'var(--text-mid)',
+              cursor: 'pointer',
+              fontSize: 15,
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+        )}
       </div>
 
       <div
@@ -137,7 +155,7 @@ export function DetailPanel({
           flex: 1,
           minHeight: 0,
           overflowY: 'auto',
-          padding: '18px 18px 18px 26px',
+          padding: sheet ? '16px 18px 4px' : '18px 18px 18px 26px',
           display: 'flex',
           flexDirection: 'column',
           gap: 18,

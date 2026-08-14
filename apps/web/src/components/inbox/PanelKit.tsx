@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react'
 import { useHover } from './useHover'
+import { useIsMobile } from './useIsMobile'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 
@@ -56,6 +57,14 @@ interface PanelButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export function PanelButton({ variant = 'secondary', style, children, ...rest }: PanelButtonProps) {
   const [hover, hoverProps] = useHover()
+  // Au pouce, une cible de 33px de haut (9px de padding + 13px de texte) se
+  // rate. 44px est le plancher tenu par tout l'écran mobile (`Inbox
+  // mobile.dc.html` : `min-height: 44px` sur chaque bouton de la feuille) ;
+  // au-dessus du point de bascule, rien ne change.
+  const mobile = useIsMobile()
+  const touch: CSSProperties = mobile
+    ? { minHeight: 44, paddingLeft: 18, paddingRight: 18, fontSize: 13.5 }
+    : {}
   return (
     <button
       // Marque l'action principale du panneau pour qui pilote au clavier : la
@@ -67,7 +76,7 @@ export function PanelButton({ variant = 'secondary', style, children, ...rest }:
       type="button"
       {...hoverProps}
       {...rest}
-      style={{ ...BASE, ...variantStyle(variant, hover), ...style }}
+      style={{ ...BASE, ...variantStyle(variant, hover), ...touch, ...style }}
     >
       {children}
     </button>

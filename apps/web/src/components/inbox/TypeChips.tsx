@@ -1,6 +1,7 @@
 import type { InboxType } from '@silithid/shared'
 import { SEM, TYPE_CHIP_DEFS } from './constants'
 import { useHover } from './useHover'
+import { useIsMobile } from './useIsMobile'
 
 export interface TypeChipsProps {
   counts: Record<'all' | InboxType, number>
@@ -22,6 +23,7 @@ function Chip({
   onPick: (id: 'all' | InboxType) => void
 }) {
   const [hover, hoverProps] = useHover()
+  const mobile = useIsMobile()
   const dot = id === 'all' ? null : SEM[id]
   return (
     <button
@@ -32,7 +34,11 @@ function Chip({
         display: 'inline-flex',
         alignItems: 'center',
         gap: 7,
-        padding: '5px 12px',
+        // Au pouce : 44px de haut et pas de retour à la ligne, la rangée
+        // défile latéralement (`Inbox mobile.dc.html`, `overflow-x: auto`).
+        minHeight: mobile ? 44 : undefined,
+        flexShrink: mobile ? 0 : undefined,
+        padding: mobile ? '8px 14px' : '5px 12px',
         borderRadius: 'var(--r-full)',
         border: `1px solid ${active ? 'color-mix(in oklab, var(--accent) 45%, transparent)' : hover ? 'var(--line-strong)' : 'transparent'}`,
         background: active ? 'color-mix(in oklab, var(--accent) 13%, transparent)' : 'transparent',
@@ -55,8 +61,17 @@ function Chip({
 }
 
 export function TypeChips({ counts, active, onPick }: TypeChipsProps) {
+  const mobile = useIsMobile()
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, padding: '2px 2px 12px' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: mobile ? 'nowrap' : 'wrap',
+        overflowX: mobile ? 'auto' : 'visible',
+        gap: 7,
+        padding: '2px 2px 12px',
+      }}
+    >
       {TYPE_CHIP_DEFS.map(({ id, label }) => (
         <Chip
           key={id}

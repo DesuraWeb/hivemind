@@ -14,6 +14,8 @@ export interface InboxListProps {
   vanishing: ReadonlySet<string>
   onPickItem: (id: string) => void
   projectName: (slug: string | null) => string
+  /** Triage tactile : la liste prend toute la largeur, il n'y a pas de panneau à côté. */
+  fullWidth?: boolean
 }
 
 function EmptyState() {
@@ -56,11 +58,12 @@ export function InboxList({
   vanishing,
   onPickItem,
   projectName,
+  fullWidth = false,
 }: InboxListProps) {
   return (
     <div
       style={{
-        width: 'clamp(360px, 38vw, 470px)',
+        width: fullWidth ? '100%' : 'clamp(360px, 38vw, 470px)',
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',

@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { SectionHeader } from '../components/SectionHeader'
 import { DetailPanel } from '../components/inbox/DetailPanel'
 import { InboxList } from '../components/inbox/InboxList'
+import { MobileSheet } from '../components/inbox/MobileSheet'
 import { WEIGHT } from '../components/inbox/constants'
+import { useIsMobile } from '../components/inbox/useIsMobile'
 import { ageMinutes, formatAge } from '../lib/age'
 import { type ProjectSummary, api } from '../lib/api'
 import { subscribeToEvents } from '../lib/events'
@@ -32,9 +34,30 @@ function isSavoir(item: InboxItemView): boolean {
  * s'invalide sur `inbox.new`/`inbox.resolved`, React Query refait la
  * requête. Résoudre un item appelle réellement `POST /api/inbox/:id/resolve`,
  * qui relance la boucle bloquée le cas échéant (resolve.ts, Task 2).
+ *
+ * **Le triage tactile (`docs/design/Inbox mobile.dc.html`) est cet écran, pas
+ * un autre.** Le prototype montre l'Inbox dans un cadre iPhone : le cadre est
+ * un support de maquette, pas une interface. Ce qu'il décrit est le même
+ * écran, les mêmes items et les mêmes routes, disposés autrement — une
+ * colonne au lieu de deux, une feuille qui remonte au lieu d'un panneau
+ * latéral. Une route `/inbox/mobile` aurait donné deux inbox à tenir en
+ * parallèle et une URL qui ment sur son contenu ; un choix « appareil » à
+ * faire à la main aurait donné un réglage de plus à se tromper. La bascule
+ * suit donc la largeur disponible (`useIsMobile`), et l'adresse reste
+ * `/inbox` : ouvrir le même lien depuis un téléphone donne l'écran tactile.
+ *
+ * Trois choses du prototype ne sont pas reprises. La barre d'onglets du bas
+ * (Inbox · micro · Orbe) : le rail nav et le bandeau Hive tiennent déjà ces
+ * rôles sur toutes les pages, en ajouter une troisième ferait deux barres.
+ * Le toast « Traité · la boucle du Koin reprend » : `POST /resolve` rend
+ * `runResumed`, mais l'item disparaît déjà de la liste, et l'écran de bureau
+ * ne l'affiche pas non plus — le dire ici et pas là serait une divergence
+ * gratuite. Le bouton « Détails sur le poste » : il n'y a rien de plus au
+ * poste, c'est le même panneau.
  */
 export function Inbox() {
   const queryClient = useQueryClient()
+  const mobile = useIsMobile()
   const inboxQuery = useQuery({
     queryKey: INBOX_QUERY_KEY,
     queryFn: () => api.inbox.list({ status: 'open' }),
@@ -128,12 +151,26 @@ export function Inbox() {
     (acc, i) => (!acc || ageMinutes(i.blockedSince) > ageMinutes(acc.blockedSince) ? i : acc),
     null,
   )
+  // Au pouce, la ligne de méta est amputée de son détail le moins utile : la
+  // largeur restante (l'écran moins le rail) ne la tient pas, et une phrase
+  // coupée à mi-mot ne renseigne personne.
   const headerMeta =
     decisions > 0
       ? `${decisions} décision${decisions > 1 ? 's' : ''} · ~${Math.max(4, decisions * 3)} min${
-          oldest ? ` · plus ancienne ${formatAge(oldest.blockedSince)}` : ''
+          !mobile && oldest ? ` · plus ancienne ${formatAge(oldest.blockedSince)}` : ''
         }`
       : undefined
+
+  const detail = (
+    <DetailPanel
+      item={selectedItem}
+      projectName={projectName(selectedItem?.project ?? null)}
+      resolving={resolveMutation.isPending}
+      onResolve={(id, response) => resolveMutation.mutate({ id, response })}
+      onClose={() => setSelectedId(null)}
+      variant={mobile ? 'feuille' : 'colonne'}
+    />
+  )
 
   return (
     <>
@@ -144,7 +181,9 @@ export function Inbox() {
           minHeight: 0,
           display: 'flex',
           gap: 18,
-          padding: '16px 20px 108px',
+          // 108px en bas dans les deux dispositions : le bandeau Hive flotte
+          // au-dessus du contenu, le dernier item doit rester atteignable.
+          padding: mobile ? '12px 12px 108px' : '16px 20px 108px',
         }}
       >
         <InboxList
@@ -157,15 +196,15 @@ export function Inbox() {
           vanishing={vanishing}
           onPickItem={setSelectedId}
           projectName={projectName}
+          fullWidth={mobile}
         />
-        <DetailPanel
-          item={selectedItem}
-          projectName={projectName(selectedItem?.project ?? null)}
-          resolving={resolveMutation.isPending}
-          onResolve={(id, response) => resolveMutation.mutate({ id, response })}
-          onClose={() => setSelectedId(null)}
-        />
+        {!mobile && detail}
       </main>
+      {mobile && (
+        <MobileSheet open={selectedItem !== null} onClose={() => setSelectedId(null)}>
+          {detail}
+        </MobileSheet>
+      )}
     </>
   )
 }
