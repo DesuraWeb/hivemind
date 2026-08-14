@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { OrbCanvas } from '../components/OrbCanvas'
 import { SectionHeader } from '../components/SectionHeader'
 import { BriefPanel } from '../components/dashboard/BriefPanel'
-import { BudgetPanel } from '../components/dashboard/BudgetPanel'
+import { DOCK_TAB_WIDTH, DOCK_WIDTH, DashboardDock } from '../components/dashboard/DashboardDock'
 import { FocusPanel } from '../components/dashboard/FocusPanel'
 import { HoverCard } from '../components/dashboard/HoverCard'
 import { LOOP_ORDER, badgeFor } from '../components/dashboard/loop'
@@ -182,7 +182,13 @@ export function Dashboard() {
     [projects],
   )
 
-  const [budgetOpen, setBudgetOpen] = useState(false)
+  // Le dock droit (`components/dashboard/DashboardDock.tsx` dit ce qu'il
+  // contient et pourquoi). Ouvert par défaut : il porte les boucles, c'est-à-dire
+  // le contenu principal de l'écran avec l'orbe. Replié, il rend sa largeur à
+  // l'orbe — c'est tout l'intérêt du geste, et le prototype ne le permettait
+  // pas (son dock n'a aucun bouton de réouverture).
+  const [dockOpen, setDockOpen] = useState(true)
+  const orbRight = dockOpen ? `calc(${DOCK_WIDTH} + 32px)` : `${DOCK_TAB_WIDTH + 32}px`
 
   return (
     <>
@@ -277,9 +283,18 @@ export function Dashboard() {
           ref={orbHostRef}
           style={{
             position: 'absolute',
-            inset: '12px 20px 20px',
+            top: 12,
+            left: 20,
+            bottom: 20,
+            // L'orbe s'arrête au dock au lieu de passer dessous : un dock
+            // ouvert doit laisser la place au contenu, pas le masquer.
+            right: orbRight,
             borderRadius: 'var(--r-lg)',
             overflow: 'hidden',
+            // Pas de transition sur cette largeur : animer `right` ferait
+            // repasser le `ResizeObserver` d'orb.js à chaque image pendant
+            // 250 ms, donc réallouer le buffer WebGL une quinzaine de fois
+            // pour un effet que personne n'a demandé.
           }}
         >
           {orbProjects.length > 0 && (
@@ -317,33 +332,8 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div
-          style={{
-            position: 'absolute',
-            right: 20,
-            top: 12,
-            bottom: 20,
-            width: 'clamp(240px, 23vw, 320px)',
-            zIndex: 10,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 14,
-            overflowY: 'auto',
-            overflowX: 'hidden',
-          }}
-        >
-          <div style={{ padding: '4px 2px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div
-              style={{
-                font: '600 10.5px var(--font-mono)',
-                letterSpacing: '0.18em',
-                textTransform: 'uppercase',
-                color: 'var(--text-mid)',
-                padding: '0 2px 8px',
-              }}
-            >
-              Boucles · le travail en cours
-            </div>
+        <DashboardDock open={dockOpen} onToggle={() => setDockOpen((v) => !v)}>
+          <>
             {sortedProjects.map((p) => {
               const badge = badgeFor(p.loop)
               const rowOp = p.loop === 'pause' || p.loop === 'done' ? 0.55 : 1
@@ -452,48 +442,8 @@ export function Dashboard() {
                 aucun projet pour l&rsquo;instant
               </span>
             )}
-          </div>
-
-          <div style={{ padding: '10px 2px 4px', marginTop: 'auto' }}>
-            <button
-              type="button"
-              onClick={() => setBudgetOpen((v) => !v)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                width: '100%',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: 2,
-              }}
-            >
-              <span
-                style={{
-                  font: '600 10.5px var(--font-mono)',
-                  letterSpacing: '0.18em',
-                  textTransform: 'uppercase',
-                  color: 'var(--text-mid)',
-                }}
-              >
-                Budget
-              </span>
-              <span
-                style={{
-                  fontSize: 10,
-                  color: 'var(--text-low)',
-                  marginLeft: 'auto',
-                  transform: `rotate(${budgetOpen ? '0deg' : '-90deg'})`,
-                  transition: 'transform var(--dur-2) var(--ease)',
-                }}
-              >
-                ▾
-              </span>
-            </button>
-            {budgetOpen && <BudgetPanel />}
-          </div>
-        </div>
+          </>
+        </DashboardDock>
       </main>
 
       <HoverCard project={hover?.project ?? null} left={hover?.left ?? 0} top={hover?.top ?? 0} />
