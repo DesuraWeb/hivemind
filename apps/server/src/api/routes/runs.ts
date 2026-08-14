@@ -14,6 +14,7 @@ import {
   isInstructableRole,
 } from '../../loop/instructions'
 import { applyEvent } from '../../loop/orchestrator'
+import { RunAlreadyActiveError, StepNotFoundError, startRun } from '../../loop/start'
 
 /**
  * Le détail d'un run, et les gestes qui permettent de reprendre la main
@@ -229,6 +230,41 @@ export async function runsRoutes(app: FastifyInstance, deps: RunsRoutesDeps): Pr
     if (!out.ok) return reply.code(out.code).send(out.body)
     await deps.boss.send(RUN_STEP_QUEUE, { runId: out.id } satisfies RunStepJobData)
     return { id: out.id, state: out.state }
+  })
+
+  /**
+   * Démarre la boucle sur un step.
+   *
+   * C'était le trou le plus béant : `insertInto('runs')` n'existait que dans
+   * les tests et les scripts. On pouvait mettre en pause, reprendre, arrêter
+   * et instruire une boucle qu'aucune route ne savait lancer.
+   *
+   * `boss.send` après le commit, comme pour la reprise : un run créé sans job
+   * resterait en `framing` indéfiniment, visible dans la liste et immobile.
+   */
+  app.post('/api/steps/:id/start', { preHandler: app.requireAuth }, async (req, reply) => {
+    const parsed = params.safeParse(req.params)
+    if (!parsed.success) return reply.code(400).send({ error: 'id_invalide' })
+
+    try {
+      const started = await startRun(deps.db, parsed.data.id)
+      await deps.boss.send(RUN_STEP_QUEUE, { runId: started.runId } satisfies RunStepJobData)
+      return reply.code(201).send(started)
+    } catch (err) {
+      if (err instanceof StepNotFoundError) {
+        return reply.code(404).send({ error: 'step_introuvable' })
+      }
+      if (err instanceof RunAlreadyActiveError) {
+        // 409 et non 400 : la requête est valide, c'est l'état du monde qui
+        // s'y oppose. L'écran doit pouvoir proposer d'ouvrir le run en cours.
+        return reply.code(409).send({
+          error: 'run_deja_actif',
+          runId: err.runId,
+          state: err.state,
+        })
+      }
+      throw err
+    }
   })
 
   const stopBody = z.object({ reason: z.string().min(1).max(500).optional() })

@@ -345,3 +345,105 @@ test('avec consignes, le bloc porte le titre et chaque consigne', () => {
   expect(block).toContain('- a')
   expect(block).toContain('- b')
 })
+
+// --- Demarrer une boucle (POST /api/steps/:id/start) ---
+
+async function seedStep(): Promise<string> {
+  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const project = await db
+    .insertInto('projects')
+    .values({
+      globe_id: globe.id,
+      name: 'Projet Demarrage',
+      slug: `projet-demarrage-${randomUUID()}`,
+      repo_full_name: 'desura/x',
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow()
+  const step = await db
+    .insertInto('steps')
+    .values({ project_id: project.id, position: 1, title: 'Premier step', specs: '## s' })
+    .returning('id')
+    .executeTakeFirstOrThrow()
+  return step.id
+}
+
+async function jobCount(runId: string): Promise<number> {
+  const row = await sql<{ n: string }>`
+    select count(*)::text as n from pgboss.job
+    where name = ${RUN_STEP_QUEUE} and data->>'runId' = ${runId}
+  `.execute(db)
+  return Number(row.rows[0]?.n ?? '0')
+}
+
+test('demarrer un step cree un run en framing ET enfile un job', async () => {
+  const stepId = await seedStep()
+
+  const res = await post(`/api/steps/${stepId}/start`, {})
+  expect(res.statusCode).toBe(201)
+  const { runId } = res.json()
+
+  expect(await stateOf(runId)).toBe('framing')
+  // Sans job, le run resterait en framing indefiniment : visible dans la
+  // liste, et immobile.
+  expect(await jobCount(runId)).toBe(1)
+
+  const step = await db
+    .selectFrom('steps')
+    .select('status')
+    .where('id', '=', stepId)
+    .executeTakeFirstOrThrow()
+  expect(step.status).toBe('running')
+})
+
+test('deux demarrages sur le meme step : le second est refuse en 409', async () => {
+  const stepId = await seedStep()
+
+  const a = await post(`/api/steps/${stepId}/start`, {})
+  const b = await post(`/api/steps/${stepId}/start`, {})
+
+  expect(a.statusCode).toBe(201)
+  // 409 et non 400 : la requete est valide, c'est l'etat du monde qui s'y
+  // oppose. L'ecran doit pouvoir proposer d'ouvrir le run en cours.
+  expect(b.statusCode).toBe(409)
+  expect(b.json().runId).toBe(a.json().runId)
+  expect(b.json().state).toBe('framing')
+})
+
+test('un step dont le run est termine peut redemarrer', async () => {
+  const stepId = await seedStep()
+  const first = (await post(`/api/steps/${stepId}/start`, {})).json()
+  await db
+    .updateTable('runs')
+    .set({ state: 'done', ended_at: new Date() })
+    .where('id', '=', first.runId)
+    .execute()
+
+  const res = await post(`/api/steps/${stepId}/start`, {})
+  expect(res.statusCode).toBe(201)
+  expect(res.json().runId).not.toBe(first.runId)
+})
+
+test('un run en pause occupe toujours son step', async () => {
+  const stepId = await seedStep()
+  const first = (await post(`/api/steps/${stepId}/start`, {})).json()
+  await db
+    .updateTable('runs')
+    .set({ state: 'paused_human', resume_state: 'coding' })
+    .where('id', '=', first.runId)
+    .execute()
+
+  // Une pause n'est pas une fin : relancer creerait un second run sur le meme
+  // step, avec deux verdicts contradictoires a la cle.
+  expect((await post(`/api/steps/${stepId}/start`, {})).statusCode).toBe(409)
+})
+
+test('demarrer un step inconnu renvoie 404', async () => {
+  expect((await post(`/api/steps/${randomUUID()}/start`, {})).statusCode).toBe(404)
+})
+
+test('demarrer exige une session', async () => {
+  const stepId = await seedStep()
+  const res = await app.inject({ method: 'POST', url: `/api/steps/${stepId}/start` })
+  expect(res.statusCode).toBe(401)
+})
