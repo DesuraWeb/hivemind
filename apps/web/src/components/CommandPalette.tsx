@@ -8,7 +8,11 @@ import { SEM } from './inbox/constants'
  * Destination d'un résultat. Un type somme plutôt qu'un simple chemin : la
  * fiche projet est une route paramétrée, elle a besoin de ses deux slugs.
  */
-type PaletteTarget = { kind: 'inbox' } | { kind: 'project'; globeId: string; projectId: string }
+type PaletteTarget =
+  | { kind: 'inbox' }
+  | { kind: 'project'; globeId: string; projectId: string }
+  /** Une page sans paramètre : les entrées du groupe Actions. */
+  | { kind: 'route'; to: string }
 
 interface PaletteEntry {
   key: string
@@ -23,15 +27,43 @@ interface PaletteGroup {
   items: PaletteEntry[]
 }
 
+/**
+ * Les destinations du groupe Actions. Reprises de `MajordomeStrip.dc.html`
+ * (chercher `pal` dans le source), **moins celles dont la page n'existe pas**.
+ *
+ * « Suivre le run en direct » n'y figure pas : le prototype l'attache à un run
+ * précis, et une palette ne sait pas lequel. L'entrée vit sur le panneau de
+ * focus du dashboard, là où le projet est connu.
+ */
+const ACTIONS: { label: string; hint: string; to: string }[] = [
+  { label: 'Démarrer la revue du matin', hint: 'traitement au clavier', to: '/revue' },
+  { label: 'Journal · nuit des agents et vos décisions', hint: 'fusionné', to: '/journal' },
+  { label: 'Analytics · coûts', hint: 'économie du système', to: '/analytics' },
+  { label: 'Créer un projet ou un globe', hint: 'scène de création', to: '/creation' },
+  { label: 'Mode ambient', hint: 'écran TV', to: '/ambient' },
+  { label: 'Conscience collective', hint: 'spec mémoire', to: '/conscience' },
+  { label: 'Protocole inter-agents', hint: 'spec passations', to: '/protocole' },
+  { label: 'Réglages', hint: 'diagnostic, budget, coffre', to: '/reglages' },
+  { label: 'Clients', hint: 'base de connaissances', to: '/clients' },
+  { label: 'Globes', hint: 'espaces de conscience', to: '/globes' },
+]
+
 const PROJECTS_QUERY_KEY = ['projects'] as const
 const INBOX_QUERY_KEY = ['inbox'] as const
 
 /**
- * ⌘K (plan Phase 3, Task 8) : recherche projets et inbox, navigation vers
- * les pages — « rien d'autre en v0 » (pas d'Actions statiques, pas de
- * Savoirs : la conscience collective est hors périmètre). Repris de la
- * palette de `MajordomeStrip.dc.html` (chercher `pal` dans le source), sans
- * les groupes qui n'ont pas de contrepartie réelle dans cette phase.
+ * ⌘K : recherche projets et inbox, plus le groupe **Actions** — l'index de
+ * toutes les pages, comme l'exige CLAUDE.md.
+ *
+ * Ce groupe avait été écarté « en v0 » pour une raison qui a cessé d'être
+ * vraie : les écrans n'existaient pas, et une palette qui propose des
+ * destinations inexistantes est pire qu'une palette courte. Ils existent
+ * maintenant. Une action dont la page n'est pas construite n'entre PAS dans
+ * la liste — c'est la même règle que partout : on ne propose pas ce qu'on ne
+ * sait pas faire.
+ *
+ * Le groupe **Savoirs** du prototype reste absent : la conscience collective
+ * n'a ni table ni API, il n'y a rien à indexer.
  *
  * Un résultat « projet » ouvre désormais sa fiche (`/globes/:globe/:projet`)
  * plutôt que l'Inbox : le repli sur `/inbox` datait de l'absence de page
@@ -101,10 +133,23 @@ export function CommandPalette() {
         target: { kind: 'inbox' },
       }))
 
+    const actionItems: PaletteEntry[] = ACTIONS.filter((a) => match(a.label, a.hint))
+      .slice(0, q ? 8 : 5)
+      .map((a) => ({
+        key: `a-${a.to}`,
+        label: a.label,
+        hint: a.hint,
+        dot: 'var(--accent)',
+        target: { kind: 'route', to: a.to },
+      }))
+
     return [
       { label: 'Projets', items: projectItems },
+      { label: 'Actions', items: actionItems },
       { label: 'Inbox', items: inboxItems },
-    ].filter((g) => g.items.length > 0 && (q.length > 0 || g.label === 'Projets'))
+      // Sans recherche, on ne montre que les deux groupes qui servent à
+      // démarrer quelque chose ; l'inbox se cherche, elle ne se parcourt pas ici.
+    ].filter((g) => g.items.length > 0 && (q.length > 0 || g.label !== 'Inbox'))
   }, [query, projectsQuery.data, inboxQuery.data])
 
   const flat = useMemo(() => groups.flatMap((g) => g.items), [groups])
@@ -117,6 +162,10 @@ export function CommandPalette() {
         to: '/globes/$globeId/$projectId',
         params: { globeId: entry.target.globeId, projectId: entry.target.projectId },
       })
+      return
+    }
+    if (entry.target.kind === 'route') {
+      void navigate({ to: entry.target.to })
       return
     }
     void navigate({ to: '/inbox' })
