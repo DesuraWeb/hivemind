@@ -1,9 +1,16 @@
-import type { StepView } from '../../lib/project-types'
+import type { RunView, StepView } from '../../lib/project-types'
+import { StartLoop } from '../run/StartLoop'
+import { isRunActive } from './runs'
 import { stepNumber, stepTone } from './steps'
 
 /**
  * Onglet « Steps » (Projet.dc.html, `sc-if value="{{ isSteps }}"`) : une carte
- * par step, specs et régime de validation.
+ * par step, specs, régime de validation — et le bouton qui lance la boucle.
+ *
+ * C'est ici que le geste « démarrer » a sa place : le step est l'unité qu'un
+ * run traite, et la carte porte déjà les specs qu'on relit avant de lancer.
+ * Un step déjà occupé n'affiche pas de bouton mais le lien vers sa boucle en
+ * direct — `runs` est passé pour ça, et pour rien d'autre.
  *
  * Écart assumé au pack : le prototype rend « Gates humaines » / « Full-auto »
  * en boutons, avec un maintien de 1,1 s pour basculer en full-auto. Aucune
@@ -12,7 +19,15 @@ import { stepNumber, stepTone } from './steps'
  * rendues en lecture seule, avec exactement le même vocabulaire visuel
  * (celle qui est active porte sa couleur, l'autre reste éteinte).
  */
-export function StepList({ steps }: { steps: StepView[] }) {
+export function StepList({
+  steps,
+  runs,
+  projectId,
+}: {
+  steps: StepView[]
+  runs: RunView[]
+  projectId: string
+}) {
   if (steps.length === 0) {
     return (
       <span style={{ font: '11.5px var(--font-mono)', color: 'var(--text-low)' }}>
@@ -26,6 +41,9 @@ export function StepList({ steps }: { steps: StepView[] }) {
       {steps.map((s) => {
         const tone = stepTone(s)
         const isAuto = s.autonomy === 'auto'
+        // `runs` est trié du plus récent au plus ancien : le premier run non
+        // terminal de ce step est celui qui l'occupe.
+        const activeRun = runs.find((r) => r.stepId === s.id && isRunActive(r.state)) ?? null
         return (
           <div
             key={s.id}
@@ -142,6 +160,9 @@ export function StepList({ steps }: { steps: StepView[] }) {
                   régime hérité du projet
                 </span>
               )}
+              <span style={{ marginLeft: 'auto' }}>
+                <StartLoop step={s} activeRun={activeRun} projectId={projectId} />
+              </span>
             </div>
           </div>
         )

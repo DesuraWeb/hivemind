@@ -25,6 +25,15 @@ export function runTone(state: RunState): RunTone {
       return { label: 'en attente humain', color: 'var(--sem-question)', pulse: false }
     case 'paused_budget':
       return { label: 'pause budget', color: 'var(--pause)', pulse: false }
+    case 'paused_human':
+      return { label: 'pause · vous', color: 'var(--pause)', pulse: false }
+    /**
+     * Terminal, et distinct d'`échec` : un arrêt est une décision, un échec un
+     * constat. Sans cette branche, le `default` faisait lire « en cours » avec
+     * sa pastille qui palpite sur une boucle coupée depuis une heure.
+     */
+    case 'stopped':
+      return { label: 'stoppée', color: 'var(--text-low)', pulse: false }
     case 'verdict':
       return { label: 'verdict', color: 'var(--sem-verdict)', pulse: true }
     default:
@@ -32,9 +41,14 @@ export function runTone(state: RunState): RunTone {
   }
 }
 
-/** Le run avance-t-il encore ? Même partition que `loopFromRunState` côté serveur. */
+/**
+ * Le run avance-t-il encore ? Même partition que `loopFromRunState` côté
+ * serveur — et que les `OCCUPYING_STATES` de `loop/start.ts`, qui décident si
+ * un step est libre : les trois états terminaux (`done`, `failed`, `stopped`)
+ * le libèrent, tous les autres l'occupent.
+ */
 export function isRunActive(state: RunState): boolean {
-  return state !== 'done' && state !== 'failed'
+  return state !== 'done' && state !== 'failed' && state !== 'stopped'
 }
 
 /**

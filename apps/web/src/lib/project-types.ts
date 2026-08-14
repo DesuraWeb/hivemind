@@ -10,8 +10,14 @@ export interface PendingCount {
  * apps/server/src/projects/derive.ts). `demarrage` : projet sans aucun run
  * encore démarré — absent de l'énum `badgeFor` de data.js (pack DA), géré
  * ici par un badge propre (Dashboard.tsx).
+ *
+ * `stop` manquait ici alors que le serveur le rendait déjà : `badgeFor` y
+ * cherchait une entrée absente et rendait `undefined`, ce qui faisait planter
+ * la fiche projet et le dashboard à la PREMIÈRE boucle arrêtée. Comme
+ * `demarrage`, le pack n'a pas de visuel pour lui — et surtout il ne doit pas
+ * emprunter celui de `fail` : arrêter n'est pas échouer.
  */
-export type LoopStatus = 'run' | 'wait' | 'fail' | 'done' | 'pause' | 'demarrage'
+export type LoopStatus = 'run' | 'wait' | 'fail' | 'done' | 'pause' | 'demarrage' | 'stop'
 
 /**
  * Miroir front de `ProjectView` (apps/server/src/projects/repo.ts) : la forme

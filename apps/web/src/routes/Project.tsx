@@ -11,6 +11,7 @@ import {
   formatRunTime,
   isRunActive,
   latestRun,
+  runTone,
   shortRunId,
 } from '../components/project/runs'
 import { formatTokens } from '../components/project/steps'
@@ -312,7 +313,23 @@ export function Project() {
                       <br />
                       garant → dev → reviewer → juge · {formatTokens(activeRun.costTokens)} tokens
                     </div>
-                    <div style={{ display: 'flex', gap: 10, marginTop: 2 }}>
+                    <div style={{ display: 'flex', gap: 10, marginTop: 2, alignItems: 'center' }}>
+                      {/* Le geste attendu depuis cette carte n'est pas de lire
+                          une liste : c'est d'aller voir la boucle avancer et
+                          de pouvoir reprendre la main dessus. */}
+                      <Link
+                        to="/runs/$runId"
+                        params={{ runId: activeRun.id }}
+                        style={{
+                          padding: '7px 14px',
+                          borderRadius: 'var(--r-md)',
+                          border: '1px solid color-mix(in oklab, var(--accent) 50%, transparent)',
+                          font: '500 12.5px var(--font-sans)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        Suivre en direct →
+                      </Link>
                       <button
                         type="button"
                         onClick={() => setTab('boucles')}
@@ -332,16 +349,38 @@ export function Project() {
                     </div>
                   </>
                 ) : (
-                  <div
-                    style={{
-                      font: '11.5px var(--font-mono)',
-                      color: 'var(--text-low)',
-                      lineHeight: 1.8,
-                    }}
-                  >
-                    {current
-                      ? `dernière boucle ${shortRunId(current.id)} · ${formatRunTime(current.startedAt)} · terminée`
-                      : 'aucune boucle démarrée sur ce projet'}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div
+                      style={{
+                        font: '11.5px var(--font-mono)',
+                        color: 'var(--text-low)',
+                        lineHeight: 1.8,
+                      }}
+                    >
+                      {/* « terminée » était écrit pour tout run non actif :
+                          faux pour un arrêt, et faux pour un échec. On nomme
+                          l'état réel, celui-là même que rend la liste. */}
+                      {current
+                        ? `dernière boucle ${shortRunId(current.id)} · ${formatRunTime(current.startedAt)} · ${runTone(current.state).label}`
+                        : 'aucune boucle démarrée sur ce projet'}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setTab('steps')}
+                      style={{
+                        alignSelf: 'flex-start',
+                        padding: '7px 14px',
+                        borderRadius: 'var(--r-md)',
+                        border: '1px solid color-mix(in oklab, var(--accent) 50%, transparent)',
+                        background: 'transparent',
+                        color: 'var(--accent)',
+                        font: '500 12.5px var(--font-sans)',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Démarrer une boucle →
+                    </button>
                   </div>
                 )}
               </div>
@@ -416,7 +455,7 @@ export function Project() {
           </div>
         )}
 
-        {tab === 'steps' && <StepList steps={steps} />}
+        {tab === 'steps' && <StepList steps={steps} runs={runs} projectId={projectId} />}
         {tab === 'boucles' && <RunsList runs={runs} steps={steps} />}
       </main>
     </>

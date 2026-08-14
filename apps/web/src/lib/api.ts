@@ -24,6 +24,14 @@ export class ApiError extends Error {
     readonly status: number,
     message: string,
     readonly details: ApiErrorDetail[] = [],
+    /**
+     * Le corps d'erreur brut. Certains refus portent une donnée exploitable
+     * que `error`/`details` n'ont pas de place pour transporter : le 409 de
+     * `POST /api/steps/:id/start` rend le `runId` du run qui occupe déjà le
+     * step, et sans lui l'écran ne pourrait qu'afficher une erreur là où il
+     * doit proposer d'ouvrir la boucle en cours.
+     */
+    readonly payload: unknown = null,
   ) {
     super(message)
   }
@@ -58,6 +66,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       res.status,
       payload.error ?? `HTTP ${res.status}`,
       toDetails(payload.details),
+      payload,
     )
   }
   return (await res.json()) as T
@@ -453,10 +462,16 @@ export const api = {
      * geste utile est pause · consigne · reprise.
      */
     instruct: (id: string, role: string, text: string) =>
-      request<{ readAt: string }>('POST', `/api/runs/${encodeURIComponent(id)}/instruct`, {
-        role,
-        text,
-      }),
+      // Le champ attendu par la route s'appelle `body` (`instructBody`, zod,
+      // apps/server/src/api/routes/runs.ts) : envoyer `text` valait un
+      // `400 corps_invalide` à chaque consigne. `readAt` est rendu par le
+      // serveur en toutes lettres pour que l'écran puisse dire QUAND elle sera
+      // lue — il est affiché tel quel, jamais reformulé.
+      request<{ id: string; role: string; state: string; readAt: string }>(
+        'POST',
+        `/api/runs/${encodeURIComponent(id)}/instruct`,
+        { role, body: text },
+      ),
   },
   settings: {
     /** Tous les réglages, valeurs scellées remplacées par `***` (store.listPublic). */

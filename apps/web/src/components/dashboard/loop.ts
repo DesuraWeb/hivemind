@@ -7,10 +7,12 @@ export interface LoopBadge {
 }
 
 /**
- * Repris de `badgeFor` (data.js), plus `demarrage` : ce statut n'existe pas
- * dans l'énum de data.js (le pack DA n'a pas de visuel pour un projet neuf,
- * cf. `loopFromRunState`, apps/server/src/projects/derive.ts) — badge neutre
- * ajouté ici plutôt que de forcer un projet neuf sous le badge « pause ».
+ * Repris de `badgeFor` (data.js), plus `demarrage` et `stop` : ces deux
+ * statuts n'existent pas dans l'énum de data.js (le pack DA n'a de visuel ni
+ * pour un projet neuf ni pour une boucle arrêtée, cf. `loopFromRunState`,
+ * apps/server/src/projects/derive.ts) — badges neutres ajoutés ici plutôt que
+ * de forcer un projet neuf sous « pause » et une boucle arrêtée sous « échec ».
+ * Un arrêt est une décision, pas une panne : il n'emprunte pas le rouge.
  */
 const BADGE: Record<LoopStatus, LoopBadge> = {
   run: { label: 'en cours', color: 'var(--accent)', pulse: true },
@@ -19,6 +21,7 @@ const BADGE: Record<LoopStatus, LoopBadge> = {
   done: { label: 'terminé', color: 'var(--ok)', pulse: false },
   pause: { label: 'pause', color: 'var(--pause)', pulse: false },
   demarrage: { label: 'prêt à démarrer', color: 'var(--text-low)', pulse: false },
+  stop: { label: 'boucle stoppée', color: 'var(--text-low)', pulse: false },
 }
 
 export function badgeFor(loop: LoopStatus): LoopBadge {
@@ -32,5 +35,8 @@ export const LOOP_ORDER: Record<LoopStatus, number> = {
   wait: 2,
   pause: 3,
   done: 4,
-  demarrage: 5,
+  // Une boucle arrêtée n'attend rien de personne : elle passe après les
+  // terminées, avant les projets qui n'ont jamais démarré.
+  stop: 5,
+  demarrage: 6,
 }

@@ -7,6 +7,13 @@ export type BusEvent =
   | { type: 'inbox.new'; id: string; projectId: string | null }
   | { type: 'inbox.resolved'; id: string; projectId: string | null }
   | { type: 'run.state'; runId: string; projectId: string }
+  /**
+   * La timeline d'un run a bougé sans que son état change — aujourd'hui une
+   * consigne humaine posée dans le bus. Distinct de `run.state` : l'écran
+   * « Run en direct » doit recharger sa timeline, mais rien n'a bougé dans le
+   * pipeline, et publier `run.state` pour ça mentirait sur ce qui s'est passé.
+   */
+  | { type: 'run.message'; runId: string; projectId: string }
   | { type: 'budget.tick'; projectId: string }
 
 function isBusEvent(value: unknown): value is BusEvent {
