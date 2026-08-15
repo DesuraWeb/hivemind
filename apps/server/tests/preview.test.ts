@@ -12,6 +12,7 @@ import { createLocalPreviewTarget } from '../src/deploy/local-preview'
 import { databaseUrl, loadEnv } from '../src/env'
 import { closeBrowser } from '../src/integrations/playwright'
 import { startStaticPreview } from '../src/integrations/preview'
+import { appendMessage } from '../src/loop/bus'
 import { createDeployingHandler } from '../src/loop/steps/deploying'
 
 // Aucun réseau externe, aucun token consommé : tout tourne en local
@@ -226,7 +227,11 @@ test('release() est appelé même quand la capture échoue', async () => {
     },
   })
 
-  await expect(handler(db, runId)).rejects.toThrow()
+  // Le handler ne lève plus : une capture ratée devient un `ci_red` lisible,
+  // que la machine à états sait transformer en alerte d'inbox. Ce qui compte
+  // ici reste le `release()`, appelé quoi qu'il arrive.
+  const event = await handler(db, runId)
+  expect(event.type).toBe('ci_red')
   expect(released).toBe(true)
 })
 
@@ -251,4 +256,46 @@ test("un déploiement raté n'écrit aucun message d'audit trompeur", async () =
     .where('run_id', '=', runId)
     .execute()
   expect(messages).toHaveLength(0)
+})
+
+test('une page introuvable produit ci_red, elle n arrive JAMAIS au juge', async () => {
+  const worktree = await tempDir('silithid-404-worktree-')
+  await mkdir(join(worktree, 'public'), { recursive: true })
+  await writeFile(join(worktree, 'public', 'index.html'), '<!doctype html><h1>ok</h1>', 'utf8')
+  const runId = await createFixtureRun(worktree)
+
+  // Le cas reel : le garant rend un chemin de DEPOT au lieu d'un chemin
+  // d'URL. L'apercu sert deja `public/` comme racine, donc `public/index.html`
+  // repond 404. Sans garde-fou, le juge jugeait la page d'erreur et rendait
+  // « 0 conformite, 6 ecarts » — pendant que le garant lisait la source et
+  // concluait « conforme ». Le bon verdict, malgre un juge nourri de dechets.
+  await appendMessage(db, {
+    runId,
+    fromRole: 'garant',
+    toRole: 'dev',
+    kind: 'prompt',
+    body: 'Cadrage',
+    meta: { pages_to_judge: ['public/index.html'] },
+  })
+
+  const handler = createDeployingHandler({
+    artifactsRoot: await tempDir('silithid-404-artifacts-'),
+    target: createLocalPreviewTarget(),
+  })
+  const event = await handler(db, runId)
+
+  expect(event.type).toBe('ci_red')
+  if (event.type === 'ci_red') {
+    expect(event.reason).toContain('404')
+    // La raison doit dire quoi corriger, pas seulement que ca a rate.
+    expect(event.reason).toContain('RACINE SERVIE')
+  }
+
+  // Et surtout : aucun artifact enregistre. Rien a donner au juge.
+  const artifacts = await db
+    .selectFrom('artifacts')
+    .select('id')
+    .where('run_id', '=', runId)
+    .execute()
+  expect(artifacts).toHaveLength(0)
 })

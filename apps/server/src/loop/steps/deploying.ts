@@ -86,7 +86,23 @@ export function createDeployingHandler(deps: DeployingDeps): StepHandler {
       const pages = findPagesToJudge(messages)
 
       const artifactsDir = join(deps.artifactsRoot, runId)
-      const captures = await capturePages(deployed.url, pages, artifactsDir)
+      let captures: Awaited<ReturnType<typeof capturePages>>
+      try {
+        captures = await capturePages(deployed.url, pages, artifactsDir)
+      } catch (err) {
+        // Une capture ratée devient un `ci_red` lisible, pas une exception qui
+        // remonte au job. La machine à états sait déjà quoi en faire :
+        // `awaiting_human` avec une alerte d'inbox — donc Florian voit la
+        // cause au lieu de trouver un run bloqué sans explication.
+        //
+        // Le cas qui a motivé ça : `pages_to_judge` en chemins de dépôt
+        // (`public/index.html`) au lieu de chemins d'URL. Le juge recevait un
+        // 404 et le jugeait comme une vraie page.
+        return {
+          type: 'ci_red',
+          reason: `run ${runId} : ${err instanceof Error ? err.message : String(err)}`,
+        } satisfies LoopEvent
+      }
       const records = await recordCapturedPages(db, runId, deps.artifactsRoot, captures)
 
       // Message d'audit : trace l'URL réellement servie et par quelle voie,

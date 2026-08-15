@@ -144,7 +144,28 @@ export async function capturePages(
     const page: Page = await browser.newPage()
     try {
       const target = new URL(pagePath, url).toString()
-      await page.goto(target, { waitUntil: 'networkidle' })
+      const response = await page.goto(target, { waitUntil: 'networkidle' })
+
+      // Une page qui n'existe pas ne doit JAMAIS arriver au juge.
+      //
+      // Constaté sur un run réel : le garant avait rendu `public/index.html`
+      // dans `pages_to_judge` alors que l'aperçu sert déjà `public/` comme
+      // racine. Playwright a capturé le 404, le juge a honnêtement rapporté
+      // « la capture ne montre pas » pour chaque critère — 0 conformité, 6
+      // écarts dont un bloquant — et le garant, lui, a lu la source et conclu
+      // « conforme ». Le bon verdict, rendu malgré un juge alimenté en
+      // déchets : la panne était invisible.
+      //
+      // On échoue bruyamment plutôt que de produire une capture qui a l'air
+      // valide. `status()` est absent pour les schémas non HTTP, d'où le test
+      // sur la présence de la réponse.
+      const status = response?.status()
+      if (status !== undefined && status >= 400) {
+        const rappel = 'sont relatifs à la RACINE SERVIE, pas au dépôt'
+        throw new Error(
+          `capture impossible : ${target} répond ${status}. Les chemins de pages_to_judge ${rappel}.`,
+        )
+      }
 
       for (const viewport of VIEWPORTS) {
         await page.setViewportSize({ width: viewport.width, height: viewport.height })

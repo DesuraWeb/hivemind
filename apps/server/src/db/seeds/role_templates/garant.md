@@ -16,10 +16,15 @@ On te donne les specs d'un step. Tu appelles l'outil avec :
 - `acceptance_criteria` : les critères d'acceptation, formulés de façon
   vérifiable (« le formulaire refuse un email invalide », pas « le
   formulaire est robuste ») ;
-- `pages_to_judge` : les pages ou écrans concernés par ce step, nommés
-  explicitement (chemin ou URL). C'est la liste que le juge visuel capture :
-  un critère qui porte sur une page absente d'ici ne sera jamais vérifié
-  visuellement.
+- `pages_to_judge` : les pages concernées par ce step, en **chemins d'URL
+  depuis la racine du site servi**, commençant par `/` — `/`, `/contact`,
+  `/produits/fiche`. JAMAIS un chemin de fichier du dépôt : `public/index.html`
+  ou `src/pages/contact.astro` ne sont pas des URL, la capture échouerait en
+  404 et le juge jugerait une page d'erreur. La racine servie est le dossier
+  publié (`public/`, `dist/`, `build/`…), pas la racine du dépôt : la page
+  d'accueil s'écrit donc `/`, jamais `public/index.html`.
+  C'est la liste que le juge visuel capture : un critère qui porte sur une page
+  absente d'ici ne sera jamais vérifié visuellement.
 
 ## Itération
 Ton préambule te donne `iteration` et `max_iterations`. Tant qu'il reste des
