@@ -29,6 +29,30 @@ manque a survécu si longtemps.
 - [ ] Coût : un échange. Écrire le constat ici avant de continuer, comme
   `diag-juge-garant.ts` l'a fait pour le juge.
 
+### Constat du 15/08 — le socle tient
+
+`scripts/diag-rappel.ts`, un échange. Vérité terrain : une fiche client
+contenant « Marie valide les contenus, jamais son alternante, la prévenir
+48 h avant », et un cadrage qui rend cette information nécessaire.
+
+Mesuré sur `AgentResult.toolCalls`, pas sur le texte de la réponse :
+
+```
+outils appelés      : mcp__client_kb__lookup
+a consulté la fiche : OUI
+```
+
+Et sa réponse : « La fiche client répond déjà aux deux points : Marie, la
+gérante, valide personnellement les contenus (jamais son alternante) et doit
+être prévenue 48 h à l'avance — **je n'ai donc aucune question à poser à
+l'humain**, et je peux cadrer en intégrant ce délai. »
+
+**Le rappel ne fait pas que se produire : il change le comportement.** L'agent
+consulte, trouve, cite, et renonce à une question qu'il aurait posée sinon.
+C'est exactement le mécanisme que cette phase doit industrialiser — il est
+prouvé sur un cercle (le client), il reste à l'étendre aux trois autres et à
+faire naître les savoirs tout seuls.
+
 ## Les contrats
 
 - **Le savoir s'accumule tout seul, le pouvoir ne s'élargit que par une
