@@ -95,24 +95,78 @@ export function Globes() {
         </Link>
       </header>
 
-      <GlobesStage globes={globes} />
+      {globes.length === 0 && !globesQuery.isPending ? (
+        /* Premier écran d'une installation neuve : aucun globe n'est seedé
+           (migration 0006). Ce n'est pas une panne, c'est le point de départ —
+           l'écran doit donc inviter, pas constater un vide. */
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 14,
+            textAlign: 'center',
+            padding: '0 24px',
+          }}
+        >
+          <span style={{ font: '600 15px var(--font-sans)', color: 'var(--text-hi)' }}>
+            Aucun globe pour l&rsquo;instant
+          </span>
+          <span
+            style={{
+              font: '12.5px var(--font-sans)',
+              color: 'var(--text-mid)',
+              maxWidth: 420,
+              lineHeight: 1.6,
+              textWrap: 'pretty',
+            }}
+          >
+            Un globe est un espace de conscience : il regroupe des projets et porte la mémoire
+            qu&rsquo;ils partagent. Commencez par en créer un · vos projets s&rsquo;y rangeront.
+          </span>
+          <Link
+            to="/creation"
+            search={{}}
+            style={{
+              display: 'inline-flex',
+              marginTop: 4,
+              padding: '10px 20px',
+              borderRadius: 'var(--r-full)',
+              border: '1px solid color-mix(in oklab, var(--accent) 45%, transparent)',
+              background: 'var(--accent-soft)',
+              color: 'var(--text-hi)',
+              font: '500 13px var(--font-sans)',
+              cursor: 'pointer',
+            }}
+          >
+            Créer le premier globe
+          </Link>
+        </div>
+      ) : (
+        <GlobesStage globes={globes} />
+      )}
 
-      <div
-        style={{
-          position: 'absolute',
-          left: 24,
-          bottom: 18,
-          zIndex: 20,
-          font: '10.5px var(--font-mono)',
-          color: 'var(--text-low)',
-          maxWidth: 250,
-          lineHeight: 1.7,
-        }}
-      >
-        une orbite par globe · taille selon données
-        <br />
-        chaque globe = un espace de conscience
-      </div>
+      {globes.length > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            left: 24,
+            bottom: 18,
+            zIndex: 20,
+            font: '10.5px var(--font-mono)',
+            color: 'var(--text-low)',
+            maxWidth: 250,
+            lineHeight: 1.7,
+          }}
+        >
+          une orbite par globe · taille selon données
+          <br />
+          chaque globe = un espace de conscience
+        </div>
+      )}
     </div>
   )
 }
