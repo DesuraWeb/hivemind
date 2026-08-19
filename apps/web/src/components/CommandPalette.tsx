@@ -37,6 +37,9 @@ interface PaletteGroup {
  */
 const ACTIONS: { label: string; hint: string; to: string }[] = [
   { label: 'Démarrer la revue du matin', hint: 'traitement au clavier', to: '/revue' },
+  // Rien ne planifie cette revue et rien ne la rappelle : la palette est le
+  // seul chemin vers elle, avec l'URL.
+  { label: 'Revue des savoirs · péremption', hint: 'ce qui reste vrai', to: '/revue-savoirs' },
   { label: 'Journal · nuit des agents et vos décisions', hint: 'fusionné', to: '/journal' },
   { label: 'Analytics · coûts', hint: 'économie du système', to: '/analytics' },
   { label: 'Créer un projet ou un globe', hint: 'scène de création', to: '/creation' },

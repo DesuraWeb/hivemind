@@ -151,6 +151,13 @@ export interface SavoirsTable {
   origine_item_id: string | null
   created_at: Generated<Timestamp>
   archived_at: Timestamp | null
+  /**
+   * Dernière confirmation humaine en revue de péremption (« toujours vrai ·
+   * garder »). Null = jamais passé en revue. C'est ce qui sort un savoir de la
+   * file pour un trimestre — sans écrire dans `rappels`, qui reste le score
+   * d'utilité mesuré par le rappel réel.
+   */
+  revue_at: Timestamp | null
 }
 
 export interface InboxItemsTable {

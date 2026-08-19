@@ -14,6 +14,7 @@ import { journalRoutes } from './api/routes/journal'
 import { projectsRoutes } from './api/routes/projects'
 import { rolesRoutes } from './api/routes/roles'
 import { runsRoutes } from './api/routes/runs'
+import { savoirsRoutes } from './api/routes/savoirs'
 import { settingsRoutes } from './api/routes/settings'
 import { registerStatic } from './api/static'
 import { registerSession } from './auth/session'
@@ -92,6 +93,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(analyticsRoutes, { db: deps.db, settings })
   await app.register(runsRoutes, { db: deps.db, boss })
   await app.register(journalRoutes, { db: deps.db })
+  await app.register(savoirsRoutes, { db: deps.db })
   await app.register(hiveRoutes, { db: deps.db, adapter, cwd: env.WORKTREES_ROOT })
 
   // Le front construit, en production seulement : un seul processus, un seul

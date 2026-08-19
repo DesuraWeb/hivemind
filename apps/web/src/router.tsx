@@ -15,6 +15,7 @@ import { Project } from './routes/Project'
 import { Protocole } from './routes/Protocole'
 import { Reglages } from './routes/Reglages'
 import { RevueMatin } from './routes/RevueMatin'
+import { RevueSavoirs } from './routes/RevueSavoirs'
 import { RunLive } from './routes/RunLive'
 
 // Routage code-first (pas de génération de fichiers de routes) : cinq routes
@@ -135,6 +136,18 @@ const revueMatinRoute = createRoute({
   component: RevueMatin,
 })
 
+/**
+ * La revue de péremption (`Revue des savoirs.dc.html`) : sœur de `/revue`, sur
+ * un autre objet — l'inbox pour l'une, la mémoire pour l'autre. Le chemin le
+ * dit plutôt que de les ranger sous un préfixe commun qui ferait croire à deux
+ * onglets d'un même écran.
+ */
+const revueSavoirsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/revue-savoirs',
+  component: RevueSavoirs,
+})
+
 const ambientRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/ambient',
@@ -173,6 +186,7 @@ const routeTree = rootRoute.addChildren([
   analyticsRoute,
   runLiveRoute,
   revueMatinRoute,
+  revueSavoirsRoute,
   ambientRoute,
   onboardingRoute,
   conscienceRoute,

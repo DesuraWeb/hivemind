@@ -203,6 +203,42 @@ export interface VaultEntryView {
   key: string
 }
 
+/**
+ * Miroir front de `SavoirARevoir` (apps/server/src/knowledge/review.ts).
+ *
+ * Tout y est déjà calculé côté serveur — le libellé du cercle, l'âge, la
+ * raison de la proposition. L'écran n'a rien à dériver : une seconde règle de
+ * tri ou une seconde façon de dire « jamais rappelé » divergerait de celle qui
+ * a réellement classé la file.
+ */
+export interface SavoirRevueView {
+  racineId: string
+  version: number
+  cercle: 'projet' | 'client' | 'globe' | 'hive'
+  /** « fiche client Bastide », « mémoire du globe Desura », « conscience de Hive ». */
+  cercleLabel: string
+  sujet: string
+  contenu: string
+  /** Score d'utilité mesuré par le rappel réel. 0 = jamais servi à un agent. */
+  rappels: number
+  ageJours: number
+  createdAt: string
+  /** Dernière confirmation humaine, `null` si le savoir n'est jamais passé en revue. */
+  revueAt: string | null
+  pourquoi: string
+}
+
+export interface RevueSavoirsView {
+  /** Durée pendant laquelle un savoir confirmé reste hors de la file (90 j). */
+  periodeJours: number
+  actifs: number
+  /** Total à revoir · peut dépasser `items.length`, la file étant plafonnée. */
+  aRevoir: number
+  /** Phrase de Hive, calculée depuis ces mêmes nombres · aucun appel de modèle. */
+  hive: string
+  items: SavoirRevueView[]
+}
+
 export interface HiveMessageView {
   id: string
   from: string
@@ -425,6 +461,26 @@ export const api = {
       request<AnalyticsView>('GET', `/api/analytics${days ? `?days=${days}` : ''}`),
     steps: (projectId: string) =>
       request<StepCostView[]>('GET', `/api/analytics/steps/${encodeURIComponent(projectId)}`),
+  },
+  savoirs: {
+    /**
+     * La file de la revue de péremption. Gratuite : un `select` trié et une
+     * phrase calculée, jamais un échange avec un modèle — l'écran peut donc
+     * être ouvert et rafraîchi sans coût.
+     */
+    revue: () => request<RevueSavoirsView>('GET', '/api/savoirs/revue'),
+    /** « Toujours vrai · garder » : date la confirmation, ne touche pas au score d'utilité. */
+    garder: (racineId: string) =>
+      request<{ racineId: string; revueAt: string }>(
+        'POST',
+        `/api/savoirs/${encodeURIComponent(racineId)}/garder`,
+      ),
+    /** « Plus d'actualité · archiver » : hors du rappel, historique conservé. */
+    archiver: (racineId: string) =>
+      request<{ racineId: string; archive: true }>(
+        'POST',
+        `/api/savoirs/${encodeURIComponent(racineId)}/archiver`,
+      ),
   },
   vault: {
     /** Inventaire seul : aucune valeur de secret ne transite jamais par l'API. */
