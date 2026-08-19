@@ -53,6 +53,26 @@ C'est exactement le mécanisme que cette phase doit industrialiser — il est
 prouvé sur un cercle (le client), il reste à l'étendre aux trois autres et à
 faire naître les savoirs tout seuls.
 
+## Les quatre questions ouvertes — tranchées le 15/08
+
+**Où naissent les savoirs → le garant, au moment du verdict.** Écart assumé à
+la spec, qui dit « le reviewer extrait les candidats ». Le reviewer ne voit que
+le diff ; le garant a le cadrage, le rapport du reviewer, celui du juge et son
+propre verdict — et il fait DÉJÀ un appel au modèle à cet instant. Les
+candidats voyagent dans sa sortie structurée existante : aucun échange
+supplémentaire, aucun token de plus par run.
+
+**`clients.notes` → migré vers la nouvelle table.** Une seule source de vérité.
+Ce projet a refusé le stockage dupliqué deux fois déjà (statut projet, journal),
+pour la même raison : deux vérités divergent au premier incident.
+
+**Détection de conflit → par sujet déclaré.** L'agent propose un sujet court
+(« version PHP · PrestaShop »), Florian le confirme en validant. Deux savoirs de
+même sujet dans le même cercle = conflit. Déterministe et gratuit, contre un
+appel au modèle par proposition. **Imparfait, et l'item doit le dire** : deux
+savoirs contradictoires rangés sous des sujets différents passeront entre les
+mailles, et c'est la revue trimestrielle qui les rattrapera.
+
 ## Les contrats
 
 - **Le savoir s'accumule tout seul, le pouvoir ne s'élargit que par une
