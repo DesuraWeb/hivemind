@@ -19,7 +19,7 @@ import { registerStatic } from './api/static'
 import { registerSession } from './auth/session'
 import { createSecretBox } from './crypto/secrets'
 import type { Database } from './db/types'
-import { fromRepoRoot, loadEnv } from './env'
+import { DEFAULT_ALERT_EMAIL, fromRepoRoot, loadEnv } from './env'
 import { type GmailSendPort, createLazyGmailSender } from './integrations/gmail'
 import { type Mailer, createMailer } from './integrations/mailer'
 import { createBoss } from './jobs/boss'
@@ -77,7 +77,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     db: deps.db,
     adapter,
     mailer,
-    alertTo: env.ALERT_EMAIL_TO ?? 'alerts@exemple.test',
+    alertTo: env.ALERT_EMAIL_TO ?? DEFAULT_ALERT_EMAIL,
     settings,
   })
   await app.register(authRoutes, { db: deps.db })

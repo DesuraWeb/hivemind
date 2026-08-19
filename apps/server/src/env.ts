@@ -29,6 +29,17 @@ function findRepoRoot(from = process.cwd()): string | undefined {
  * Un chemin déjà absolu est rendu tel quel : en production on peut vouloir
  * pointer ailleurs que dans le dépôt.
  */
+/**
+ * Destinataire des alertes système quand `ALERT_EMAIL_TO` n'est pas renseigné.
+ *
+ * Une adresse générique et non celle de l'exploitant : ce dépôt est destiné à
+ * être public, et y coder en dur l'adresse de quelqu'un enverrait ses alertes
+ * à un inconnu chez qui l'installation tournerait. Le repli sert à ce que le
+ * démarrage n'échoue pas, pas à joindre réellement quelqu'un — renseignez
+ * `ALERT_EMAIL_TO`.
+ */
+export const DEFAULT_ALERT_EMAIL = 'alerts@localhost'
+
 export function fromRepoRoot(relatif: string): string {
   if (isAbsolute(relatif)) return relatif
   const racine = findRepoRoot()

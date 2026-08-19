@@ -5,6 +5,7 @@ import { ROLE_KEYS, type RoleKey } from '@silithid/shared'
 import type { Kysely } from 'kysely'
 import { BUDGET_SETTINGS_KEYS, DEFAULT_BUDGET_THRESHOLDS } from '../budget/scheduler'
 import { DEFAULT_GUARDED_PATHS, GUARDED_PATHS_SETTINGS_KEY } from '../security/guarded-paths'
+import { DEFAULT_ANSWER_BASELINE, DEFAULT_STACK_RULES } from './seeds/baseline'
 import type { Database } from './types'
 
 const SEEDS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'seeds', 'role_templates')
@@ -46,45 +47,6 @@ export async function seedRoleTemplates(db: Kysely<Database>): Promise<void> {
   }
 }
 
-/**
- * Paramètres de base sous-entendus par Florian dans ses réponses lapidaires
- * (« Ok réalise ce design », « corrige ces bugs ») — injectés par
- * `POST /api/inbox/:id/optimize` (inbox/optimize.ts) dans la proposition de
- * Hive, jamais dans la réponse brute elle-même. Point de départ à affiner au
- * fil de l'usage, pas une vérité figée : modifiable dans les réglages sans
- * redéploiement. La boucle qui apprendrait ces paramètres depuis les
- * corrections de Florian (BRIEF-RETOUR.md §6, « conscience collective ») est
- * hors scope ici — ce réglage reste statique tant qu'elle n'existe pas.
- */
-export const DEFAULT_ANSWER_BASELINE =
-  "[socle de règles retiré de l’historique · voir seeds/prive/]"
-
-/**
- * Règles propres à une stack, injectées UNIQUEMENT quand `projects.stack`
- * correspond. Les mettre dans le socle commun ferait traîner les règles
- * PrestaShop sur un projet WordPress : du bruit, et des tokens dépensés pour
- * des contraintes hors sujet.
- *
- * Les clés sont comparées en minuscules, sans accent, par inclusion : un
- * `projects.stack` valant « Laravel 12 » déclenche la règle `laravel`.
- *
- * Deux entrées portaient la mention RÈGLE MANQUANTE (tunnel de commande
- * PrestaShop, Pest ou PHPUnit sur Le Koin). Retirées le 13/08 : « je m'en fous
- * de PrestaShop et du Koin ». Ce ne sont plus des trous, c'est un périmètre —
- * le dépôt pilote est Desura.fr, en WordPress, et ses règles sont complètes.
- *
- * Le mécanisme qui fait dire « je ne sais pas » plutôt qu'inventer reste
- * disponible pour la prochaine règle réellement en suspens : écrire
- * `RÈGLE MANQUANTE : …` dans une entrée suffit.
- */
-export const DEFAULT_STACK_RULES: Record<string, string> = {}
-
-/**
- * Taux de conversion tokens → euros, affiché dans les listes de projets
- * (« 14,2 k tokens · 2,10 € »). Valeur d'ordre de grandeur, pas de
- * facturation : elle est destinée à donner une échelle, pas un montant exact.
- * Modifiable dans les réglages sans redéploiement.
- */
 export async function seedDefaultSettings(db: Kysely<Database>): Promise<void> {
   await db
     .insertInto('settings')
@@ -142,3 +104,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(`${ROLE_KEYS.length} templates de rôle seedés.`)
   await closeDb()
 }
+
+/**
+ * Réexporté pour les appelants historiques (`inbox/optimize.ts`). Le socle
+ * lui-même vit dans `seeds/baseline.ts`, avec son recouvrement privé.
+ */
+export { DEFAULT_ANSWER_BASELINE, DEFAULT_STACK_RULES }

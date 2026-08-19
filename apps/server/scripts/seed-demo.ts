@@ -234,7 +234,7 @@ async function seed(db: Kysely<Database>): Promise<void> {
     payload: {
       ctx: 'rédigé par le communicant · 6 j sans réponse client · ton fiche client : direct, cordial',
       email: {
-        from: 'alerts@exemple.test',
+        from: 'contact@exemple.test',
         to: 'contact@reparea.fr',
         subject: 'Reparea · avancement & accès API QualiRépar',
         body: 'Bonjour Julien,\n\nLe step 2 (parcours de dépôt) est prêt côté staging. Pour brancher la certification, il nous manque l’accès API QualiRépar (clé sandbox).\n\nPouvez-vous nous la transmettre cette semaine ? Le planning reste tenu.\n\nBien à vous,\nFlorian · Desura',

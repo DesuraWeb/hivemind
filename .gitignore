@@ -11,3 +11,13 @@ coverage/
 # Archives sources des polices : les fontes variables extraites sont dans
 # apps/web/public/fonts, inutile de versionner les zips en plus.
 docs/*.zip
+
+# Savoir privé — règles de l'agence, jamais dans le dépôt public.
+# Le défaut générique versionné vit dans `apps/server/src/db/seeds/baseline.ts` :
+# une installation neuve fonctionne sans ces fichiers. Voir aussi
+# `seeds/prive/README.md`, lui versionné, qui explique quoi y mettre.
+apps/server/src/db/seeds/prive/*
+!apps/server/src/db/seeds/prive/README.md
+
+# Pack de design — direction artistique et contexte métier, gardés privés.
+docs/design/

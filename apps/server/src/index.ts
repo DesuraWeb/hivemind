@@ -1,7 +1,7 @@
 import { buildApp } from './app'
 import { createSecretBox } from './crypto/secrets'
 import { getDb } from './db/client'
-import { loadEnv } from './env'
+import { DEFAULT_ALERT_EMAIL, loadEnv } from './env'
 import { createMailer } from './integrations/mailer'
 import { closeBrowser } from './integrations/playwright'
 import { createBoss, startBoss } from './jobs/boss'
@@ -16,7 +16,7 @@ const db = getDb()
 // pg-boss (voir le commentaire sur `AppDeps.adapter` dans app.ts).
 const adapter = await createRuntimeAdapter(env)
 const mailer = createMailer(env)
-const alertTo = env.ALERT_EMAIL_TO ?? 'alerts@exemple.test'
+const alertTo = env.ALERT_EMAIL_TO ?? DEFAULT_ALERT_EMAIL
 
 // Construit avant `buildApp` : `POST /api/inbox/:id/resolve` (Task 4) a
 // besoin de la même instance pour ré-enfiler `run.step` — `createBoss` ne
