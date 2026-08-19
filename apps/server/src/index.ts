@@ -51,8 +51,25 @@ await startBoss(boss, {
 
 await app.listen({ port: env.PORT, host: '0.0.0.0' })
 
+let arretEnCours = false
+
 async function shutdown(): Promise<void> {
-  await boss.stop()
+  // Un second signal pendant l'arrêt ne relance pas la séquence : systemd
+  // envoie SIGTERM puis SIGKILL, et un `boss.stop()` concurrent laisserait des
+  // workers dans un état indéterminé.
+  if (arretEnCours) return
+  arretEnCours = true
+
+  // `boss.stop()` rend la main AVANT que les workers en cours ne soient
+  // drainés : l'arrêt effectif est signalé par l'évènement `stopped`. Sans
+  // cette attente, un SIGTERM au milieu d'un step tue l'agent en plein
+  // travail — le run reste dans un état actif sans personne pour l'avancer.
+  // Le même défaut avait été trouvé côté tests (`tests/stop-boss.ts`).
+  const draine = new Promise<void>((resolve) => {
+    boss.once('stopped', () => resolve())
+  })
+  await boss.stop({ graceful: true })
+  await draine
   // Ferme le navigateur Chromium partagé (Task 1, Phase 4) : une fuite de
   // Chromium coûte bien plus cher qu'une fuite de connexion, jamais laissée
   // au ramasse-miettes du process.

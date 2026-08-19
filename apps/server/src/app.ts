@@ -15,10 +15,11 @@ import { projectsRoutes } from './api/routes/projects'
 import { rolesRoutes } from './api/routes/roles'
 import { runsRoutes } from './api/routes/runs'
 import { settingsRoutes } from './api/routes/settings'
+import { registerStatic } from './api/static'
 import { registerSession } from './auth/session'
 import { createSecretBox } from './crypto/secrets'
 import type { Database } from './db/types'
-import { loadEnv } from './env'
+import { fromRepoRoot, loadEnv } from './env'
 import { type GmailSendPort, createLazyGmailSender } from './integrations/gmail'
 import { type Mailer, createMailer } from './integrations/mailer'
 import { createBoss } from './jobs/boss'
@@ -92,6 +93,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(runsRoutes, { db: deps.db, boss })
   await app.register(journalRoutes, { db: deps.db })
   await app.register(hiveRoutes, { db: deps.db, adapter, cwd: env.WORKTREES_ROOT })
+
+  // Le front construit, en production seulement : un seul processus, un seul
+  // port. En développement Vite le sert lui-même, avec son rechargement à
+  // chaud — enregistrer ce gestionnaire ici masquerait ses 404 utiles.
+  if (env.NODE_ENV === 'production') {
+    await registerStatic(app, { root: fromRepoRoot(env.WEB_DIST) })
+  }
 
   return app
 }

@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.15.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "pnpm --filter @silithid/server dev",
     "dev:web": "pnpm --filter @silithid/web dev",
@@ -13,7 +15,9 @@
     "test": "vitest run",
     "db:migrate": "pnpm --filter @silithid/server db:migrate",
     "db:seed": "pnpm --filter @silithid/server db:seed",
-    "db:reset": "./scripts/db-reset.sh"
+    "db:reset": "./scripts/db-reset.sh",
+    "build": "pnpm --filter @silithid/web build",
+    "start": "pnpm --filter @silithid/server start"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join, parse } from 'node:path'
+import { dirname, isAbsolute, join, parse, resolve } from 'node:path'
 import { z } from 'zod'
 
 /**
@@ -18,6 +18,21 @@ function findRepoRoot(from = process.cwd()): string | undefined {
     if (dir === root) return undefined
     dir = dirname(dir)
   }
+}
+
+/**
+ * Résout un chemin de configuration relatif à la RACINE DU DÉPÔT, jamais au
+ * cwd. Même raison que pour `.env` ci-dessus : `pnpm --filter` place le cwd
+ * dans `apps/server`, et `./apps/web/dist` n'y existe pas. Mesuré en démarrant
+ * réellement en production — le front rendait 503 sur toutes les pages.
+ *
+ * Un chemin déjà absolu est rendu tel quel : en production on peut vouloir
+ * pointer ailleurs que dans le dépôt.
+ */
+export function fromRepoRoot(relatif: string): string {
+  if (isAbsolute(relatif)) return relatif
+  const racine = findRepoRoot()
+  return racine ? resolve(racine, relatif) : resolve(relatif)
 }
 
 /**
@@ -48,6 +63,12 @@ function loadDotEnvFile(path?: string): void {
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  /**
+   * Racine du front construit, servie par le serveur en production seulement.
+   * En développement Vite sert le front sur son propre port : ce réglage est
+   * ignoré. Relatif à la racine du dépôt.
+   */
+  WEB_DIST: z.string().default('./apps/web/dist'),
   PORT: z.coerce.number().default(3000),
   DATABASE_URL: z.string().min(1),
   DATABASE_URL_TEST: z.string().optional(),
