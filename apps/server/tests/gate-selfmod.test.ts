@@ -12,6 +12,7 @@ import {
   loadGuardedPaths,
   runSelfmodGate,
 } from '../src/security/selfmod-gate'
+import { ensureGlobe } from './fixtures'
 
 // `.env` n'est chargé dans process.env que via loadEnv() (voir src/env.ts).
 const db = createDb(createPool(databaseUrl(loadEnv())))
@@ -30,7 +31,7 @@ afterAll(async () => {
 
 /** Un globe (seedé par la migration 0002) + projet + step + run neufs. */
 async function createRun(): Promise<{ runId: string; projectId: string }> {
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   const project = await db
     .insertInto('projects')
     .values({

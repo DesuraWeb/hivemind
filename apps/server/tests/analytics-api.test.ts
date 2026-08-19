@@ -6,6 +6,7 @@ import { createUser } from '../src/auth/users'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
 import { databaseUrl, loadEnv } from '../src/env'
+import { ensureGlobe } from './fixtures'
 
 const env = loadEnv()
 const db = createDb(createPool(databaseUrl(env)))
@@ -45,7 +46,7 @@ interface RunSpec {
 }
 
 async function seedProject(name: string, runs: RunSpec[]): Promise<string> {
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   const slug = `analytics-${randomUUID()}`
   const project = await db
     .insertInto('projects')

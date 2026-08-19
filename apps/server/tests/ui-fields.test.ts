@@ -3,6 +3,7 @@ import { afterAll, beforeAll, expect, test } from 'vitest'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
 import { databaseUrl, loadEnv } from '../src/env'
+import { ensureGlobe } from './fixtures'
 
 const db = createDb(createPool(databaseUrl(loadEnv())))
 let projectId: string
@@ -10,7 +11,7 @@ let projectId: string
 beforeAll(async () => {
   await sql`drop schema public cascade; create schema public;`.execute(db)
   await runMigrations(db)
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   const p = await db
     .insertInto('projects')
     .values({ globe_id: globe.id, name: 'Le Koin', slug: 'koin', repo_full_name: 'a/b' })

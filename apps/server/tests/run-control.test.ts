@@ -16,6 +16,7 @@ import {
   instructionsBlock,
 } from '../src/loop/instructions'
 import { loopFromRunState } from '../src/projects/derive'
+import { ensureGlobe } from './fixtures'
 import { stopBoss } from './stop-boss'
 
 const env = loadEnv()
@@ -66,7 +67,7 @@ function get(url: string) {
 }
 
 async function seedRun(state = 'coding'): Promise<string> {
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   const project = await db
     .insertInto('projects')
     .values({
@@ -350,7 +351,7 @@ test('avec consignes, le bloc porte le titre et chaque consigne', () => {
 // --- Demarrer une boucle (POST /api/steps/:id/start) ---
 
 async function seedStep(): Promise<string> {
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   const project = await db
     .insertInto('projects')
     .values({

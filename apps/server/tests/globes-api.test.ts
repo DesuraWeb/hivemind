@@ -80,13 +80,14 @@ test('POST /api/globes sans cookie renvoie 401', async () => {
   expect((await post('/api/globes', { name: 'X' }, false)).statusCode).toBe(401)
 })
 
-// --- Liste : le globe Desura de la migration est toujours présent ---
+// --- Liste ---
 
-test('GET /api/globes rend le globe Desura seedé par la migration', async () => {
+test('GET /api/globes rend une liste vide sur une installation neuve', async () => {
   const res = await get('/api/globes')
   expect(res.statusCode).toBe(200)
-  const body = res.json() as Array<{ id: string; name: string }>
-  expect(body.some((g) => g.id === 'desura' && g.name === 'Desura')).toBe(true)
+  // Aucun globe seedé (migration 0006) : c'est un état normal, pas une panne.
+  // L'écran Globes doit inviter à en créer un, pas afficher une erreur.
+  expect(res.json()).toEqual([])
 })
 
 // --- Agrégats dérivés, pas fabriqués ---

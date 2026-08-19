@@ -3,6 +3,7 @@ import { afterAll, beforeAll, expect, test } from 'vitest'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
 import { databaseUrl, loadEnv } from '../src/env'
+import { ensureGlobe } from './fixtures'
 
 const db = createDb(createPool(databaseUrl(loadEnv())))
 
@@ -14,15 +15,12 @@ afterAll(async () => {
   await db.destroy()
 })
 
-test('le globe Desura existe apres migration', async () => {
-  const globe = await db
-    .selectFrom('globes')
-    .selectAll()
-    .where('slug', '=', 'desura')
-    .executeTakeFirstOrThrow()
-
-  expect(globe.name).toBe('Desura')
-  expect(globe.position).toBe(0)
+test('une installation neuve n a AUCUN globe', async () => {
+  // La migration 0002 en créait un, nommé « Desura », pour rattacher les
+  // projets existants. La 0006 le retire : le nom d'une agence n'a rien à
+  // faire dans le schéma, et l'écran de Création sait poser le premier globe.
+  const globes = await db.selectFrom('globes').selectAll().execute()
+  expect(globes).toEqual([])
 })
 
 test('un projet sans globe_id est refuse', async () => {
@@ -32,19 +30,15 @@ test('un projet sans globe_id est refuse', async () => {
 })
 
 test('un projet rattache a un globe est accepte', async () => {
-  const globe = await db
-    .selectFrom('globes')
-    .select('id')
-    .where('slug', '=', 'desura')
-    .executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
 
   const project = await db
     .insertInto('projects')
     .values({
       globe_id: globe.id,
-      name: 'Desura.fr',
-      slug: 'desura-fr',
-      repo_full_name: 'desura/Desura.fr',
+      name: 'Site vitrine',
+      slug: 'site-vitrine',
+      repo_full_name: 'exemple/site-vitrine',
     })
     .returningAll()
     .executeTakeFirstOrThrow()
@@ -53,7 +47,7 @@ test('un projet rattache a un globe est accepte', async () => {
 })
 
 test('un run porte resume_state et review_round', async () => {
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   const project = await db
     .insertInto('projects')
     .values({ globe_id: globe.id, name: 'P', slug: 'p-run', repo_full_name: 'a/b' })

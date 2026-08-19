@@ -11,6 +11,7 @@ import { databaseUrl, loadEnv } from '../src/env'
 import { type CreateInboxItemInput, createInboxItem } from '../src/inbox/repo'
 import { createBoss } from '../src/jobs/boss'
 import { type FakeToolCall, createFakeAdapter } from '../src/runtime/fake'
+import { ensureGlobe } from './fixtures'
 
 const env = loadEnv()
 const db = createDb(createPool(databaseUrl(env)))
@@ -53,7 +54,7 @@ async function appWithReplies(replies: (string | FakeToolCall)[]) {
 }
 
 async function createProject(): Promise<{ projectId: string }> {
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   const project = await db
     .insertInto('projects')
     .values({

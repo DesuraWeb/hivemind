@@ -11,6 +11,7 @@ import { type CreateInboxItemInput, createInboxItem } from '../src/inbox/repo'
 import { createBoss } from '../src/jobs/boss'
 import { RUN_STEP_QUEUE } from '../src/jobs/run-step'
 import { applyEvent } from '../src/loop/orchestrator'
+import { ensureGlobe } from './fixtures'
 import { stopBoss } from './stop-boss'
 
 const env = loadEnv()
@@ -49,7 +50,7 @@ interface FixtureProject {
 
 /** Un globe + projet + step + run neufs, prêts à porter un item d'inbox. */
 async function createRun(opts: { state?: 'framing' | 'coding' | 'reviewing' } = {}) {
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   const slug = `p-inbox-api-${randomUUID()}`
   const project = await db
     .insertInto('projects')
@@ -70,7 +71,7 @@ async function createRun(opts: { state?: 'framing' | 'coding' | 'reviewing' } = 
 }
 
 async function createProject(): Promise<FixtureProject> {
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   const slug = `p-inbox-plain-${randomUUID()}`
   const project = await db
     .insertInto('projects')

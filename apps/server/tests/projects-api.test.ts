@@ -9,6 +9,7 @@ import { runMigrations } from '../src/db/migrate'
 import { seedRoleTemplates } from '../src/db/seed'
 import { databaseUrl, loadEnv } from '../src/env'
 import { createInboxItem } from '../src/inbox/repo'
+import { ensureGlobe } from './fixtures'
 
 const env = loadEnv()
 const db = createDb(createPool(databaseUrl(env)))
@@ -59,7 +60,7 @@ interface ProjectFixtureOpts {
 }
 
 async function createProjectFixture(opts: ProjectFixtureOpts): Promise<string> {
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
 
   let clientId: string | undefined
   if (opts.clientName) {

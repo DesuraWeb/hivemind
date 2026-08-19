@@ -31,6 +31,7 @@ import { RUN_STEP_QUEUE } from '../src/jobs/run-step'
 import { readRunMessages } from '../src/loop/bus'
 import { resolveToolPolicy } from '../src/runtime/tools'
 import type { ToolPolicy } from '../src/runtime/types'
+import { ensureGlobe } from './fixtures'
 import { stopBoss } from './stop-boss'
 
 /**
@@ -76,7 +77,7 @@ afterAll(async () => {
 })
 
 async function createProjectAndRun(): Promise<{ projectId: string; runId: string }> {
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   const project = await db
     .insertInto('projects')
     .values({

@@ -3,6 +3,7 @@ import { afterAll, beforeAll, expect, test } from 'vitest'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
 import { databaseUrl, loadEnv } from '../src/env'
+import { ensureGlobe } from './fixtures'
 
 // `.env` n'est chargé dans process.env que via loadEnv() (voir src/env.ts).
 // Passer par databaseUrl() plutôt qu'une URL en dur : sinon un changement de
@@ -25,11 +26,7 @@ test('insère un client, un projet et un step reliés', async () => {
     .returningAll()
     .executeTakeFirstOrThrow()
 
-  const globe = await db
-    .selectFrom('globes')
-    .select('id')
-    .where('slug', '=', 'desura')
-    .executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
 
   const project = await db
     .insertInto('projects')
@@ -58,7 +55,7 @@ test('insère un client, un projet et un step reliés', async () => {
 })
 
 test('refuse un budget_weight hors bornes', async () => {
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   await expect(
     db
       .insertInto('projects')

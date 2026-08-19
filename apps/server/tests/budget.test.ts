@@ -20,6 +20,7 @@ import { seedDefaultSettings } from '../src/db/seed'
 import { databaseUrl, loadEnv } from '../src/env'
 import type { UsageSnapshot } from '../src/runtime/types'
 import { createSettingsStore } from '../src/settings/store'
+import { ensureGlobe } from './fixtures'
 
 /**
  * Aucun de ces tests ne parle au SDK : la décision est pure, et `runBudgetTick`
@@ -142,7 +143,7 @@ test('un reglage aberrant retombe sur le defaut plutot que de piloter une pause'
 const settings: BudgetSettingsSource = { get: async () => undefined }
 
 async function createRun(state?: RunState, resumeState?: RunState): Promise<string> {
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   const project = await db
     .insertInto('projects')
     .values({

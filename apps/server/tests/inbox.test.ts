@@ -16,6 +16,7 @@ import { createBoss } from '../src/jobs/boss'
 import { RUN_STEP_QUEUE } from '../src/jobs/run-step'
 import { readRunMessages } from '../src/loop/bus'
 import { applyEvent } from '../src/loop/orchestrator'
+import { ensureGlobe } from './fixtures'
 import { stopBoss } from './stop-boss'
 
 const env = loadEnv()
@@ -43,7 +44,7 @@ interface CreateRunOptions {
 async function createRun(
   opts: CreateRunOptions = {},
 ): Promise<{ runId: string; projectId: string }> {
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   const project = await db
     .insertInto('projects')
     .values({

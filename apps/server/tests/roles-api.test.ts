@@ -8,6 +8,7 @@ import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
 import { databaseUrl, loadEnv } from '../src/env'
 import { createSettingsStore } from '../src/settings/store'
+import { ensureGlobe } from './fixtures'
 
 const env = loadEnv()
 const db = createDb(createPool(databaseUrl(env)))
@@ -68,7 +69,7 @@ test('les templates sortent par version décroissante, avec leur nombre de proje
     .execute()
 
   // Deux projets matérialisent la v1 : c'est ce que doit compter `usedByProjects`.
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   for (let i = 0; i < 2; i++) {
     const project = await db
       .insertInto('projects')

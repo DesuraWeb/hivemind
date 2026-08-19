@@ -6,6 +6,7 @@ import { createUser } from '../src/auth/users'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
 import { databaseUrl, loadEnv } from '../src/env'
+import { ensureGlobe } from './fixtures'
 
 const env = loadEnv()
 const db = createDb(createPool(databaseUrl(env)))
@@ -121,7 +122,7 @@ test('AUCUNE valeur de secret ne sort de l API, seulement les noms des accès', 
 
 test('les projets rattachés sont listés par slug', async () => {
   const clientId = await createClientFixture()
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   const slug = `projet-client-${randomUUID()}`
   await db
     .insertInto('projects')

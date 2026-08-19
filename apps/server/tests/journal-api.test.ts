@@ -8,6 +8,7 @@ import { runMigrations } from '../src/db/migrate'
 import { databaseUrl, loadEnv } from '../src/env'
 import { createInboxItem } from '../src/inbox/repo'
 import { appendMessage } from '../src/loop/bus'
+import { ensureGlobe } from './fixtures'
 
 const env = loadEnv()
 const db = createDb(createPool(databaseUrl(env)))
@@ -39,7 +40,7 @@ function get(url: string) {
 }
 
 async function seed(): Promise<{ projectId: string; runId: string }> {
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   const project = await db
     .insertInto('projects')
     .values({

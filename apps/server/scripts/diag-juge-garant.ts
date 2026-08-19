@@ -38,6 +38,7 @@ import { appendMessage, readRunMessages } from '../src/loop/bus'
 import { createJudgingHandler } from '../src/loop/steps/judging'
 import { createVerdictHandler } from '../src/loop/steps/verdict'
 import { createClaudeAdapter } from '../src/runtime/claude'
+import { ensureGlobe } from '../tests/fixtures'
 
 const PAGE = `<!doctype html>
 <html lang="fr">
@@ -81,7 +82,7 @@ const siteDir = await mkdtemp(join(tmpdir(), 'silithid-diag-site-'))
 const artifactsRoot = await mkdtemp(join(tmpdir(), 'silithid-diag-artifacts-'))
 await writeFile(join(siteDir, 'index.html'), PAGE, 'utf8')
 
-const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+const globe = await ensureGlobe(db)
 const project = await db
   .insertInto('projects')
   .values({

@@ -7,6 +7,7 @@ import { runMigrations } from '../src/db/migrate'
 import { databaseUrl, loadEnv } from '../src/env'
 import { readRunMessages } from '../src/loop/bus'
 import { applyEvent } from '../src/loop/orchestrator'
+import { ensureGlobe } from './fixtures'
 
 const db = createDb(createPool(databaseUrl(loadEnv())))
 
@@ -25,7 +26,7 @@ interface CreateRunOptions {
 
 /** Un globe + projet + step + run neufs, prêts pour `applyEvent`. */
 async function createRun(opts: CreateRunOptions = {}): Promise<string> {
-  const globe = await db.selectFrom('globes').select('id').executeTakeFirstOrThrow()
+  const globe = await ensureGlobe(db)
   const project = await db
     .insertInto('projects')
     .values({
