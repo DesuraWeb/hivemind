@@ -10,6 +10,8 @@ import { databaseUrl, loadEnv } from '../src/env'
 import { type CreateInboxItemInput, createInboxItem } from '../src/inbox/repo'
 import { createBoss } from '../src/jobs/boss'
 import { RUN_STEP_QUEUE } from '../src/jobs/run-step'
+import { proposerSavoirs } from '../src/knowledge/propose'
+import { rappeler } from '../src/knowledge/recall'
 import { applyEvent } from '../src/loop/orchestrator'
 import { ensureGlobe } from './fixtures'
 import { stopBoss } from './stop-boss'
@@ -376,4 +378,66 @@ test('POST /api/inbox/:id/resolve sur un item bloquant relance réellement le ru
     .executeTakeFirstOrThrow()
   expect(run.state).toBe('coding')
   expect(await pendingRunStepJobs(runId)).toBeGreaterThan(jobsBefore)
+})
+
+// --- Chaîne HTTP → archivage d'un savoir (Phase 7, Task 3) ---
+
+test('POST /api/inbox/:id/resolve sur un savoir approuvé archive la formulation corrigée', async () => {
+  const { runId, projectId } = await createRun()
+  const { proposes } = await proposerSavoirs(db, {
+    runId,
+    projectId,
+    candidats: [
+      {
+        sujet: 'limite upload',
+        contenu: 'Ce serveur refuse tout upload au-delà de 2 Mo, sans message d’erreur.',
+        cercle: 'projet',
+      },
+    ],
+  })
+  const itemId = proposes[0]?.id as string
+
+  const corrige =
+    'Uploads plafonnés à 2 Mo côté serveur · aucun message d’erreur, échec silencieux.'
+  const res = await app.inject({
+    method: 'POST',
+    url: `/api/inbox/${itemId}/resolve`,
+    payload: { response: { approved: true, text: corrige } },
+    cookies: { hm_session: cookie },
+  })
+
+  expect(res.statusCode).toBe(200)
+  expect(res.json().savoirArchived).toBe(true)
+  // Le run n'a pas été réveillé : une proposition de savoir ne bloque rien.
+  expect(res.json().runResumed).toBe(false)
+
+  // C'est la formulation de Florian qui est rappelée, jamais celle du garant.
+  const rappeles = await rappeler(db, { projetId: projectId })
+  expect(rappeles.map((s) => s.contenu)).toEqual([corrige])
+})
+
+test('POST /api/inbox/:id/resolve sur un savoir refusé n archive rien', async () => {
+  const { runId, projectId } = await createRun()
+  const { proposes } = await proposerSavoirs(db, {
+    runId,
+    projectId,
+    candidats: [
+      {
+        sujet: 'cache CDN',
+        contenu: 'Le CDN de ce client garde les assets 24 h, purger après chaque déploiement.',
+        cercle: 'projet',
+      },
+    ],
+  })
+
+  const res = await app.inject({
+    method: 'POST',
+    url: `/api/inbox/${proposes[0]?.id}/resolve`,
+    payload: { response: { approved: false } },
+    cookies: { hm_session: cookie },
+  })
+
+  expect(res.statusCode).toBe(200)
+  expect(res.json().savoirArchived).toBe(false)
+  expect(await rappeler(db, { projetId: projectId })).toHaveLength(0)
 })

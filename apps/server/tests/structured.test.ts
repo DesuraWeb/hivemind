@@ -1,6 +1,6 @@
 import { expect, test, vi } from 'vitest'
 import { createFakeAdapter } from '../src/runtime/fake'
-import { collectStructured, frameSchema } from '../src/runtime/structured'
+import { collectStructured, frameSchema, verdictSchema } from '../src/runtime/structured'
 
 const baseOpts = {
   roleKey: 'garant' as const,
@@ -107,4 +107,40 @@ test('un seul essai suffit quand la premiere reponse est deja un appel d outil v
 
   expect(frame).toEqual(validFrame)
   expect(sendSpy).toHaveBeenCalledTimes(1)
+})
+
+// --- Candidats-savoirs dans le verdict (Phase 7, Task 3) ---
+
+const verdictNu = { decision: 'conforme' as const, ecarts: [] }
+const candidat = {
+  sujet: 'version PHP · PrestaShop',
+  contenu: 'Les PrestaShop de ce client tournent en PHP 8.1 maximum, vérifier avant mise à jour.',
+  cercle: 'globe' as const,
+}
+
+test('un verdict sans savoirs reste valide : ne rien apprendre est le cas normal', () => {
+  const parsed = verdictSchema.parse(verdictNu)
+  // Clé ABSENTE, pas `undefined` : un run qui n'apprend rien ne produit pas
+  // un champ vide que l'appelant devrait ensuite distinguer.
+  expect('savoirs' in parsed).toBe(false)
+})
+
+test('un candidat ne peut pas nommer une instance de cercle', () => {
+  const parsed = verdictSchema.parse({
+    ...verdictNu,
+    savoirs: [{ ...candidat, cercle_id: 'globe-d-un-autre' }],
+  })
+  // Le champ n'existe pas au contrat : il est jeté, jamais transporté. C'est
+  // le serveur qui résout l'instance depuis le projet du run.
+  expect(parsed.savoirs?.[0]).not.toHaveProperty('cercle_id')
+})
+
+test('au-delà de trois savoirs, la charge est refusée', () => {
+  const quatre = [1, 2, 3, 4].map((n) => ({ ...candidat, sujet: `sujet ${n}` }))
+  expect(verdictSchema.safeParse({ ...verdictNu, savoirs: quatre }).success).toBe(false)
+})
+
+test('un sujet rédigé en phrase est refusé : il ne détecterait aucun conflit', () => {
+  const bavard = { ...candidat, sujet: 'a'.repeat(81) }
+  expect(verdictSchema.safeParse({ ...verdictNu, savoirs: [bavard] }).success).toBe(false)
 })

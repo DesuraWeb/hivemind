@@ -81,9 +81,48 @@ export const frameSchema = z.object({
 export type Frame = z.infer<typeof frameSchema>
 
 /**
+ * Un candidat-savoir proposé par le garant au moment du verdict (Phase 7,
+ * Task 3).
+ *
+ * ## Pourquoi ici, et pourquoi ça ne coûte rien
+ *
+ * La spec dit « le reviewer extrait les candidats ». Le reviewer ne voit que
+ * le diff ; le garant a le cadrage, le rapport du reviewer, celui du juge et
+ * son propre verdict — et il fait DÉJÀ un appel au modèle à cet instant. Les
+ * candidats voyagent dans sa sortie structurée existante : zéro échange
+ * supplémentaire, zéro token de plus par run.
+ *
+ * ## Ce que l'agent NE choisit PAS
+ *
+ * Il déclare une NATURE de cercle (`projet`/`client`/`globe`/`hive`), jamais
+ * une instance. Aucun identifiant ne traverse ce schéma : le serveur résout
+ * `cercle_id` depuis le projet du run lui-même (`knowledge/propose.ts`). Un
+ * garant ne peut donc pas proposer un savoir dans le globe d'un autre — ce
+ * n'est pas une règle à respecter, c'est une donnée qu'il n'a pas.
+ */
+export const candidatSavoirSchema = z.object({
+  /**
+   * Clé de détection de conflit (arbitrage du 15/08) : court, nominal,
+   * réutilisable d'un run à l'autre. Borné à 80 : un « sujet » d'une phrase
+   * ne recoupe jamais celui du run suivant, donc ne détecte aucun conflit.
+   */
+  sujet: z.string().min(3).max(80),
+  contenu: z.string().min(20),
+  cercle: z.enum(['projet', 'client', 'globe', 'hive']),
+  stack: z.string().min(1).optional(),
+})
+export type CandidatSavoir = z.infer<typeof candidatSavoirSchema>
+
+/**
  * Verdict du garant après reviewer + juge visuel. Figé par le garant du
  * projet (plan, contrat 3) mais implémenté en Phase 4 : type seulement
  * ici, rien ne le construit ni ne le consomme dans cette tâche.
+ *
+ * `savoirs` (Phase 7, Task 3) est OPTIONNEL et borné à 3. Un run qui
+ * n'apprend rien est le cas normal : rendre le champ obligatoire forcerait le
+ * garant à inventer un savoir à chaque verdict, et ce bruit noierait le
+ * signal. La borne joue le même rôle dans l'autre sens — trois propositions
+ * par run suffisent largement, au-delà c'est du résumé de step déguisé.
  */
 export const verdictSchema = z.object({
   decision: z.enum(['conforme', 'ecarts']),
@@ -95,6 +134,7 @@ export const verdictSchema = z.object({
     }),
   ),
   dev_prompt_correctif: z.string().optional(),
+  savoirs: z.array(candidatSavoirSchema).max(3).optional(),
 })
 export type Verdict = z.infer<typeof verdictSchema>
 

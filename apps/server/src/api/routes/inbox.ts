@@ -9,6 +9,7 @@ import { optimizeAnswer } from '../../inbox/optimize'
 import { type InboxItemRow, createInboxItem, getInboxItem, listInbox } from '../../inbox/repo'
 import { type InboxResponse, resolveInboxItem } from '../../inbox/resolve'
 import type { GmailSendPort } from '../../integrations/gmail'
+import { archiverSavoirApprouve } from '../../knowledge/propose'
 import type { RuntimeAdapter } from '../../runtime/types'
 import type { SettingsStore } from '../../settings/store'
 
@@ -142,6 +143,41 @@ async function sendApprovedEmailOrAlert(
   }
 }
 
+/**
+ * Suite serveur d'une proposition de savoir (Phase 7, Task 3) : un item
+ * `approval`/`savoir` approuvé archive le savoir dans le cercle visé, avec la
+ * formulation de Florian si elle a été corrigée. Un refus n'archive rien.
+ *
+ * Même traitement d'erreur que l'envoi d'email : l'item est déjà résolu, le
+ * rejouer est impossible, donc l'échec lève une alerte au lieu de disparaître
+ * dans un log. Un savoir validé qui ne serait jamais entré en mémoire est
+ * exactement le genre de perte silencieuse que cette phase existe pour
+ * éviter.
+ */
+async function archiveSavoirOrAlert(
+  deps: InboxRoutesDeps,
+  item: InboxItemRow,
+  log: FastifyBaseLogger,
+): Promise<boolean> {
+  try {
+    return (await archiverSavoirApprouve(deps.db, item)) !== null
+  } catch (err) {
+    log.error({ err, itemId: item.id }, 'archivage du savoir approuvé échoué')
+    await createInboxItem(deps.db, {
+      type: 'alert',
+      projectId: item.projectId,
+      runId: item.runId,
+      title: `Archivage impossible · ${item.title}`,
+      fromRole: 'system',
+      payload: {
+        sourceItemId: item.id,
+        error: err instanceof Error ? err.message : String(err),
+      },
+    })
+    return false
+  }
+}
+
 export async function inboxRoutes(app: FastifyInstance, deps: InboxRoutesDeps): Promise<void> {
   app.get('/api/inbox', { preHandler: app.requireAuth }, async (req, reply) => {
     const parsed = listQuery.safeParse(req.query)
@@ -195,7 +231,13 @@ export async function inboxRoutes(app: FastifyInstance, deps: InboxRoutesDeps): 
           null)
         : null
       const emailSent = await sendApprovedEmailOrAlert(deps, result.item, req.log)
-      return { item: toApiItem(result.item, slug), runResumed: result.runResumed, emailSent }
+      const savoirArchived = await archiveSavoirOrAlert(deps, result.item, req.log)
+      return {
+        item: toApiItem(result.item, slug),
+        runResumed: result.runResumed,
+        emailSent,
+        savoirArchived,
+      }
     } catch (err) {
       // `resolve.ts` (Task 2, non modifié ici) n'expose que des `Error`
       // génériques — matcher le message est le seul signal disponible sans

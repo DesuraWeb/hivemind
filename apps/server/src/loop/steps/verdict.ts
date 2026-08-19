@@ -15,6 +15,12 @@
  * mise en prod (`../../deploy/prod-gate.ts`), quel que soit le mode de boucle
  * du step — `auto` compris. Ce fichier est le point d'appel parce que c'est
  * ici, et nulle part ailleurs, qu'un step devient promouvable.
+ *
+ * DEPUIS LA PHASE 7 (Task 3), c'est aussi ici que naissent les savoirs
+ * (`../../knowledge/propose.ts`). Le garant est le seul rôle qui ait à la fois
+ * tout le contexte du step ET un appel au modèle déjà en cours à cet instant :
+ * ses candidats voyagent dans la sortie structurée qu'il produit de toute
+ * façon, donc l'apprentissage ne coûte pas un échange de plus par run.
  */
 
 import {
@@ -26,6 +32,7 @@ import {
 } from '../../deploy/prod-gate'
 import type { LoopEvent } from '../../domain/run-state'
 import type { StepHandler } from '../../jobs/run-step'
+import { proposerSavoirs } from '../../knowledge/propose'
 import { type Verdict, collectStructured, verdictSchema } from '../../runtime/structured'
 import type { RuntimeAdapter, ToolPolicy } from '../../runtime/types'
 import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
@@ -197,6 +204,13 @@ function buildPreamble(opts: {
     'Rends ton verdict en appelant l’outil de sortie structurée mis à ta disposition. Un écart ' +
       "cosmétique non couvert par un critère d'acceptation n'est pas un écart : ce n'est pas un " +
       'motif pour rendre « ecarts ».',
+    '',
+    // Rappelé ici, au moment de la décision, en plus du prompt de rôle : le
+    // défaut correct est l'ABSENCE de champ, et c'est le défaut qu'un modèle
+    // remplit le plus volontiers à tort quand il voit une clé disponible.
+    'Le champ `savoirs` reste vide dans la grande majorité des runs : ne le remplis que si ce step ' +
+      "t'a fait découvrir une contrainte durable que le prochain run aurait aimé connaître avant de " +
+      'commencer, jamais pour résumer ce qui vient d’être fait.',
   ].join('\n')
 }
 
@@ -304,7 +318,8 @@ export function createVerdictHandler(deps: VerdictDeps): StepHandler {
     const verdict = await collectStructured(deps.adapter, session, preamble, verdictSchema, {
       toolName: 'submit_verdict',
       toolDescription:
-        'Rend le verdict du garant : conforme, ou écarts avec leurs correctifs et le prompt correctif pour le dev.',
+        'Rend le verdict du garant : conforme, ou écarts avec leurs correctifs et le prompt correctif pour le dev. ' +
+        'Porte aussi, facultativement, les savoirs durables découverts pendant ce step.',
     })
 
     // Passation d'audit garant→system : trace la décision elle-même dans la
@@ -319,6 +334,35 @@ export function createVerdictHandler(deps: VerdictDeps): StepHandler {
       body: formatVerdict(verdict),
       meta: { decision: verdict.decision, ecarts: verdict.ecarts },
     })
+
+    // Les candidats-savoirs voyagent dans la sortie structurée qu'on vient de
+    // recevoir : aucun échange supplémentaire, aucun token de plus (Phase 7,
+    // Task 3). Levés quel que soit le verdict — un step qui part en écarts est
+    // souvent celui qui apprend le plus, c'est en butant qu'on découvre la
+    // contrainte qu'on aurait aimé connaître avant de commencer.
+    //
+    // `try/catch`, contrairement au gate de prod juste en dessous : une
+    // proposition de savoir est strictement additive. La laisser faire échouer
+    // le handler ferait rejouer le job, donc REFAIRE l'appel au modèle du
+    // verdict — payer des tokens pour une mémoire est exactement ce que
+    // l'arbitrage de cette tâche refuse. L'échec est tracé dans la timeline
+    // plutôt qu'avalé.
+    try {
+      await proposerSavoirs(db, {
+        runId,
+        projectId: runRow.projectId,
+        candidats: verdict.savoirs ?? [],
+      })
+    } catch (err) {
+      await appendMessage(db, {
+        runId,
+        fromRole: 'system',
+        toRole: 'system',
+        kind: 'info',
+        body: `Proposition de savoirs échouée · ${err instanceof Error ? err.message : String(err)}`,
+        meta: { savoirs_proposes: [] },
+      })
+    }
 
     // Le garant a-t-il validé un travail que le juge n'a validé en rien ?
     // Constaté sur une vraie boucle : le juge ne voyait qu'un 404, le garant a
