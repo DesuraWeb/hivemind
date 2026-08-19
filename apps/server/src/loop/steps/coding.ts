@@ -212,7 +212,7 @@ export function createCodingHandler(deps: CodingDeps): StepHandler {
     // Même raison que dans `framing.ts` : `dev.md` dit « avant toute question,
     // consulte la fiche client », et l'outil n'était jamais fourni.
     const kb = roleUsesClientKb(role.tools)
-      ? createClientKbSurface({ db, tools: role.tools })
+      ? createClientKbSurface({ db, tools: role.tools, projetId: runRow.projectId })
       : null
     const result = await deps.adapter.send(session, prompt, kb ? kb.sendOptions : undefined)
     const report = result.text.trim() || '(le développeur n’a renvoyé aucun texte de rapport)'

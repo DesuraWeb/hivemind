@@ -129,6 +129,30 @@ export interface MessagesTable {
   created_at: Generated<Timestamp>
 }
 
+/** Cercles de mémoire, du plus spécifique au plus général (spec §01). */
+export type CercleMemoire = 'projet' | 'client' | 'globe' | 'hive'
+
+export interface SavoirsTable {
+  id: Generated<string>
+  /** Regroupe les versions d'un même savoir. Une seule est `actif` à la fois. */
+  racine_id: string
+  version: Generated<number>
+  cercle: CercleMemoire
+  /** Null pour le cercle `hive`, qui n'a pas d'instance. */
+  cercle_id: string | null
+  /** Clé de détection de conflit : deux actifs de même sujet dans un cercle se contredisent probablement. */
+  sujet: string
+  contenu: string
+  stack: string | null
+  etat: Generated<'actif' | 'archive'>
+  /** Score d'utilité, incrémenté à chaque rappel. */
+  rappels: Generated<number>
+  origine_run_id: string | null
+  origine_item_id: string | null
+  created_at: Generated<Timestamp>
+  archived_at: Timestamp | null
+}
+
 export interface InboxItemsTable {
   id: Generated<string>
   type: InboxType
@@ -186,6 +210,7 @@ export interface Database {
   agent_sessions: AgentSessionsTable
   messages: MessagesTable
   inbox_items: InboxItemsTable
+  savoirs: SavoirsTable
   usage_windows: UsageWindowsTable
   artifacts: ArtifactsTable
   settings: SettingsTable

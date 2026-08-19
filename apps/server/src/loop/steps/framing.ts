@@ -210,7 +210,7 @@ export function createFramingHandler(deps: FramingDeps): StepHandler {
     // fiche client ». L'outil n'existait pas : la consigne était impossible à
     // suivre, et chaque run reposait des questions déjà répondues.
     const kb = roleUsesClientKb(role.tools)
-      ? createClientKbSurface({ db, tools: role.tools })
+      ? createClientKbSurface({ db, tools: role.tools, projetId: runRow.projectId })
       : null
 
     const frame = await collectStructured(deps.adapter, session, preamble, frameSchema, {

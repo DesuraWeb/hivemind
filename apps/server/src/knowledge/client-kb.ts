@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { type getClient, listClients } from '../clients/repo'
 import type { Database } from '../db/types'
 import type { SendOptions } from '../runtime/types'
+import { formaterRappel, rappeler } from './recall'
 
 /**
  * `client_kb` : la fiche client, consultable par un agent.
@@ -83,6 +84,12 @@ export interface ClientKbDeps {
   db: Kysely<Database>
   /** La politique d'outils du rôle, telle que résolue en base (forme jsonb, non garantie). */
   tools: unknown
+  /**
+   * Le projet en cours, s'il y en a un. Sert au rappel en cascade : sans lui,
+   * seuls les cercles `client` et `hive` sont atteignables — le savoir propre
+   * au projet et celui du globe resteraient invisibles.
+   */
+  projetId?: string | null
 }
 
 /** Rend la fiche en texte : c'est ce que lit un modèle, et une phrase coûte moins qu'un objet. */
@@ -149,7 +156,20 @@ export function createClientKbSurface(deps: ClientKbDeps): ClientKbSurface {
         }
       }
 
-      return { content: [{ type: 'text' as const, text: render(found) }] }
+      // La cascade complète : projet → client → globe → hive, le plus
+      // spécifique gagne. La fiche client seule ne suffisait plus dès lors que
+      // les trois autres cercles existent (Phase 7).
+      const cascade = await rappelerPourProjet(deps.db, deps.projetId ?? null, found.id)
+      const memoire = formaterRappel(cascade)
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: memoire ? `${render(found)}\n\n${memoire}` : render(found),
+          },
+        ],
+      }
     },
   )
 
@@ -183,4 +203,29 @@ export function readPolicyMcp(tools: unknown): string[] {
 /** Vrai quand le rôle a `client_kb` dans sa politique : inutile de construire la surface sinon. */
 export function roleUsesClientKb(tools: unknown): boolean {
   return readPolicyMcp(tools).includes(CLIENT_KB_MCP_SERVER)
+}
+
+/**
+ * Résout les cercles depuis un projet, puis rappelle.
+ *
+ * Le client passé en second est celui que l'agent a demandé par son nom : il
+ * fait foi même sans projet, ce qui permet au communicant — qui travaille sur
+ * un client, pas forcément sur un projet — de consulter quand même.
+ */
+async function rappelerPourProjet(db: Kysely<Database>, projetId: string | null, clientId: string) {
+  if (!projetId) return rappeler(db, { clientId })
+
+  const projet = await db
+    .selectFrom('projects')
+    .select(['id', 'globe_id as globeId', 'client_id as clientId'])
+    .where('id', '=', projetId)
+    .executeTakeFirst()
+  if (!projet) return rappeler(db, { clientId })
+
+  return rappeler(db, {
+    projetId: projet.id,
+    // Le client demandé prime : c'est celui dont l'agent parle.
+    clientId,
+    globeId: projet.globeId,
+  })
 }
