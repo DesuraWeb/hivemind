@@ -3,6 +3,7 @@ import type { Kysely } from 'kysely'
 import { z } from 'zod'
 import { DEFAULT_ANSWER_BASELINE, DEFAULT_STACK_RULES } from '../db/seed'
 import type { Database } from '../db/types'
+import { fusionner, savoirsDeStack } from '../knowledge/stack-rules'
 import { resolveProjectRole } from '../loop/roles'
 import { type ClientRow, clientSummary } from '../loop/steps/framing'
 import { collectStructured } from '../runtime/structured'
@@ -47,15 +48,27 @@ async function loadBaseline(settings: SettingsStore): Promise<string> {
 async function loadStackRules(
   settings: SettingsStore,
   stack: string | null,
+  db?: Kysely<Database>,
 ): Promise<string | null> {
   if (!stack) return null
   const stored = await settings.get<Record<string, string>>('hive.stack_rules')
   const rules = stored && typeof stored === 'object' ? stored : DEFAULT_STACK_RULES
   const haystack = stack.toLowerCase()
+
+  let socle: string | null = null
   for (const [key, value] of Object.entries(rules)) {
-    if (haystack.includes(key)) return value
+    if (haystack.includes(key)) {
+      socle = value
+      break
+    }
   }
-  return null
+
+  // Ce qui a été APPRIS sur cette stack s'ajoute au socle écrit à la main,
+  // sans l'écraser (Phase 7, Task 6). Les deux blocs restent étiquetés : une
+  // règle posée par Florian n'a pas le même poids qu'une observation tirée
+  // d'un run, et les confondre empêcherait de corriger la bonne.
+  if (!db) return socle
+  return fusionner(socle, await savoirsDeStack(db, stack))
 }
 
 export interface OptimizeAnswerInput {
@@ -133,7 +146,7 @@ export async function optimizeAnswer(
 
   const role = await resolveProjectRole(db, project.id, 'majordome')
   const baseline = await loadBaseline(settings)
-  const stackRules = await loadStackRules(settings, project.stack)
+  const stackRules = await loadStackRules(settings, project.stack, db)
 
   const session = await adapter.createSession({
     roleKey: 'majordome',
