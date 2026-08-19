@@ -29,6 +29,7 @@ import type { StepHandler } from '../../jobs/run-step'
 import { type Verdict, collectStructured, verdictSchema } from '../../runtime/structured'
 import type { RuntimeAdapter, ToolPolicy } from '../../runtime/types'
 import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
+import { contredit, raiseJudgeContradiction, readJudgeSummary } from '../judge-contradiction'
 import { resolveProjectRole } from '../roles'
 
 export interface VerdictDeps {
@@ -318,6 +319,19 @@ export function createVerdictHandler(deps: VerdictDeps): StepHandler {
       body: formatVerdict(verdict),
       meta: { decision: verdict.decision, ecarts: verdict.ecarts },
     })
+
+    // Le garant a-t-il validé un travail que le juge n'a validé en rien ?
+    // Constaté sur une vraie boucle : le juge ne voyait qu'un 404, le garant a
+    // lu la source et conclu juste. Bon verdict, juge en panne, panne
+    // invisible. On ne touche pas au verdict — on le rend visible.
+    const resumeJuge = readJudgeSummary(messages)
+    if (contredit(resumeJuge, verdict.decision) && resumeJuge) {
+      await raiseJudgeContradiction(db, {
+        runId,
+        projectId: runRow.projectId,
+        resume: resumeJuge,
+      })
+    }
 
     if (verdict.decision === 'conforme') {
       // Le gate de mise en prod (Phase 5, Task 4), levé EN PARALLÈLE du flux :
