@@ -4,6 +4,7 @@ import type { CercleMemoire, Database } from '../db/types'
 import { type InboxItemRow, createInboxItem } from '../inbox/repo'
 import { appendMessage } from '../loop/bus'
 import type { CandidatSavoir } from '../runtime/structured'
+import { leverConflit, trouverConflit } from './conflict'
 import { type Savoir, archiver } from './store'
 
 /**
@@ -234,6 +235,26 @@ export async function proposerSavoirs(
       continue
     }
     vusDansCeVerdict.add(empreinte)
+
+    // Un savoir ACTIF de même sujet dans le même cercle : ce n'est pas une
+    // proposition ordinaire, c'est une contradiction. Elle part en item de
+    // CONFLIT — l'existant et la proposition côte à côte — plutôt qu'en
+    // validation simple, qui laisserait Florian archiver un second savoir sans
+    // voir qu'il en contredit un premier.
+    const existant = await trouverConflit(db, cible, candidat.sujet)
+    if (existant) {
+      const conflit = await leverConflit(db, {
+        existant,
+        propose: { sujet: candidat.sujet, contenu: candidat.contenu },
+        projectId: ctx.projectId,
+        runId: opts.runId,
+      })
+      ecartes.push({
+        sujet: candidat.sujet,
+        raison: `contredit un savoir actif · item de conflit ${conflit.id}`,
+      })
+      continue
+    }
 
     const item = await createInboxItem(db, {
       type: 'approval',
