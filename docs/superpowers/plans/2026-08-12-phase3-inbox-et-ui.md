@@ -207,3 +207,35 @@ Question posée le 12/08. Réponse courte : c'est la pente naturelle du système
 4. **Plomberie transactionnelle dupliquée** (constat Task 2) : Kysely refuse les transactions imbriquées, donc `resolveInboxItem` ne peut pas appeler `applyEvent`. Il réutilise `decide()` mais duplique l'écriture d'état, des effets et du message d'audit. Le risque de divergence est contenu — le code lève explicitement sur tout effet autre que `clear_resume_state`, donc un changement du domaine casse bruyamment plutôt que silencieusement. Le nettoyage propre (extraire le corps d'`applyEvent` en une fonction prenant un exécuteur, transaction ou non) est à faire quand on retouchera l'orchestrateur, pas avant.
 
 5. **Qui écrit `projects.synth` ?** Hive, mais à quel moment — à chaque transition, ou sur demande ? À trancher avant la Task 4.
+
+### Complément du 15/08 — ce qui va dans le dépôt public
+
+**Un seul dépôt** (tranché par Florian). Deux dépôts synchronisés sont un impôt
+permanent : à chaque commit il faut décider où il va, et ils divergent.
+
+La ligne n'est pas code contre code, c'est **moteur contre savoir**. Le moteur
+est générique et publiable ; ce qui est privé, c'est le savoir de Florian —
+mesuré à ~1,9 Ko dans `db/seed.ts` (`DEFAULT_ANSWER_BASELINE`, les règles par
+stack) plus `alerts@exemple.test` en repli codé en dur à deux endroits. Ça sort
+vers un seed privé, le dépôt public garde un défaut neutre.
+
+**`docs/design/` reste privé.** Vérifié : l'app ne le lit jamais, les
+références sont toutes des commentaires, et `apps/web/src/vendor/` porte déjà
+les cinq moteurs et les tokens nécessaires à l'exécution.
+
+Ce que ça protège n'est PAS la direction artistique — publier le front la
+publie de toute façon. Ça protège deux choses : le contexte métier de
+`CLAUDE.md` (Desura, Marseille, noms de clients, préférences), et le fait que
+les 23 prototypes décrivent des écrans **non construits** qu'un lecteur externe
+prendrait pour des fonctionnalités existantes.
+
+Défaut assumé : les commentaires du code renvoient à des chemins absents du
+dépôt public. Une phrase du README l'explique.
+
+**L'historique est publiable en l'état** : audit complet, aucun secret n'a
+jamais été commité (ni `.env`, ni clé, ni `.pem`). Les seules occurrences de
+`MASTER_KEY` sont le placeholder de `.env.example` et le `sed` de
+`scripts/setup.sh`. Pas de réécriture d'historique nécessaire.
+
+**Publication après le mode production** (tranché) : on pousse un dépôt qui
+tourne ailleurs que sur un Mac en mode développement.
