@@ -160,6 +160,25 @@ export interface SavoirsTable {
   revue_at: Timestamp | null
 }
 
+/**
+ * Emprunt de savoir entre globes (spec §05). Les globes sont étanches par
+ * défaut ; un emprunt est la seule voie, et il passe par l'inbox.
+ */
+export interface EmpruntsSavoirTable {
+  id: Generated<string>
+  globe_emprunteur_id: string
+  globe_preteur_id: string
+  /** Par racine, pas par version : l'emprunt suit les corrections du prêteur. */
+  savoir_racine_id: string
+  /** `lecture` suit le prêteur et meurt avec l'emprunt · `fork` est une copie qui vit sa vie. */
+  mode: 'lecture' | 'fork'
+  etat: Generated<'actif' | 'revoque'>
+  demande_par_run_id: string | null
+  motif: string | null
+  created_at: Generated<Timestamp>
+  revoked_at: Timestamp | null
+}
+
 export interface InboxItemsTable {
   id: Generated<string>
   type: InboxType
@@ -218,6 +237,7 @@ export interface Database {
   messages: MessagesTable
   inbox_items: InboxItemsTable
   savoirs: SavoirsTable
+  emprunts_savoir: EmpruntsSavoirTable
   usage_windows: UsageWindowsTable
   artifacts: ArtifactsTable
   settings: SettingsTable

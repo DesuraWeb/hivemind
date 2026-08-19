@@ -1,5 +1,6 @@
 import { type Kysely, sql } from 'kysely'
 import type { Database } from '../db/types'
+import { savoirsEmpruntes } from './borrow'
 import { type Savoir, actifsDuCercle } from './store'
 
 /**
@@ -31,8 +32,11 @@ export interface ContexteRappel {
 }
 
 export interface SavoirRappele extends Savoir {
-  /** D'où il vient, pour que l'agent sache à quel point il est spécifique. */
-  provenance: 'projet' | 'client' | 'globe' | 'hive'
+  /**
+   * D'où il vient, pour que l'agent sache à quel point il est spécifique.
+   * `emprunt` : il appartient à un AUTRE globe et a été prêté (spec §05).
+   */
+  provenance: 'projet' | 'client' | 'globe' | 'hive' | 'emprunt'
 }
 
 /**
@@ -70,6 +74,19 @@ export async function rappeler(
       if (sujetsCouverts.has(cle)) continue
       sujetsCouverts.add(cle)
       retenus.push({ ...s, provenance: cercle })
+    }
+  }
+
+  // Ce que ce globe voit EN PLUS des siens, par emprunt accordé. Ajouté
+  // APRÈS la cascade : un savoir emprunté ne prime jamais sur un savoir
+  // maison du même sujet — on emprunte ce qu'on n'a pas, pas ce qu'on a déjà
+  // décidé autrement.
+  if (ctx.globeId) {
+    for (const s of await savoirsEmpruntes(db, ctx.globeId)) {
+      const cle = s.sujet.toLowerCase()
+      if (sujetsCouverts.has(cle)) continue
+      sujetsCouverts.add(cle)
+      retenus.push({ ...s, provenance: 'emprunt' })
     }
   }
 
