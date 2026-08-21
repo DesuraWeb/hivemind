@@ -87,6 +87,26 @@ const schema = z.object({
   SESSION_SECRET: z.string().min(1),
   RUNTIME_ADAPTER: z.enum(['claude', 'fake']).default('claude'),
   WORKTREES_ROOT: z.string().default('./worktrees'),
+  /**
+   * Combien de boucles peuvent avancer EN MÊME TEMPS sur cette machine.
+   *
+   * Jusqu'ici : une seule, et jamais par décision — c'était le défaut de
+   * pg-boss (`localConcurrency: 1`), personne ne l'avait choisi. Une file
+   * d'attente d'un projet derrière l'autre, sur une machine qui ne travaille
+   * qu'à quelques pourcents.
+   *
+   * Trois, mesuré et pas deviné. Sur le serveur de Florian : 8,3 Go de RAM
+   * libre, un agent en vaut ~285 Mo (Node + Chromium quand le juge capture),
+   * et surtout AUCUN swap. Sans swap, dépasser la RAM ne ralentit pas la
+   * machine, l'OOM killer tue un process au hasard — un run à moitié fait, un
+   * worktree resté en place. Trois laisse une marge que la mesure justifie ;
+   * au-delà, il faut d'abord ajouter du swap.
+   *
+   * Par machine, donc par variable d'environnement et pas par réglage en base :
+   * le portable de développement et le VPS n'ont pas la même RAM, et un
+   * réglage partagé leur imposerait le même chiffre.
+   */
+  LOOP_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(3),
   ARTIFACTS_ROOT: z.string().default('./artifacts'),
   MAIL_DRY_RUN: z.coerce.number().default(1),
   PROD_DISPATCH_DRY_RUN: z.coerce.number().default(1),

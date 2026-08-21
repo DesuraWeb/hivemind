@@ -4,6 +4,8 @@ import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 
+import { withRepoLock } from './lock'
+
 const run = promisify(execFile)
 
 export interface EnsureProjectRepoOptions {
@@ -38,12 +40,17 @@ export async function ensureProjectRepo(opts: EnsureProjectRepoOptions): Promise
   const { worktreesRoot, projectSlug, remoteUrl } = opts
   const repoPath = projectRepoPath(worktreesRoot, projectSlug)
 
-  if (existsSync(join(repoPath, '.git'))) {
-    await run('git', ['fetch', '--all', '--prune'], { cwd: repoPath })
-    return repoPath
-  }
+  // Sérialisé par dépôt (`git/lock.ts`) : deux runs du même projet démarrant
+  // ensemble verraient tous les deux un clone absent et lanceraient deux
+  // `git clone` vers le même chemin.
+  return withRepoLock(repoPath, async () => {
+    if (existsSync(join(repoPath, '.git'))) {
+      await run('git', ['fetch', '--all', '--prune'], { cwd: repoPath })
+      return repoPath
+    }
 
-  await mkdir(dirname(repoPath), { recursive: true })
-  await run('git', ['clone', remoteUrl, repoPath])
-  return repoPath
+    await mkdir(dirname(repoPath), { recursive: true })
+    await run('git', ['clone', remoteUrl, repoPath])
+    return repoPath
+  })
 }

@@ -102,13 +102,31 @@ export async function registerRunStepWorker(
   boss: PgBoss,
   db: Kysely<Database>,
   registry: StepRegistry,
+  /**
+   * Combien de boucles avancent en même temps (`LOOP_CONCURRENCY`, env.ts).
+   *
+   * `localConcurrency` fait tourner N workers indépendants sur la même file :
+   * chacun récupère son job, l'exécute, et échoue tout seul. C'est la
+   * différence avec `batchSize`, qui remettrait N jobs au MÊME appel — une
+   * seule exception ferait alors échouer les N runs du lot, dont ceux qui
+   * n'avaient rien fait de mal.
+   *
+   * Le défaut reste 1 pour les appelants qui ne se prononcent pas (tests,
+   * scripts) : leur faire hériter d'un parallélisme qu'ils n'ont pas demandé
+   * changerait l'ordre d'exécution sous leurs pieds.
+   */
+  concurrency = 1,
 ): Promise<void> {
-  await boss.work<RunStepJobData>(RUN_STEP_QUEUE, async (jobs) => {
-    for (const job of jobs) {
-      const result = await stepOnce(db, registry, job.data.runId)
-      if (result.requeue) {
-        await boss.send(RUN_STEP_QUEUE, { runId: job.data.runId } satisfies RunStepJobData)
+  await boss.work<RunStepJobData>(
+    RUN_STEP_QUEUE,
+    { localConcurrency: concurrency },
+    async (jobs) => {
+      for (const job of jobs) {
+        const result = await stepOnce(db, registry, job.data.runId)
+        if (result.requeue) {
+          await boss.send(RUN_STEP_QUEUE, { runId: job.data.runId } satisfies RunStepJobData)
+        }
       }
-    }
-  })
+    },
+  )
 }

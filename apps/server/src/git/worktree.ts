@@ -3,6 +3,8 @@ import { rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 
+import { withRepoLock } from './lock'
+
 const run = promisify(execFile)
 
 /**
@@ -56,22 +58,24 @@ async function branchExists(repoPath: string, branch: string): Promise<boolean> 
  * créée depuis la branche par défaut du dépôt.
  */
 export async function addRunWorktree(repoPath: string, runId: string): Promise<string> {
-  const worktreePath = runWorktreePath(repoPath, runId)
-  const branch = runBranch(runId)
+  return withRepoLock(repoPath, async () => {
+    const worktreePath = runWorktreePath(repoPath, runId)
+    const branch = runBranch(runId)
 
-  await run('git', ['worktree', 'prune'], { cwd: repoPath })
+    await run('git', ['worktree', 'prune'], { cwd: repoPath })
 
-  if (await branchExists(repoPath, branch)) {
-    await run('git', ['worktree', 'add', worktreePath, branch], { cwd: repoPath })
-  } else {
-    const { stdout } = await run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoPath })
-    const defaultBranch = stdout.trim()
-    await run('git', ['worktree', 'add', '-b', branch, worktreePath, defaultBranch], {
-      cwd: repoPath,
-    })
-  }
+    if (await branchExists(repoPath, branch)) {
+      await run('git', ['worktree', 'add', worktreePath, branch], { cwd: repoPath })
+    } else {
+      const { stdout } = await run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoPath })
+      const defaultBranch = stdout.trim()
+      await run('git', ['worktree', 'add', '-b', branch, worktreePath, defaultBranch], {
+        cwd: repoPath,
+      })
+    }
 
-  return worktreePath
+    return worktreePath
+  })
 }
 
 async function pathIsDirectory(path: string): Promise<boolean> {
@@ -108,18 +112,20 @@ export async function ensureRunWorktree(repoPath: string, runId: string): Promis
  * n'a pas à savoir si le nettoyage a déjà eu lieu.
  */
 export async function removeRunWorktree(repoPath: string, runId: string): Promise<void> {
-  const worktreePath = runWorktreePath(repoPath, runId)
+  return withRepoLock(repoPath, async () => {
+    const worktreePath = runWorktreePath(repoPath, runId)
 
-  try {
-    await run('git', ['worktree', 'remove', '--force', worktreePath], { cwd: repoPath })
-  } catch {
-    // Rien à retirer administrativement (déjà supprimé, ou jamais créé) :
-    // ce n'est pas une erreur, `rm` et `prune` ci-dessous suffisent à finir
-    // le nettoyage dans tous les cas.
-  }
+    try {
+      await run('git', ['worktree', 'remove', '--force', worktreePath], { cwd: repoPath })
+    } catch {
+      // Rien à retirer administrativement (déjà supprimé, ou jamais créé) :
+      // ce n'est pas une erreur, `rm` et `prune` ci-dessous suffisent à finir
+      // le nettoyage dans tous les cas.
+    }
 
-  await rm(worktreePath, { recursive: true, force: true })
-  await run('git', ['worktree', 'prune'], { cwd: repoPath })
+    await rm(worktreePath, { recursive: true, force: true })
+    await run('git', ['worktree', 'prune'], { cwd: repoPath })
+  })
 }
 
 /**
@@ -134,15 +140,17 @@ export async function removeRunWorktree(repoPath: string, runId: string): Promis
  * `fetch` à chaque réutilisation) : `origin/run/<id>` doit déjà exister.
  */
 export async function addReviewWorktree(repoPath: string, runId: string): Promise<string> {
-  const worktreePath = reviewWorktreePath(repoPath, runId)
-  const branch = runBranch(runId)
+  return withRepoLock(repoPath, async () => {
+    const worktreePath = reviewWorktreePath(repoPath, runId)
+    const branch = runBranch(runId)
 
-  await run('git', ['worktree', 'prune'], { cwd: repoPath })
-  await run('git', ['worktree', 'add', '--detach', worktreePath, `origin/${branch}`], {
-    cwd: repoPath,
+    await run('git', ['worktree', 'prune'], { cwd: repoPath })
+    await run('git', ['worktree', 'add', '--detach', worktreePath, `origin/${branch}`], {
+      cwd: repoPath,
+    })
+
+    return worktreePath
   })
-
-  return worktreePath
 }
 
 /**
@@ -152,15 +160,17 @@ export async function addReviewWorktree(repoPath: string, runId: string): Promis
  * précédent a été interrompu en cours de revue.
  */
 export async function removeReviewWorktree(repoPath: string, runId: string): Promise<void> {
-  const worktreePath = reviewWorktreePath(repoPath, runId)
+  return withRepoLock(repoPath, async () => {
+    const worktreePath = reviewWorktreePath(repoPath, runId)
 
-  try {
-    await run('git', ['worktree', 'remove', '--force', worktreePath], { cwd: repoPath })
-  } catch {
-    // Idem removeRunWorktree : rien à retirer administrativement n'est pas
-    // une erreur, rm + prune ci-dessous suffisent dans tous les cas.
-  }
+    try {
+      await run('git', ['worktree', 'remove', '--force', worktreePath], { cwd: repoPath })
+    } catch {
+      // Idem removeRunWorktree : rien à retirer administrativement n'est pas
+      // une erreur, rm + prune ci-dessous suffisent dans tous les cas.
+    }
 
-  await rm(worktreePath, { recursive: true, force: true })
-  await run('git', ['worktree', 'prune'], { cwd: repoPath })
+    await rm(worktreePath, { recursive: true, force: true })
+    await run('git', ['worktree', 'prune'], { cwd: repoPath })
+  })
 }

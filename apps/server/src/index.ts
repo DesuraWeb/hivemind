@@ -43,6 +43,7 @@ await startBoss(boss, {
   mailer,
   alertTo,
   settings,
+  loopConcurrency: env.LOOP_CONCURRENCY,
   // De quoi rédiger, pour le worker `communicant.draft` : la surface de
   // brouillon, jamais celle d'envoi.
   gmailDrafts: createLazyGmailDrafts(settings),

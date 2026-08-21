@@ -48,6 +48,12 @@ export interface BossDeps {
    */
   stepRegistry?: StepRegistry
   /**
+   * Boucles simultanées autorisées sur cette machine (`LOOP_CONCURRENCY`).
+   * Omis, une seule — ce que gardent les tests, dont plusieurs comptent sur
+   * un ordre d'exécution déterministe.
+   */
+  loopConcurrency?: number
+  /**
    * Réglages lus par la sonde de budget (seuils, péremption). Typé au plus
    * étroit — `SettingsStore` le satisfait structurellement : pg-boss n'a
    * besoin que de lire des clés publiques, jamais des secrets.
@@ -82,7 +88,7 @@ export async function startBoss(boss: PgBoss, deps: BossDeps): Promise<void> {
   await boss.start()
 
   await boss.createQueue(RUN_STEP_QUEUE)
-  await registerRunStepWorker(boss, deps.db, deps.stepRegistry ?? {})
+  await registerRunStepWorker(boss, deps.db, deps.stepRegistry ?? {}, deps.loopConcurrency ?? 1)
 
   await boss.createQueue(AUTH_HEALTHCHECK_QUEUE)
   await boss.work(AUTH_HEALTHCHECK_QUEUE, async () => {
