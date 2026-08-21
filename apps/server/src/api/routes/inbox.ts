@@ -4,11 +4,13 @@ import type { Kysely } from 'kysely'
 import type { PgBoss } from 'pg-boss'
 import { z } from 'zod'
 import { sendApprovedClientEmail } from '../../communication/client-email'
+import { sujetDepuisProd } from '../../communication/invoke'
 import type { Database } from '../../db/types'
 import { optimizeAnswer } from '../../inbox/optimize'
 import { type InboxItemRow, createInboxItem, getInboxItem, listInbox } from '../../inbox/repo'
 import { type InboxResponse, resolveInboxItem } from '../../inbox/resolve'
 import type { GmailSendPort } from '../../integrations/gmail'
+import { COMMUNICANT_QUEUE, type CommunicantJobData } from '../../jobs/communicant'
 import { archiverSavoirApprouve } from '../../knowledge/propose'
 import type { RuntimeAdapter } from '../../runtime/types'
 import type { SettingsStore } from '../../settings/store'
@@ -178,6 +180,51 @@ async function archiveSavoirOrAlert(
   }
 }
 
+/**
+ * Suite serveur d'une mise en prod approuvée : faire proposer au communicant
+ * un email au client (Phase 5, Task 5 · câblé pour de bon).
+ *
+ * Le communicant savait rédiger depuis la Phase 5 et personne ne l'appelait
+ * jamais. C'est ici qu'il est réveillé, parce que c'est ici — et nulle part
+ * ailleurs dans la boucle — que quelque chose change du point de vue du
+ * client (voir `communication/invoke.ts` pour l'arbitrage complet).
+ *
+ * Enfilé, pas exécuté : la rédaction est un échange modèle complet, et
+ * Florian vient seulement de cliquer « approuver ». Le faire attendre
+ * plusieurs dizaines de secondes derrière un brouillon qu'il n'a pas demandé
+ * serait une punition pour avoir validé une mise en ligne.
+ *
+ * L'échec d'enfilage ne fait pas échouer la requête, et ne lève PAS d'alerte
+ * en inbox, contrairement aux deux suites ci-dessus. La différence est
+ * réelle : un email approuvé qui ne part pas et un savoir validé qui n'entre
+ * pas en mémoire sont des pertes — un humain avait décidé, sa décision a
+ * disparu. Ici personne n'a rien décidé encore : c'est une proposition qui
+ * n'a pas abouti. La tracer en inbox ajouterait du bruit à l'endroit exact
+ * que ce projet existe pour désencombrer. Elle est journalisée, et Florian
+ * garde la route à la demande.
+ */
+async function enqueueClientEmailDraft(
+  deps: InboxRoutesDeps,
+  item: InboxItemRow,
+  log: FastifyBaseLogger,
+): Promise<boolean> {
+  if (item.type !== 'approval' || item.subtype !== 'prod') return false
+  if (item.humanResponse?.approved !== true) return false
+  if (!item.projectId) return false
+
+  try {
+    await deps.boss.send(COMMUNICANT_QUEUE, {
+      projectId: item.projectId,
+      runId: item.runId,
+      sujet: sujetDepuisProd(item.title, item.payload),
+    } satisfies CommunicantJobData)
+    return true
+  } catch (err) {
+    log.error({ err, itemId: item.id }, 'mise en file de la rédaction client échouée')
+    return false
+  }
+}
+
 export async function inboxRoutes(app: FastifyInstance, deps: InboxRoutesDeps): Promise<void> {
   app.get('/api/inbox', { preHandler: app.requireAuth }, async (req, reply) => {
     const parsed = listQuery.safeParse(req.query)
@@ -232,11 +279,13 @@ export async function inboxRoutes(app: FastifyInstance, deps: InboxRoutesDeps): 
         : null
       const emailSent = await sendApprovedEmailOrAlert(deps, result.item, req.log)
       const savoirArchived = await archiveSavoirOrAlert(deps, result.item, req.log)
+      const emailDraftQueued = await enqueueClientEmailDraft(deps, result.item, req.log)
       return {
         item: toApiItem(result.item, slug),
         runResumed: result.runResumed,
         emailSent,
         savoirArchived,
+        emailDraftQueued,
       }
     } catch (err) {
       // `resolve.ts` (Task 2, non modifié ici) n'expose que des `Error`

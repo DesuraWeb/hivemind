@@ -422,6 +422,22 @@ export const api = {
       request<StepView[]>('GET', `/api/projects/${encodeURIComponent(id)}/steps`),
     runs: (id: string) => request<RunView[]>('GET', `/api/projects/${encodeURIComponent(id)}/runs`),
     /**
+     * Fait rédiger au communicant un brouillon d'email client, à la demande.
+     *
+     * On envoie le SUJET, pas le texte : le communicant va lire la fiche
+     * client, en applique le ton et évite de redemander ce qui a déjà été
+     * répondu. Dicter le contenu en ferait un correcteur orthographique.
+     *
+     * Un vrai échange modèle par appel, donc jamais déclenché autrement que
+     * par un clic explicite — même règle que `inbox.optimize`.
+     */
+    communicant: (id: string, sujet: string) =>
+      request<{ inboxItemId: string | null; raison?: string }>(
+        'POST',
+        `/api/projects/${encodeURIComponent(id)}/communicant`,
+        { sujet },
+      ),
+    /**
      * Crée un projet et ses steps · rien d'autre. Aucun dépôt GitHub n'est
      * créé, aucun staging n'est provisionné, aucun accès n'est déposé dans le
      * coffre (cf. `apps/server/src/projects/create.ts`) : l'écran de création

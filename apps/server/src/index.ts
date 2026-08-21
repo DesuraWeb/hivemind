@@ -2,6 +2,7 @@ import { buildApp } from './app'
 import { createSecretBox } from './crypto/secrets'
 import { getDb } from './db/client'
 import { DEFAULT_ALERT_EMAIL, loadEnv } from './env'
+import { createLazyGmailDrafts } from './integrations/gmail'
 import { createMailer } from './integrations/mailer'
 import { closeBrowser } from './integrations/playwright'
 import { createBoss, startBoss } from './jobs/boss'
@@ -42,6 +43,9 @@ await startBoss(boss, {
   mailer,
   alertTo,
   settings,
+  // De quoi rédiger, pour le worker `communicant.draft` : la surface de
+  // brouillon, jamais celle d'envoi.
+  gmailDrafts: createLazyGmailDrafts(settings),
   stepRegistry: createStepRegistry({
     adapter,
     worktreesRoot: env.WORKTREES_ROOT,

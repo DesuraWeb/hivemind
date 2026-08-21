@@ -421,6 +421,27 @@ export async function createGmailAccount(settings: SettingsStore): Promise<Gmail
 }
 
 /**
+ * Port de BROUILLON qui ne lit le coffre qu'à la première rédaction.
+ *
+ * Même paresse, même raison que `createLazyGmailSender` juste en dessous : le
+ * boot du serveur ne doit pas dépendre de l'état du schéma. Les deux ports
+ * restent deux objets distincts et ne partagent pas leur compte mémorisé —
+ * c'est volontaire : ce qu'on remet à un agent (celui-ci) et ce qu'on garde
+ * pour le chemin serveur post-validation (l'autre) ne doivent jamais être la
+ * même référence, sans quoi un `as` malheureux suffirait à passer de l'un à
+ * l'autre.
+ */
+export function createLazyGmailDrafts(settings: SettingsStore): GmailDraftPort {
+  let account: Promise<GmailAccount> | null = null
+  return {
+    async createDraft(draft) {
+      account ??= createGmailAccount(settings)
+      return (await account).drafts.createDraft(draft)
+    },
+  }
+}
+
+/**
  * Port d'envoi qui ne lit le coffre qu'au premier envoi réel.
  *
  * Construire le compte au démarrage ferait dépendre le boot du serveur de

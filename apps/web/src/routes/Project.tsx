@@ -3,6 +3,7 @@ import { Link, useParams } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { badgeFor } from '../components/dashboard/loop'
 import { SEM } from '../components/inbox/constants'
+import { ClientEmail } from '../components/project/ClientEmail'
 import { RunsList } from '../components/project/RunsList'
 import { StepList } from '../components/project/StepList'
 import { StepTimeline } from '../components/project/StepTimeline'
@@ -444,6 +445,11 @@ export function Project() {
                 )}
               </div>
             </div>
+
+            {/* Le communicant travaille tout seul quand une mise en prod est
+                approuvée. Le reste du temps — une relance, un devis, une
+                mauvaise nouvelle — c'est d'ici qu'on le réveille. */}
+            <ClientEmail projectId={projectId} />
 
             {/* Le pack ajoute « budget projet 3 % de la fenêtre 7 j » : le suivi
                 budgétaire par projet n'est pas exposé cette phase, on s'arrête

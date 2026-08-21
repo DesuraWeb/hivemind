@@ -6,6 +6,7 @@ import { analyticsRoutes } from './api/routes/analytics'
 import { authRoutes } from './api/routes/auth'
 import { budgetRoutes } from './api/routes/budget'
 import { clientsRoutes } from './api/routes/clients'
+import { communicationRoutes } from './api/routes/communication'
 import { globesRoutes } from './api/routes/globes'
 import { healthRoutes } from './api/routes/health'
 import { hiveRoutes } from './api/routes/hive'
@@ -21,7 +22,12 @@ import { registerSession } from './auth/session'
 import { createSecretBox } from './crypto/secrets'
 import type { Database } from './db/types'
 import { DEFAULT_ALERT_EMAIL, fromRepoRoot, loadEnv } from './env'
-import { type GmailSendPort, createLazyGmailSender } from './integrations/gmail'
+import {
+  type GmailDraftPort,
+  type GmailSendPort,
+  createLazyGmailDrafts,
+  createLazyGmailSender,
+} from './integrations/gmail'
 import { type Mailer, createMailer } from './integrations/mailer'
 import { createBoss } from './jobs/boss'
 import { createRuntimeAdapter } from './runtime/index'
@@ -61,6 +67,11 @@ export interface AppDeps {
    * observer ce qui aurait été envoyé.
    */
   gmailSender?: GmailSendPort
+  /**
+   * Port de rédaction du communicant. Séparé de `gmailSender` jusque dans les
+   * dépendances de l'application : c'est le seul des deux qu'un agent touche.
+   */
+  gmailDrafts?: GmailDraftPort
 }
 
 /** Construit l'instance Fastify sans l'écouter — utilisable tel quel en test. */
@@ -72,6 +83,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const mailer = deps.mailer ?? createMailer(env)
   const boss = deps.boss ?? createBoss(env)
   const gmailSender = deps.gmailSender ?? createLazyGmailSender(settings)
+  const gmailDrafts = deps.gmailDrafts ?? createLazyGmailDrafts(settings)
 
   await registerSession(app, { db: deps.db, secret: env.SESSION_SECRET })
   await app.register(healthRoutes, {
@@ -89,6 +101,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(globesRoutes, { db: deps.db })
   await app.register(budgetRoutes, { db: deps.db, settings, adapter, boss })
   await app.register(clientsRoutes, { db: deps.db })
+  await app.register(communicationRoutes, { db: deps.db, adapter, gmailDrafts })
   await app.register(rolesRoutes, { db: deps.db, settings })
   await app.register(analyticsRoutes, { db: deps.db, settings })
   await app.register(runsRoutes, { db: deps.db, boss })

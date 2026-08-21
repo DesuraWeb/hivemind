@@ -4,8 +4,10 @@ import { type BudgetSettingsSource, runBudgetTick } from '../budget/scheduler'
 import type { Database } from '../db/types'
 import { type Env, databaseUrl } from '../env'
 import { runAuthHealthcheck } from '../health/auth-check'
+import type { GmailDraftPort } from '../integrations/gmail'
 import type { Mailer } from '../integrations/mailer'
 import type { RuntimeAdapter } from '../runtime/types'
+import { COMMUNICANT_QUEUE, registerCommunicantWorker } from './communicant'
 import {
   RUN_STEP_QUEUE,
   type RunStepJobData,
@@ -51,6 +53,13 @@ export interface BossDeps {
    * besoin que de lire des clés publiques, jamais des secrets.
    */
   settings: BudgetSettingsSource
+  /**
+   * Surface de rédaction du communicant. Omise, la queue existe quand même
+   * mais sans worker : les jobs s'accumulent au lieu d'échouer, et un
+   * redémarrage avec la dépendance les rattrape. C'est ce que gardent les
+   * tests qui n'exercent pas la rédaction.
+   */
+  gmailDrafts?: GmailDraftPort
 }
 
 /**
@@ -103,4 +112,17 @@ export async function startBoss(boss: PgBoss, deps: BossDeps): Promise<void> {
     })
   })
   await boss.schedule(BUDGET_PROBE_QUEUE, BUDGET_PROBE_CRON)
+
+  // La queue est créée dans tous les cas : `api/routes/inbox.ts` y envoie un
+  // job à chaque mise en prod approuvée, et `boss.send` sur une queue
+  // inexistante lève. Le worker, lui, n'existe que si de quoi rédiger a été
+  // fourni.
+  await boss.createQueue(COMMUNICANT_QUEUE)
+  if (deps.gmailDrafts) {
+    await registerCommunicantWorker(boss, {
+      db: deps.db,
+      adapter: deps.adapter,
+      drafts: deps.gmailDrafts,
+    })
+  }
 }
