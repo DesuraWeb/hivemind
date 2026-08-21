@@ -7,6 +7,7 @@ import { EmailApprovalPanel } from './panels/EmailApprovalPanel'
 import { GenericApprovalPanel } from './panels/GenericApprovalPanel'
 import { ProdApprovalPanel } from './panels/ProdApprovalPanel'
 import { QuestionPanel } from './panels/QuestionPanel'
+import { RevuePanel } from './panels/RevuePanel'
 import { SavoirPanel } from './panels/SavoirPanel'
 import { VerdictPanel } from './panels/VerdictPanel'
 import type { PanelProps } from './panels/types'
@@ -16,13 +17,17 @@ import type { PanelProps } from './panels/types'
  * 1px solid var(--line)`) le sépare de la liste — jamais de panneau de verre
  * (CLAUDE.md : « panneau de traitement transparent »). Dispatche vers l'un
  * des 5 panneaux typés (question, approval·email, approval·prod, verdict,
- * alert) + l'affordance approval·savoir (jamais alimentée) + un repli
+ * alert) + le rappel de revue (info·revue) + l'affordance approval·savoir (jamais alimentée) + un repli
  * générique pour les autres sous-types d'approbation.
  */
 export function pickPanel(item: InboxItemView): (props: PanelProps) => ReactElement {
   if (item.type === 'question') return QuestionPanel
   if (item.type === 'verdict') return VerdictPanel
   if (item.type === 'alert') return AlertPanel
+  // Le rappel de revue des savoirs : un `info`, pas une décision. Sans cette
+  // ligne il tomberait dans le repli générique, qui propose approuver/refuser
+  // sur un item qui ne demande ni l'un ni l'autre.
+  if (item.type === 'info' && item.sub === 'revue') return RevuePanel
   if (item.type === 'approval') {
     if (item.sub === 'email') return EmailApprovalPanel
     if (item.sub === 'prod') return ProdApprovalPanel

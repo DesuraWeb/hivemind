@@ -6,6 +6,7 @@ import { type Env, databaseUrl } from '../env'
 import { runAuthHealthcheck } from '../health/auth-check'
 import type { GmailDraftPort } from '../integrations/gmail'
 import type { Mailer } from '../integrations/mailer'
+import { rappelerRevue } from '../knowledge/revue-notif'
 import type { RuntimeAdapter } from '../runtime/types'
 import { COMMUNICANT_QUEUE, registerCommunicantWorker } from './communicant'
 import {
@@ -21,6 +22,22 @@ const AUTH_HEALTHCHECK_CRON = '*/15 * * * *'
 
 /** La sonde de budget (Phase 5, Task 2). */
 export const BUDGET_PROBE_QUEUE = 'budget.probe'
+
+/** Le rappel de revue des savoirs (Phase 7 · le chaînon qui manquait). */
+export const REVUE_RAPPEL_QUEUE = 'savoirs.rappel'
+/**
+ * Tous les lundis à 8 h.
+ *
+ * Le rythme de la REVUE est trimestriel (`PERIODE_REVUE_JOURS`), pas celui du
+ * rappel : ce cron ne décide de rien, il pose la question. C'est
+ * `deciderRappelRevue` qui refuse de parler quand la file n'a pas grandi et
+ * que le dernier rappel a moins d'un mois — vérifier plus souvent ne peut donc
+ * pas produire plus de bruit, seulement moins de retard.
+ *
+ * Lundi matin parce que le rappel atterrit dans l'inbox, et que l'inbox se lit
+ * au brief du matin. Le samedi, il attendrait deux jours en tête de liste.
+ */
+const REVUE_RAPPEL_CRON = '0 8 * * 1'
 /**
  * Toutes les 5 minutes. La mesure est gratuite (`runtime/usage.ts`), donc la
  * fréquence n'arbitre pas un coût en tokens — seulement un appel réseau d'une
@@ -123,6 +140,12 @@ export async function startBoss(boss: PgBoss, deps: BossDeps): Promise<void> {
   // job à chaque mise en prod approuvée, et `boss.send` sur une queue
   // inexistante lève. Le worker, lui, n'existe que si de quoi rédiger a été
   // fourni.
+  await boss.createQueue(REVUE_RAPPEL_QUEUE)
+  await boss.work(REVUE_RAPPEL_QUEUE, async () => {
+    await rappelerRevue(deps.db)
+  })
+  await boss.schedule(REVUE_RAPPEL_QUEUE, REVUE_RAPPEL_CRON)
+
   await boss.createQueue(COMMUNICANT_QUEUE)
   if (deps.gmailDrafts) {
     await registerCommunicantWorker(boss, {

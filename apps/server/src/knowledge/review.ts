@@ -31,11 +31,13 @@ import { archiverDefinitivement } from './store'
  *
  * ## Ce que ce module ne fait PAS
  *
- * Il ne planifie rien et ne prévient personne. Le pack parle d'une revue
- * trimestrielle annoncée dans le brief du matin : aucun job ne la déclenche
- * aujourd'hui, et l'écran ne doit donc pas l'annoncer. `PERIODE_REVUE_JOURS`
- * n'est pas une échéance, c'est la durée pendant laquelle un savoir confirmé
- * reste hors de la file.
+ * Il ne planifie rien et ne prévient personne — c'est le travail de
+ * `revue-notif.ts`, qui calcule cette file toutes les semaines et lève un
+ * rappel en inbox quand il y a une raison de parler. Ce module-ci reste un
+ * calcul sur l'état de la base, sans horloge et sans effet de bord.
+ *
+ * `PERIODE_REVUE_JOURS` n'est toujours pas une échéance : c'est la durée
+ * pendant laquelle un savoir confirmé reste hors de la file.
  */
 
 /** Un trimestre. Durée pendant laquelle un savoir confirmé sort de la file. */

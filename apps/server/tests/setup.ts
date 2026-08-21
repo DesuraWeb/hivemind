@@ -65,11 +65,22 @@ beforeAll(async () => {
   // On vide les jobs plutôt que de détruire le schéma : le recréer à chaque
   // fichier coûterait plusieurs secondes × 50. `to_regclass` évite d'échouer
   // au tout premier passage, quand le schéma n'existe pas encore.
+  //
+  // Les PLANIFICATIONS aussi, et pour une raison pire : elles ne sont pas
+  // consommées, elles FABRIQUENT des jobs toutes les cinq minutes
+  // (`budget.probe`) ou tous les quarts d'heure (`auth.healthcheck`), dès
+  // qu'un fichier de test a démarré un boss une seule fois. Le job naît
+  // ensuite contre un schéma `public` que le fichier suivant vient de
+  // détruire, et l'échec tombe sur un test qui n'a rien à voir. Les recréer ne
+  // coûte rien : `boss.schedule` est un upsert, `startBoss` les repose.
   await client.query(`
     do $$
     begin
       if to_regclass('pgboss.job') is not null then
         delete from pgboss.job;
+      end if;
+      if to_regclass('pgboss.schedule') is not null then
+        delete from pgboss.schedule;
       end if;
     end $$;
   `)
@@ -80,12 +91,16 @@ afterAll(async () => {
   try {
     // Purge AUSSI à la sortie, avant de rendre le verrou : un fichier ne doit
     // rien laisser derrière lui. Un job `created` oublié est repris par le
-    // worker du fichier suivant, contre un schéma `public` déjà détruit.
+    // worker du fichier suivant, contre un schéma `public` déjà détruit — et
+    // une planification oubliée en fabrique de nouveaux toute seule.
     await client.query(`
       do $$
       begin
         if to_regclass('pgboss.job') is not null then
           delete from pgboss.job;
+        end if;
+        if to_regclass('pgboss.schedule') is not null then
+          delete from pgboss.schedule;
         end if;
       end $$;
     `)
