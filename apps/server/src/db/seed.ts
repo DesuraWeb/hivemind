@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { ROLE_KEYS, type RoleKey } from '@silithid/shared'
 import type { Kysely } from 'kysely'
 import { BUDGET_SETTINGS_KEYS, DEFAULT_BUDGET_THRESHOLDS } from '../budget/scheduler'
+import { RECETTES_GENERIQUES, STACK_RECIPES_SETTINGS_KEY } from '../ops/recipes'
 import { DEFAULT_GUARDED_PATHS, GUARDED_PATHS_SETTINGS_KEY } from '../security/guarded-paths'
 import { DEFAULT_ANSWER_BASELINE, DEFAULT_STACK_RULES } from './seeds/baseline'
 import type { Database } from './types'
@@ -77,6 +78,16 @@ export async function seedDefaultSettings(db: Kysely<Database>): Promise<void> {
   await db
     .insertInto('settings')
     .values({ key: 'hive.stack_rules', value: JSON.stringify(DEFAULT_STACK_RULES) })
+    .onConflict((oc) => oc.column('key').doNothing())
+    .execute()
+
+  // Les recettes de déploiement par stack (Phase 6, Task 7). `doNothing` sur
+  // conflit, comme les autres : une recette enrichie par l'expérience ne doit
+  // pas être réécrite par un `pnpm db:seed`. C'est tout l'intérêt — le premier
+  // déploiement d'une stack et le quinzième ne doivent pas être le même.
+  await db
+    .insertInto('settings')
+    .values({ key: STACK_RECIPES_SETTINGS_KEY, value: JSON.stringify(RECETTES_GENERIQUES) })
     .onConflict((oc) => oc.column('key').doNothing())
     .execute()
 
