@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import type { DomaineSavoir } from '@silithid/shared'
 import type { Kysely } from 'kysely'
 import type { CercleMemoire, Database } from '../db/types'
 
@@ -34,6 +35,8 @@ export interface Savoir {
   sujet: string
   contenu: string
   stack: string | null
+  /** `code` (dev, garant) ou `exploitation` (agent ops). Voir migration 0012. */
+  domaine: DomaineSavoir
   rappels: number
   createdAt: Date
 }
@@ -48,6 +51,12 @@ export interface ArchiverInput extends CercleRef {
   sujet: string
   contenu: string
   stack?: string | null
+  /**
+   * Omis, `code` — le défaut de la colonne, et le bon : tous les savoirs qui
+   * existaient avant la Phase 6 viennent du garant. Un savoir dont personne
+   * n'a déclaré le domaine appartient au flux qui existait déjà.
+   */
+  domaine?: DomaineSavoir
   origineRunId?: string | null
   origineItemId?: string | null
 }
@@ -61,6 +70,7 @@ function ligneVersSavoir(r: {
   sujet: string
   contenu: string
   stack: string | null
+  domaine: DomaineSavoir
   rappels: number
   created_at: unknown
 }): Savoir {
@@ -73,6 +83,7 @@ function ligneVersSavoir(r: {
     sujet: r.sujet,
     contenu: r.contenu,
     stack: r.stack,
+    domaine: r.domaine,
     rappels: r.rappels,
     createdAt: new Date(r.created_at as string),
   }
@@ -87,6 +98,7 @@ const COLONNES = [
   'sujet',
   'contenu',
   'stack',
+  'domaine',
   'rappels',
   'created_at',
 ] as const
@@ -102,6 +114,7 @@ export async function archiver(db: Kysely<Database>, input: ArchiverInput): Prom
       sujet: input.sujet.trim(),
       contenu: input.contenu.trim(),
       stack: input.stack ?? null,
+      ...(input.domaine ? { domaine: input.domaine } : {}),
       origine_run_id: input.origineRunId ?? null,
       origine_item_id: input.origineItemId ?? null,
     })

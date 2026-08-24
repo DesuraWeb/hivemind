@@ -1,5 +1,6 @@
 import type { Kysely } from 'kysely'
 import type { Database } from '../db/types'
+import { savoirsDeStack } from '../knowledge/stack-rules'
 import { estAuCatalogue } from './operations'
 
 /**
@@ -32,13 +33,18 @@ import { estAuCatalogue } from './operations'
  * une étape qui disparaît sans bruit d'une recette de déploiement, c'est un
  * site livré sans son `robots.txt` et personne pour s'en apercevoir.
  *
- * ## Ce que ce module ne fait PAS
+ * ## Une recette a deux moitiés, et elles n'apprennent PAS pareil
  *
- * Il ne remplit pas les recettes. Trois sources devraient y remonter — ce que
- * le juge a trouvé, ce que Florian a corrigé en validant, ce qui a cassé après
- * coup — et cette consolidation appartient à la conscience collective, pas
- * ici. Ce fichier pose la structure de destination et le point d'écriture,
- * jamais l'intelligence qui les alimente.
+ * - Les **rappels** sont du texte. Ils informent, ils ne donnent aucun droit.
+ *   Ils s'accumulent donc tout seuls, depuis les savoirs validés du domaine
+ *   `exploitation` (`ops/apprendre.ts`) — et ils ne sont pas STOCKÉS dans la
+ *   recette : ils sont lus à chaque fois depuis `savoirs`. Recopier une source
+ *   de vérité, c'est en créer une seconde qui divergera au premier crash. Même
+ *   raisonnement que `journal/repo.ts`, qui ne stocke rien non plus.
+ * - Les **étapes** sont des opérations. Elles s'exécutent, en champ libre, sur
+ *   le prochain serveur vierge. Une étape qui s'ajouterait toute seule serait
+ *   du pouvoir qui s'élargit sans décision humaine, et c'est exactement la
+ *   ligne. Elle passe donc par une proposition validée en inbox.
  */
 
 export const STACK_RECIPES_SETTINGS_KEY = 'ops.stack_recipes'
@@ -232,14 +238,57 @@ export async function recettePourStack(
  * Les rappels sont séparés des étapes et étiquetés : une étape est quelque
  * chose qu'on exécute, un rappel est quelque chose qu'on vérifie. Les
  * confondre ferait croire à l'agent qu'un rappel s'automatise.
+ *
+ * Le socle écrit à la main et ce qui a été APPRIS restent eux aussi distincts
+ * et étiquetés — même règle que `stack-rules.ts::fusionner`, et pour la même
+ * raison : un agent, comme un humain qui relit, doit pouvoir dire d'où vient
+ * une contrainte. Une règle posée par Florian n'a pas le même poids qu'une
+ * observation tirée d'un déploiement, et les confondre empêcherait de corriger
+ * la bonne.
  */
-export function formaterRecette(stack: string, recette: Recette): string {
-  const lignes = [`# Recette apprise pour la stack « ${stack} »`, recette.resume, '', '## Étapes']
+export function formaterRecette(stack: string, recette: Recette, appris: string[] = []): string {
+  const lignes = [`# Recette pour la stack « ${stack} »`, recette.resume, '', '## Étapes']
   for (const e of recette.etapes) {
     lignes.push(`- ${e.operation} · ${e.pourquoi}`)
   }
   if (recette.rappels.length > 0) {
     lignes.push('', '## Ce qu’on oublie toujours', ...recette.rappels.map((r) => `- ${r}`))
   }
+  if (appris.length > 0) {
+    lignes.push('', '## Appris sur les déploiements précédents', ...appris)
+  }
   return lignes.join('\n')
+}
+
+/**
+ * La recette complète d'un projet : le socle, plus ce que les déploiements
+ * précédents ont appris.
+ *
+ * C'est la fonction que l'agent d'exploitation utilise. Elle rend un texte, y
+ * compris quand aucune recette n'existe : dans ce cas seuls les savoirs appris
+ * remontent, et l'agent sait au moins ce qui a déjà cassé — c'est mieux que
+ * rien, et bien mieux qu'une recette inventée.
+ */
+export async function recetteComplete(
+  db: Kysely<Database>,
+  stack: string | null,
+): Promise<string | null> {
+  const trouvee = await recettePourStack(db, stack)
+  // Lus à chaque fois, jamais recopiés dans la recette : une seconde source de
+  // vérité divergerait de la première au premier crash.
+  const appris = await savoirsDeStack(db, stack, 'exploitation')
+
+  if (!trouvee) {
+    if (appris.length === 0) return null
+    return [
+      `# Stack « ${stack} » · aucune recette écrite`,
+      'Personne n’a encore posé de marche à suivre pour cette stack. Ce qui suit vient ' +
+        'uniquement des déploiements précédents.',
+      '',
+      '## Appris sur les déploiements précédents',
+      ...appris,
+    ].join('\n')
+  }
+
+  return formaterRecette(trouvee.stack, trouvee.recette, appris)
 }

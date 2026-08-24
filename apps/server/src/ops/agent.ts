@@ -8,7 +8,7 @@ import type { RuntimeAdapter, SendOptions } from '../runtime/types'
 import { createOpsReadSurface } from './mcp'
 import { type OpsPlan, opsPlanSchema } from './plan'
 import { lireServeur } from './probe'
-import { formaterRecette, recettePourStack } from './recipes'
+import { recetteComplete } from './recipes'
 import type { OpsExecutor, Serveur } from './types'
 
 /**
@@ -63,8 +63,10 @@ export async function demanderPlan(deps: DemanderPlanDeps): Promise<PlanDemande>
     .executeTakeFirstOrThrow()
 
   const role = await resolveProjectRole(deps.db, projet.id, 'ops')
-  const trouvee = await recettePourStack(deps.db, projet.stack)
-  const recette = trouvee ? formaterRecette(trouvee.stack, trouvee.recette) : null
+  // La recette COMPLÈTE : le socle écrit à la main, plus ce que les
+  // déploiements précédents ont appris. C'est ici que « le 15ᵉ déploiement
+  // n'est pas le premier » devient vrai.
+  const recette = await recetteComplete(deps.db, projet.stack)
 
   const kb = createClientKbSurface({ db: deps.db, tools: role.tools, projetId: projet.id })
   const lecture = createOpsReadSurface({ executor: deps.executor, serveur, tools: role.tools })

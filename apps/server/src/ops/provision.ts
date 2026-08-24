@@ -5,6 +5,7 @@ import { createInboxItem } from '../inbox/repo'
 import { collectStructured } from '../runtime/structured'
 import type { RuntimeAdapter } from '../runtime/types'
 import { type ResultatApplication, appliquer, raconter } from './apply'
+import { apprendreDeLEchec, apprendreDuJuge } from './apprendre'
 import { rendre } from './operations'
 import type { Operation } from './operations'
 import { lireServeur } from './probe'
@@ -75,6 +76,11 @@ export interface ProvisionnerDeps {
   adapter: RuntimeAdapter
   serveurId: string
   projectId?: string | null
+  /**
+   * La stack du projet. Sert uniquement à l'apprentissage : sans elle, ce que
+   * ce provisioning découvre n'atteindrait aucune recette et serait perdu.
+   */
+  stack?: string | null
 }
 
 export interface ResultatProvision {
@@ -124,6 +130,14 @@ export async function provisionner(
       // Il reste `vierge` : rien n'a abouti, et le prochain essai doit pouvoir
       // repartir en champ libre plutôt que d'exiger une validation pour rien.
       await alerter(deps, serveur, application, `arrêt sur « ${application.echec?.nom} »`)
+      // Source 3 de l'apprentissage : ce qui a cassé. Une opération qui échoue
+      // sur une stack échouera encore sur la suivante.
+      await apprendreSansFaireEchouer(deps, () =>
+        apprendreDeLEchec(
+          { db: deps.db, projectId: deps.projectId as string, stack: deps.stack ?? null },
+          application,
+        ),
+      )
       return {
         ok: false,
         iterations: iteration,
@@ -135,6 +149,17 @@ export async function provisionner(
     }
 
     rapport = await juger(deps, serveur, plan, application)
+
+    // Source 1 de l'apprentissage : ce que le juge a trouvé. Levé quel que
+    // soit le verdict — un provisioning qui passe malgré un écart majeur est
+    // exactement celui dont le suivant doit se souvenir.
+    await apprendreSansFaireEchouer(deps, () =>
+      apprendreDuJuge(
+        { db: deps.db, projectId: deps.projectId as string, stack: deps.stack ?? null },
+        rapport as RapportProvision,
+      ),
+    )
+
     const bloquants = rapport.ecarts.filter((e) => e.severite === 'bloquant')
 
     if (bloquants.length === 0) {
@@ -227,6 +252,31 @@ async function juger(
     toolDescription:
       'Rend le constat de vérification du provisioning : ce qui est conforme, et les écarts avec leur preuve.',
   })
+}
+
+/**
+ * L'apprentissage ne doit jamais faire échouer un provisioning.
+ *
+ * Même arbitrage que les propositions de savoir dans `verdict.ts` : une
+ * trouvaille est strictement additive. La laisser tomber le provisioning
+ * ferait rejouer des opérations DÉJÀ APPLIQUÉES sur un serveur — et rejouer
+ * une suite à moitié appliquée est exactement ce que toute cette phase refuse.
+ *
+ * Sans `projectId`, il n'y a pas de projet donc pas de stack donc pas de
+ * recette à enrichir : on n'apprend rien plutôt que de ranger le savoir
+ * quelque part au hasard.
+ */
+async function apprendreSansFaireEchouer(
+  deps: ProvisionnerDeps,
+  action: () => Promise<number>,
+): Promise<void> {
+  if (!deps.projectId || !deps.stack) return
+  try {
+    await action()
+  } catch {
+    // Silencieux ici, contrairement à `verdict.ts` qui trace dans le bus : un
+    // provisioning n'a pas forcément de run, donc pas de timeline où écrire.
+  }
 }
 
 async function alerter(

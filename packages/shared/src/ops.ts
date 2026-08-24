@@ -10,3 +10,14 @@
  */
 export const ETATS_SERVEUR = ['inconnu', 'vierge', 'en_service'] as const
 export type EtatServeur = (typeof ETATS_SERVEUR)[number]
+
+/**
+ * À qui un savoir de stack s'adresse.
+ *
+ * `code` : le dev et le garant, dans le cadrage d'un step. `exploitation` :
+ * l'agent ops, dans un plan de déploiement. Les deux mémoires apprennent par
+ * stack et n'ont rien à se dire — mêler « eager loading par défaut » à un plan
+ * de serveur dilue les deux (migration 0012).
+ */
+export const DOMAINES_SAVOIR = ['code', 'exploitation'] as const
+export type DomaineSavoir = (typeof DOMAINES_SAVOIR)[number]

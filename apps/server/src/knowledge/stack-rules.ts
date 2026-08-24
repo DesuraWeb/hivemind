@@ -1,3 +1,4 @@
+import type { DomaineSavoir } from '@silithid/shared'
 import type { Kysely } from 'kysely'
 import type { Database } from '../db/types'
 
@@ -42,6 +43,19 @@ import type { Database } from '../db/types'
 export async function savoirsDeStack(
   db: Kysely<Database>,
   stack: string | null,
+  /**
+   * À qui ces savoirs s'adressent (migration 0012). `code` par défaut : c'est
+   * ce que cette fonction rendait avant que l'exploitation n'ait sa propre
+   * mémoire, et l'appelant historique (`framing.ts`) ne doit pas changer de
+   * comportement parce qu'un second destinataire est apparu.
+   *
+   * Sans ce filtre, le cadrage d'un dev recevrait « poser le robots.txt dès le
+   * premier déploiement » et un plan de serveur recevrait « eager loading par
+   * défaut ». Ça coûte des tokens pour du hors-sujet, et surtout ça dilue :
+   * une contrainte noyée dans dix contraintes étrangères est une contrainte
+   * qu'on ne lit plus.
+   */
+  domaine: DomaineSavoir = 'code',
 ): Promise<string[]> {
   if (!stack) return []
 
@@ -51,6 +65,7 @@ export async function savoirsDeStack(
     .where('etat', '=', 'actif')
     .where('cercle', '=', 'hive')
     .where('stack', 'is not', null)
+    .where('domaine', '=', domaine)
     .orderBy('created_at', 'asc')
     .execute()
 

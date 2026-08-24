@@ -48,7 +48,26 @@ export async function registerOpsApplyWorker(
       if (typeof serveurId !== 'string') continue
 
       const serveur = await lireServeur(deps.db, serveurId)
-      await executerChangementApprouve({ db: deps.db, executor: deps.executor, serveur }, item)
+      // La stack sert uniquement à l'apprentissage : ce qui casse ici doit
+      // pouvoir remonter dans la recette de la stack, sinon le déploiement
+      // suivant refera la même erreur.
+      const projet = item.projectId
+        ? await deps.db
+            .selectFrom('projects')
+            .select('stack')
+            .where('id', '=', item.projectId)
+            .executeTakeFirst()
+        : undefined
+
+      await executerChangementApprouve(
+        {
+          db: deps.db,
+          executor: deps.executor,
+          serveur,
+          ...(projet?.stack ? { stack: projet.stack } : {}),
+        },
+        item,
+      )
     }
   })
 }

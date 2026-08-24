@@ -1,4 +1,11 @@
-import type { AutonomyMode, EtatServeur, InboxStatus, InboxType, RunState } from '@silithid/shared'
+import type {
+  AutonomyMode,
+  DomaineSavoir,
+  EtatServeur,
+  InboxStatus,
+  InboxType,
+  RunState,
+} from '@silithid/shared'
 import type { ColumnType, Generated, JSONColumnType } from 'kysely'
 
 /** Colonne écrite par la DB (default now()), jamais fournie à l'insert. */
@@ -144,6 +151,13 @@ export interface SavoirsTable {
   sujet: string
   contenu: string
   stack: string | null
+  /**
+   * `code` (le dev et le garant) ou `exploitation` (l'agent ops). Ce qu'on
+   * apprend à déployer n'a rien à faire dans le cadrage d'un dev, et
+   * réciproquement : sans ce champ, les deux prompts reçoivent l'union des
+   * deux mémoires (migration 0012).
+   */
+  domaine: Generated<DomaineSavoir>
   etat: Generated<'actif' | 'archive'>
   /** Score d'utilité, incrémenté à chaque rappel. */
   rappels: Generated<number>

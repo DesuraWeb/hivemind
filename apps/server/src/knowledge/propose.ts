@@ -1,4 +1,4 @@
-import type { ApprovalSubtype } from '@silithid/shared'
+import type { ApprovalSubtype, DomaineSavoir, RoleKey } from '@silithid/shared'
 import { type Kysely, sql } from 'kysely'
 import type { CercleMemoire, Database } from '../db/types'
 import { type InboxItemRow, createInboxItem } from '../inbox/repo'
@@ -140,9 +140,28 @@ async function anteriorite(db: Kysely<Database>, empreinte: string): Promise<Ant
 }
 
 export interface ProposerSavoirsOptions {
-  runId: string
+  /**
+   * `null` hors boucle. L'exploitation (Phase 6) apprend en dehors de la
+   * machine à états : un provisioning se déclenche depuis un écran, pas depuis
+   * un step. Sans cette nullabilité il aurait fallu un second chemin de
+   * proposition, donc une seconde validation, une seconde détection de conflit
+   * et un second archivage à garder cohérents.
+   */
+  runId: string | null
   projectId: string
   candidats: CandidatSavoir[]
+  /**
+   * Rôle qui a trouvé. `garant` par défaut : c'était le seul jusqu'à ce que
+   * l'agent d'exploitation apprenne à son tour, et l'UI affiche ce rôle à côté
+   * du titre.
+   */
+  fromRole?: RoleKey
+  /**
+   * `code` par défaut. `exploitation` range le savoir dans la mémoire de
+   * l'agent ops (migration 0012) — celle qui alimente les rappels des recettes
+   * de déploiement, et que le cadrage d'un dev ne voit jamais.
+   */
+  domaine?: DomaineSavoir
 }
 
 export interface CandidatEcarte {
@@ -261,13 +280,15 @@ export async function proposerSavoirs(
       subtype: SAVOIR_INBOX_SUBTYPE,
       projectId: ctx.projectId,
       runId: opts.runId,
-      // Le garant, pas 'system' : c'est sa trouvaille, et l'UI affiche ce
-      // rôle à côté du titre.
-      fromRole: 'garant',
+      // Le rôle qui a trouvé, pas 'system' : c'est sa trouvaille, et l'UI
+      // affiche ce rôle à côté du titre.
+      fromRole: opts.fromRole ?? 'garant',
       title: titre(candidat.contenu),
       payload: {
         cause: candidat.sujet,
-        ctx: `${ctx.projectName} · garant (run ${opts.runId}) · proposé pour : ${cible.libelle}`,
+        ctx: `${ctx.projectName} · ${opts.fromRole ?? 'garant'}${
+          opts.runId ? ` (run ${opts.runId})` : ''
+        } · proposé pour : ${cible.libelle}`,
         savoir: {
           sujet: candidat.sujet,
           contenu: candidat.contenu,
@@ -275,11 +296,16 @@ export async function proposerSavoirs(
           cercle_id: cible.cercleId,
           cible: cible.libelle,
           ...(candidat.stack ? { stack: candidat.stack } : {}),
+          // Recopié dans le payload : c'est lui qui décidera, à l'archivage,
+          // dans laquelle des deux mémoires le savoir entre. Le déduire du
+          // rôle au moment de l'archivage marcherait aujourd'hui et casserait
+          // le jour où un troisième rôle apprendrait.
+          domaine: opts.domaine ?? 'code',
           source: {
             run_id: opts.runId,
             project_id: ctx.projectId,
             project_name: ctx.projectName,
-            role: 'garant',
+            role: opts.fromRole ?? 'garant',
           },
           on_approve: ON_APPROVE,
         },
@@ -294,20 +320,27 @@ export async function proposerSavoirs(
   // candidats écartés y figurent avec leur raison — sans ça, une suppression
   // par antériorité serait invisible, et « le garant n'a rien proposé »
   // deviendrait indistinguable de « on a fait taire sa proposition ».
-  await appendMessage(db, {
-    runId: opts.runId,
-    fromRole: 'garant',
-    toRole: 'system',
-    kind: 'info',
-    body: [
-      `Savoirs proposés : ${proposes.length} · écartés : ${ecartes.length}.`,
-      ...ecartes.map((e) => `- « ${e.sujet} » : ${e.raison}`),
-    ].join('\n'),
-    meta: {
-      savoirs_proposes: proposes.map((p) => p.id),
-      savoirs_ecartes: ecartes,
-    },
-  })
+  //
+  // Rien à écrire hors boucle : le bus est la timeline d'un RUN, et une
+  // proposition née d'un provisioning n'en a pas. Ses items d'inbox restent
+  // sa trace, et ils suffisent — inventer un run pour pouvoir écrire une
+  // ligne serait pire que l'absence de ligne.
+  if (opts.runId) {
+    await appendMessage(db, {
+      runId: opts.runId,
+      fromRole: opts.fromRole ?? 'garant',
+      toRole: 'system',
+      kind: 'info',
+      body: [
+        `Savoirs proposés : ${proposes.length} · écartés : ${ecartes.length}.`,
+        ...ecartes.map((e) => `- « ${e.sujet} » : ${e.raison}`),
+      ].join('\n'),
+      meta: {
+        savoirs_proposes: proposes.map((p) => p.id),
+        savoirs_ecartes: ecartes,
+      },
+    })
+  }
 
   return { proposes, ecartes }
 }
@@ -356,6 +389,7 @@ export async function archiverSavoirApprouve(
     cercle?: unknown
     cercle_id?: unknown
     stack?: unknown
+    domaine?: unknown
   }
   if (typeof champs.sujet !== 'string' || typeof champs.contenu !== 'string') {
     throw new Error(`item ${item.id} : payload.savoir sans sujet ni contenu exploitables`)
@@ -374,6 +408,9 @@ export async function archiverSavoirApprouve(
     sujet,
     contenu,
     ...(typeof champs.stack === 'string' ? { stack: champs.stack } : {}),
+    // Repris du payload, jamais déduit du rôle : un item écrit avant la
+    // migration 0012 n'en porte pas, et retombe sur le défaut de la colonne.
+    ...(champs.domaine === 'exploitation' ? { domaine: 'exploitation' as const } : {}),
     origineRunId: item.runId,
     origineItemId: item.id,
   })

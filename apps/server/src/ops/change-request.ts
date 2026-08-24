@@ -4,6 +4,7 @@ import type { Database } from '../db/types'
 import { type InboxItemRow, createInboxItem } from '../inbox/repo'
 import { appendMessage } from '../loop/bus'
 import { type ResultatApplication, appliquer, raconter, rendrePlan } from './apply'
+import { apprendreDeLEchec } from './apprendre'
 import type { Operation } from './operations'
 import type { OpsExecutor, Serveur } from './types'
 
@@ -209,6 +210,8 @@ export interface ExecuterDeps {
   db: Kysely<Database>
   executor: OpsExecutor
   serveur: Serveur
+  /** La stack du projet, pour que ce qui casse ici serve au prochain déploiement. */
+  stack?: string | null
 }
 
 /**
@@ -280,6 +283,20 @@ export async function executerChangementApprouve(
   // Un échec en cours d'exécution laisse le serveur dans un état que personne
   // ne connaît : ça doit se VOIR, et une ligne de log ne se voit pas.
   if (!resultat.ok) {
+    // Source 3 de l'apprentissage. Enveloppé : une trouvaille est additive, et
+    // la laisser lever ici empêcherait l'alerte d'être écrite — donc ferait
+    // disparaître la seule trace d'un serveur laissé à moitié configuré.
+    if (item.projectId && deps.stack) {
+      try {
+        await apprendreDeLEchec(
+          { db: deps.db, projectId: item.projectId, stack: deps.stack, runId: item.runId },
+          resultat,
+        )
+      } catch {
+        // Volontairement muet : l'alerte ci-dessous compte plus.
+      }
+    }
+
     await createInboxItem(deps.db, {
       type: 'alert',
       projectId: item.projectId,

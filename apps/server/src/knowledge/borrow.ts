@@ -166,6 +166,7 @@ export async function savoirsEmpruntes(
       'savoirs.sujet as sujet',
       'savoirs.contenu as contenu',
       'savoirs.stack as stack',
+      'savoirs.domaine as domaine',
       'savoirs.rappels as rappels',
       'savoirs.created_at as created_at',
     ])
@@ -183,6 +184,7 @@ export async function savoirsEmpruntes(
     sujet: l.sujet,
     contenu: l.contenu,
     stack: l.stack,
+    domaine: l.domaine,
     rappels: l.rappels,
     createdAt: new Date(l.created_at as unknown as string),
   }))

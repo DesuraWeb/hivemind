@@ -13,6 +13,7 @@ import type { GmailSendPort } from '../../integrations/gmail'
 import { COMMUNICANT_QUEUE, type CommunicantJobData } from '../../jobs/communicant'
 import { OPS_APPLY_QUEUE, type OpsApplyJobData } from '../../jobs/ops-apply'
 import { archiverSavoirApprouve } from '../../knowledge/propose'
+import { apprendreDuRetour } from '../../ops/apprendre'
 import { OPS_INBOX_SUBTYPE } from '../../ops/change-request'
 import type { RuntimeAdapter } from '../../runtime/types'
 import type { SettingsStore } from '../../settings/store'
@@ -276,6 +277,46 @@ async function enqueueOpsApply(
   }
 }
 
+/**
+ * Source 2 de l'apprentissage d'exploitation : ce que Florian a écrit en
+ * validant (ou en refusant) un plan serveur.
+ *
+ * C'est le signal le plus précieux des trois. Un refus motivé porte un
+ * arbitrage humain qu'aucun agent n'aurait deviné — sans cette source, il
+ * faudrait le redonner à chaque déploiement sur la même stack.
+ *
+ * Ne remonte que s'il a ÉCRIT quelque chose : un « non » sec ne porte aucune
+ * leçon, et un « oui » silencieux est le cas normal. En tirer un savoir
+ * remplirait la mémoire de confirmations sans contenu.
+ *
+ * Enveloppé : une trouvaille est strictement additive, et la laisser lever
+ * ferait échouer une résolution d'inbox déjà committée.
+ */
+async function apprendreDuPlanTranche(
+  deps: InboxRoutesDeps,
+  item: InboxItemRow,
+  log: FastifyBaseLogger,
+): Promise<void> {
+  if (item.type !== 'approval' || item.subtype !== OPS_INBOX_SUBTYPE) return
+  if (!item.projectId) return
+
+  try {
+    const projet = await deps.db
+      .selectFrom('projects')
+      .select('stack')
+      .where('id', '=', item.projectId)
+      .executeTakeFirst()
+    if (!projet?.stack) return
+
+    await apprendreDuRetour(
+      { db: deps.db, projectId: item.projectId, stack: projet.stack, runId: item.runId },
+      item,
+    )
+  } catch (err) {
+    log.error({ err, itemId: item.id }, 'apprentissage du plan tranché échoué')
+  }
+}
+
 export async function inboxRoutes(app: FastifyInstance, deps: InboxRoutesDeps): Promise<void> {
   app.get('/api/inbox', { preHandler: app.requireAuth }, async (req, reply) => {
     const parsed = listQuery.safeParse(req.query)
@@ -332,6 +373,7 @@ export async function inboxRoutes(app: FastifyInstance, deps: InboxRoutesDeps): 
       const savoirArchived = await archiveSavoirOrAlert(deps, result.item, req.log)
       const emailDraftQueued = await enqueueClientEmailDraft(deps, result.item, req.log)
       const opsApplyQueued = await enqueueOpsApply(deps, result.item, req.log)
+      await apprendreDuPlanTranche(deps, result.item, req.log)
       return {
         item: toApiItem(result.item, slug),
         runResumed: result.runResumed,

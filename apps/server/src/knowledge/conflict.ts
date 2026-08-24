@@ -73,6 +73,7 @@ export async function trouverConflit(
       'sujet',
       'contenu',
       'stack',
+      'domaine',
       'rappels',
       'created_at',
     ])
@@ -96,6 +97,7 @@ export async function trouverConflit(
     sujet: ligne.sujet,
     contenu: ligne.contenu,
     stack: ligne.stack,
+    domaine: ligne.domaine,
     rappels: ligne.rappels,
     createdAt: new Date(ligne.created_at as unknown as string),
   }
