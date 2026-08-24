@@ -1,35 +1,6 @@
-import { spawn } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { runSshScript, sh } from '../integrations/ssh'
 import type { SettingsStore } from '../settings/store'
 import type { DeployContext, DeployResult, DeployTarget } from './types'
-
-/**
- * Lance une commande en lui passant un script sur l'entrée standard.
- *
- * Passer le script par stdin plutôt qu'en argument n'est pas un détail de
- * style : les arguments d'un processus sont lisibles par n'importe qui via
- * `ps` sur la machine. Le script ne contient pas de secret aujourd'hui, mais
- * c'est le genre d'invariant qu'on pose avant d'en avoir besoin.
- */
-function runWithStdin(
-  command: string,
-  args: string[],
-  input: string,
-): Promise<{ code: number; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] })
-    let stderr = ''
-    child.stderr.on('data', (chunk) => {
-      stderr += String(chunk)
-    })
-    child.on('error', reject)
-    child.on('close', (code) => resolve({ code: code ?? -1, stderr }))
-    child.stdin.write(input)
-    child.stdin.end()
-  })
-}
 
 /**
  * Le staging réel (Phase 5, Task 3) : un sous-domaine par projet sur le VPS
@@ -168,13 +139,6 @@ export function createSshGitTarget(deps: SshGitTargetDeps): DeployTarget {
         }
       }
 
-      // La clé privée n'existe sur disque que le temps du déploiement, dans un
-      // répertoire temporaire à permissions restreintes. La garder en clair
-      // quelque part de durable serait la sortir du coffre pour de bon.
-      const keyDir = await mkdtemp(join(tmpdir(), 'silithid-deploy-'))
-      const keyPath = join(keyDir, 'id')
-      await writeFile(keyPath, ensureTrailingNewline(config.privateKey), { mode: 0o600 })
-
       const dir = `${config.root}/${ctx.projectSlug}`
       const repoUrl = `https://github.com/${source.repoFullName}.git`
 
@@ -198,22 +162,15 @@ export function createSshGitTarget(deps: SshGitTargetDeps): DeployTarget {
       ].join('\n')
 
       try {
-        const { code, stderr } = await runWithStdin(
-          'ssh',
-          [
-            '-i',
-            keyPath,
-            '-o',
-            'IdentitiesOnly=yes',
-            // Pas de `StrictHostKeyChecking=no` : accepter n'importe quelle clé
-            // d'hôte, c'est accepter un homme du milieu. Le serveur doit être
-            // dans le `known_hosts` de la machine, posé une fois à la mise en
-            // service (voir la doc d'exploitation).
-            '-o',
-            'BatchMode=yes',
-            `${config.user}@${config.host}`,
-            'bash -s',
-          ],
+        // Clé sur disque le temps de l'appel, `known_hosts` exigé, pas d'invite
+        // interactive : tout est dans `integrations/ssh.ts`, partagé avec
+        // l'exploitation (Phase 6) pour n'avoir qu'un endroit à corriger.
+        const { code, stderr } = await runSshScript(
+          {
+            hote: config.host,
+            utilisateur: config.user,
+            clePrivee: config.privateKey,
+          },
           script,
         )
         if (code !== 0) {
@@ -227,9 +184,6 @@ export function createSshGitTarget(deps: SshGitTargetDeps): DeployTarget {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         return { ok: false, reason: `déploiement sur ${config.host} impossible : ${message}` }
-      } finally {
-        // La clé quitte le disque quoi qu'il arrive.
-        await rm(keyDir, { recursive: true, force: true })
       }
 
       const url = stagingUrl(config.domain, ctx.projectSlug)
@@ -243,18 +197,4 @@ export function createSshGitTarget(deps: SshGitTargetDeps): DeployTarget {
       }
     },
   }
-}
-
-function ensureTrailingNewline(key: string): string {
-  return key.endsWith('\n') ? key : `${key}\n`
-}
-
-/**
- * Échappement pour un shell POSIX. Les valeurs viennent des réglages et de la
- * base : elles ne sont pas hostiles, mais un slug ou un chemin contenant une
- * apostrophe casserait le script sans ça, et l'écart entre « casse » et
- * « exécute autre chose » est mince.
- */
-function sh(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
 }

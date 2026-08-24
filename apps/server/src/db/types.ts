@@ -1,4 +1,4 @@
-import type { AutonomyMode, InboxStatus, InboxType, RunState } from '@silithid/shared'
+import type { AutonomyMode, EtatServeur, InboxStatus, InboxType, RunState } from '@silithid/shared'
 import type { ColumnType, Generated, JSONColumnType } from 'kysely'
 
 /** Colonne écrite par la DB (default now()), jamais fournie à l'insert. */
@@ -179,6 +179,30 @@ export interface EmpruntsSavoirTable {
   revoked_at: Timestamp | null
 }
 
+/**
+ * Un serveur auquel l'agent d'exploitation parle (Phase 6).
+ *
+ * `etat` par défaut `'inconnu'`, jamais `'vierge'` : le champ libre ne
+ * s'obtient pas par oubli. Le passage à `'en_service'` est à sens unique,
+ * garanti par un trigger (migration 0011) et non par du code applicatif.
+ */
+export interface ServeursTable {
+  id: Generated<string>
+  /** Sert aussi de préfixe de clé dans le coffre : un jeu d'accès par serveur. */
+  nom: string
+  hote: string
+  utilisateur: string
+  port: Generated<number>
+  /** URL publique à sonder. Absente, la sonde perd une preuve — donc penche vers `en_service`. */
+  url: string | null
+  etat: Generated<EtatServeur>
+  etat_mesure_at: Timestamp | null
+  /** Ce que la sonde a constaté, preuve par preuve. Un verdict sans preuves ne se conteste pas. */
+  etat_preuves: JSONColumnType<unknown[], string | undefined, string>
+  notes: string | null
+  created_at: Generated<Timestamp>
+}
+
 export interface InboxItemsTable {
   id: Generated<string>
   type: InboxType
@@ -238,6 +262,7 @@ export interface Database {
   inbox_items: InboxItemsTable
   savoirs: SavoirsTable
   emprunts_savoir: EmpruntsSavoirTable
+  serveurs: ServeursTable
   usage_windows: UsageWindowsTable
   artifacts: ArtifactsTable
   settings: SettingsTable
