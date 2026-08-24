@@ -388,6 +388,37 @@ export interface AuthHealthView {
   error?: string
 }
 
+/** Un serveur, tel que `GET /api/serveurs` le rend. Aucune valeur de secret n'y figure. */
+export interface ServeurView {
+  id: string
+  nom: string
+  hote: string
+  utilisateur: string
+  port: number
+  url: string | null
+  /** `inconnu` tant que la sonde n'est pas passée : aucune autonomie sans mesure. */
+  etat: 'inconnu' | 'vierge' | 'en_service'
+  mesureAt: string | null
+  notes: string | null
+  /** Un booléen, jamais la valeur — même règle que l'inventaire du coffre. */
+  accesDepose: boolean
+  cleCoffre: string | null
+}
+
+export interface PreuveSondeView {
+  nom: string
+  verdict: 'occupe' | 'vide' | 'inconnu'
+  detail: string
+}
+
+export interface ResultatSondeView {
+  etat: 'inconnu' | 'vierge' | 'en_service'
+  raison: string
+  preuves: PreuveSondeView[]
+  /** `true` quand la mesure a été ignorée : un serveur en service ne redevient jamais vierge. */
+  figee: boolean
+}
+
 export const api = {
   me: () => request<Me>('GET', '/api/me'),
   login: (login: string, password: string) =>
@@ -401,6 +432,26 @@ export const api = {
     /** À la demande uniquement (bouton « Optimiser ») — jamais appelé à la frappe. */
     optimize: (id: string, text: string) =>
       request<OptimizeAnswerResult>('POST', `/api/inbox/${id}/optimize`, { text }),
+  },
+  serveurs: {
+    list: () => request<ServeurView[]>('GET', '/api/serveurs'),
+    /**
+     * Enregistre un serveur. Aucun état n'est envoyé : il naît « inconnu », et
+     * il n'existe volontairement AUCUNE route pour en poser un — « vierge » se
+     * mesure, un formulaire qui permettrait de le déclarer contournerait la
+     * sonde en un clic.
+     */
+    create: (body: {
+      nom: string
+      hote: string
+      utilisateur: string
+      port?: number
+      url?: string
+      notes?: string
+    }) => request<{ id: string; nom: string; etat: string }>('POST', '/api/serveurs', body),
+    /** Mesure. Un geste qui touche le serveur, donc explicitement demandé. */
+    sonde: (id: string) =>
+      request<ResultatSondeView>('POST', `/api/serveurs/${encodeURIComponent(id)}/sonde`),
   },
   projects: {
     list: () => request<ProjectView[]>('GET', '/api/projects'),

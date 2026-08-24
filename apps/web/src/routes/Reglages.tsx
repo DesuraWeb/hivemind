@@ -3,6 +3,7 @@ import { AuthDiagnostic } from '../components/reglages/AuthDiagnostic'
 import { BudgetSection } from '../components/reglages/BudgetSection'
 import { Note, Panel, StatusLine } from '../components/reglages/Panel'
 import { RoleTemplates } from '../components/reglages/RoleTemplates'
+import { Serveurs } from '../components/reglages/Serveurs'
 import { ThresholdsForm } from '../components/reglages/ThresholdsForm'
 import { VaultInventory } from '../components/reglages/VaultInventory'
 
@@ -76,6 +77,7 @@ export function Reglages() {
           </Panel>
 
           <RoleTemplates />
+          <Serveurs />
           <VaultInventory />
         </div>
       </main>

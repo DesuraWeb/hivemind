@@ -69,14 +69,35 @@ export interface JournalWindow {
 }
 
 /**
- * La « nuit » : les passations d'agents sur une fenêtre. Le pack la présente
+ * La « nuit » : les passations d'agents depuis `since`. Le pack la présente
  * comme une nuit, mais rien ici n'impose un créneau nocturne — c'est l'appelant
  * qui borne, et le nom vient de l'usage (Florian lit le matin ce qui s'est
  * passé pendant qu'il dormait), pas d'une contrainte technique.
+ *
+ * ## Pourquoi il n'y a PAS de borne haute
+ *
+ * Il y en avait une, `created_at <= until`, où `until` venait de `new Date()`
+ * dans la route. Elle perdait la passation la plus récente — celle qu'on veut
+ * le plus voir.
+ *
+ * La cause n'est pas une horloge désynchronisée (mesuré : 0 ms d'écart entre
+ * Node et PostgreSQL). C'est une différence de PRÉCISION : `now()` écrit des
+ * microsecondes, `new Date()` s'arrête à la milliseconde. Un message écrit à
+ * 12:00:00.123456 et une borne posée juste après, dans la même milliseconde,
+ * donnent `until = 12:00:00.123000` — et le message est APRÈS la borne. Mesuré
+ * sur 500 tours en boucle serrée : 445 écritures perdues. En conditions
+ * réelles la fenêtre de perte fait moins d'une milliseconde, ce qui en faisait
+ * un échec de test intermittent (environ un sur six) plutôt qu'une panne
+ * visible.
+ *
+ * La borne est donc retirée, du TYPE et pas seulement de la requête : rien
+ * n'est jamais dans le futur, et une borne haute posée sur « maintenant » ne
+ * peut que perdre des lignes. Un appelant qui voudrait vraiment une fenêtre
+ * passée devra la rajouter explicitement, en sachant ce qu'il fait.
  */
 export async function listNight(
   db: Kysely<Database>,
-  window: { since: Date; until: Date },
+  window: { since: Date },
   limit = 200,
 ): Promise<NightEntry[]> {
   const rows = await db
@@ -99,7 +120,6 @@ export async function listNight(
       'projects.name as projectName',
     ])
     .where(sql<boolean>`messages.created_at >= ${window.since}`)
-    .where(sql<boolean>`messages.created_at <= ${window.until}`)
     .orderBy('messages.created_at', 'desc')
     .limit(limit)
     .execute()
@@ -127,7 +147,7 @@ export async function listNight(
  */
 export async function listDecisions(
   db: Kysely<Database>,
-  window: { since: Date; until: Date },
+  window: { since: Date },
   limit = 200,
 ): Promise<DecisionEntry[]> {
   const rows = await db
@@ -145,8 +165,10 @@ export async function listDecisions(
     ])
     .where('inbox_items.status', '!=', 'open')
     .where('inbox_items.resolved_at', 'is not', null)
+    // Pas de borne haute non plus, et pour la même raison qu'au-dessus : une
+    // décision tranchée à la milliseconde près avant la lecture disparaîtrait
+    // du journal, alors que c'est celle qu'on vient de prendre.
     .where(sql<boolean>`inbox_items.resolved_at >= ${window.since}`)
-    .where(sql<boolean>`inbox_items.resolved_at <= ${window.until}`)
     .orderBy('inbox_items.resolved_at', 'desc')
     .limit(limit)
     .execute()

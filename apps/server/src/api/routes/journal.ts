@@ -30,7 +30,11 @@ export async function journalRoutes(app: FastifyInstance, deps: JournalRoutesDep
 
     const until = new Date()
     const since = new Date(until.getTime() - (parsed.data.hours ?? DEFAULT_HOURS) * 3_600_000)
-    const window = { since, until }
+    // `until` sert à AFFICHER la fenêtre, jamais à filtrer : `journal/repo.ts`
+    // n'a plus de borne haute, parce qu'une borne posée sur « maintenant »
+    // avec la précision milliseconde de `new Date()` perdait les lignes
+    // écrites par PostgreSQL dans la même milliseconde.
+    const window = { since }
 
     // Les deux onglets en une requête : ils sont lus ensemble (l'écran a un
     // segmented control, pas deux pages), et chacun coûte une requête SQL
