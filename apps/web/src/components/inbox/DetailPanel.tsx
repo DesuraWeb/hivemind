@@ -8,6 +8,7 @@ import { GenericApprovalPanel } from './panels/GenericApprovalPanel'
 import { OpsApprovalPanel } from './panels/OpsApprovalPanel'
 import { ProdApprovalPanel } from './panels/ProdApprovalPanel'
 import { QuestionPanel } from './panels/QuestionPanel'
+import { RecettePanel } from './panels/RecettePanel'
 import { RevuePanel } from './panels/RevuePanel'
 import { SavoirPanel } from './panels/SavoirPanel'
 import { VerdictPanel } from './panels/VerdictPanel'
@@ -37,6 +38,10 @@ export function pickPanel(item: InboxItemView): (props: PanelProps) => ReactElem
     // arrière. Sans ce panneau il tomberait dans le repli générique, qui
     // demanderait d'approuver un titre — sur une machine de production.
     if (item.sub === 'ops') return OpsApprovalPanel
+    // Le seul endroit du système où ce qui s'exécute automatiquement
+    // s'élargit : une étape de recette part d'office sur tous les prochains
+    // serveurs vierges de la stack, pas seulement sur celui d'aujourd'hui.
+    if (item.sub === 'recette') return RecettePanel
     return GenericApprovalPanel
   }
   return GenericApprovalPanel

@@ -15,6 +15,7 @@ import { OPS_APPLY_QUEUE, type OpsApplyJobData } from '../../jobs/ops-apply'
 import { archiverSavoirApprouve } from '../../knowledge/propose'
 import { apprendreDuRetour } from '../../ops/apprendre'
 import { OPS_INBOX_SUBTYPE } from '../../ops/change-request'
+import { ajouterEtapeApprouvee } from '../../ops/recipe-proposal'
 import type { RuntimeAdapter } from '../../runtime/types'
 import type { SettingsStore } from '../../settings/store'
 
@@ -317,6 +318,43 @@ async function apprendreDuPlanTranche(
   }
 }
 
+/**
+ * Suite serveur d'une étape de recette approuvée : elle rejoint la recette de
+ * la stack, et s'exécutera d'office sur les prochains serveurs vierges.
+ *
+ * C'est le SEUL chemin par lequel ce qui s'exécute automatiquement s'élargit,
+ * et il passe par une décision humaine explicite. Le savoir s'accumule tout
+ * seul (`ops/apprendre.ts`) ; le pouvoir, non.
+ *
+ * Même traitement d'erreur que l'archivage d'un savoir : l'item est déjà
+ * résolu, le rejouer est impossible, donc l'échec lève une alerte au lieu de
+ * disparaître dans un log.
+ */
+async function ajouterEtapeOuAlerter(
+  deps: InboxRoutesDeps,
+  item: InboxItemRow,
+  log: FastifyBaseLogger,
+): Promise<boolean> {
+  try {
+    return (await ajouterEtapeApprouvee(deps.db, item)) !== null
+  } catch (err) {
+    log.error({ err, itemId: item.id }, 'ajout d’étape à la recette échoué')
+    await createInboxItem(deps.db, {
+      type: 'alert',
+      projectId: item.projectId,
+      runId: item.runId,
+      fromRole: 'system',
+      title: `Recette non modifiée · ${item.title}`,
+      payload: {
+        cause: 'l’étape validée n’a pas pu rejoindre la recette',
+        sourceItemId: item.id,
+        error: err instanceof Error ? err.message : String(err),
+      },
+    })
+    return false
+  }
+}
+
 export async function inboxRoutes(app: FastifyInstance, deps: InboxRoutesDeps): Promise<void> {
   app.get('/api/inbox', { preHandler: app.requireAuth }, async (req, reply) => {
     const parsed = listQuery.safeParse(req.query)
@@ -374,6 +412,7 @@ export async function inboxRoutes(app: FastifyInstance, deps: InboxRoutesDeps): 
       const emailDraftQueued = await enqueueClientEmailDraft(deps, result.item, req.log)
       const opsApplyQueued = await enqueueOpsApply(deps, result.item, req.log)
       await apprendreDuPlanTranche(deps, result.item, req.log)
+      const etapeAjoutee = await ajouterEtapeOuAlerter(deps, result.item, req.log)
       return {
         item: toApiItem(result.item, slug),
         runResumed: result.runResumed,
@@ -381,6 +420,7 @@ export async function inboxRoutes(app: FastifyInstance, deps: InboxRoutesDeps): 
         savoirArchived,
         emailDraftQueued,
         opsApplyQueued,
+        etapeAjoutee,
       }
     } catch (err) {
       // `resolve.ts` (Task 2, non modifié ici) n'expose que des `Error`

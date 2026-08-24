@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import type { ApprovalSubtype } from '@silithid/shared'
 import { type Kysely, sql } from 'kysely'
 import type { Database } from '../db/types'
 import { type InboxItemRow, createInboxItem } from '../inbox/repo'
@@ -44,7 +45,8 @@ import type { OpsExecutor, Serveur } from './types'
  * qui lui soit assignable.
  */
 
-export const OPS_INBOX_SUBTYPE = 'ops'
+/** Typé sur l'union partagée : un typo ne peut pas dériver silencieusement. */
+export const OPS_INBOX_SUBTYPE: ApprovalSubtype = 'ops'
 
 /** Ce qu'on relit d'un item d'inbox pour décider si une exécution est autorisée. */
 export interface ResolvedOpsEvidence {

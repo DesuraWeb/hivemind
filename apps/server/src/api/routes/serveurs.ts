@@ -6,6 +6,7 @@ import { demanderPlan } from '../../ops/agent'
 import { proposerChangement } from '../../ops/change-request'
 import { inventaireAcces } from '../../ops/credentials'
 import { lireServeur, sonder } from '../../ops/probe'
+import { proposerEtapes } from '../../ops/recipe-proposal'
 import type { OpsExecutor, SondeHttp } from '../../ops/types'
 import type { RuntimeAdapter } from '../../runtime/types'
 import type { SettingsStore } from '../../settings/store'
@@ -194,6 +195,23 @@ export async function serveursRoutes(
         besoin: b.data.besoin,
       })
 
+      // Ce que l'agent estime devoir devenir STANDARD pour cette stack part
+      // en validation séparée : une étape de recette s'exécutera d'office, en
+      // champ libre, sur tous les prochains serveurs vierges. C'est une portée
+      // différente de ce plan-ci, donc une décision différente.
+      const projet = await deps.db
+        .selectFrom('projects')
+        .select('stack')
+        .where('id', '=', b.data.projectId)
+        .executeTakeFirst()
+      const etapesProposees =
+        projet?.stack && resultat.plan.pour_la_recette.length > 0
+          ? await proposerEtapes(
+              { db: deps.db, stack: projet.stack, projectId: b.data.projectId },
+              resultat.plan.pour_la_recette.map((e) => ({ nom: e.nom, pourquoi: e.pourquoi })),
+            )
+          : []
+
       let inboxItemId: string | null = null
       if (resultat.serveur.etat === 'en_service' && resultat.plan.operations.length > 0) {
         const item = await proposerChangement(
@@ -213,6 +231,7 @@ export async function serveursRoutes(
         plan: resultat.plan,
         recetteAppliquee: resultat.recette !== null,
         inboxItemId,
+        etapesProposees: etapesProposees.map((i) => i.id),
       }
     } catch (err) {
       req.log.error({ err, id: p.data.id }, 'plan d’exploitation échoué')

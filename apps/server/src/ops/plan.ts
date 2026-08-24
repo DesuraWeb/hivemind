@@ -73,5 +73,30 @@ export const opsPlanSchema = z.object({
    * plans, et c'est le bon défaut.
    */
   hors_catalogue: z.array(propositionHorsCatalogueSchema).default([]),
+  /**
+   * Les opérations que l'agent estime devoir devenir STANDARD pour cette
+   * stack — donc rejoindre la recette, et s'exécuter d'office au prochain
+   * déploiement.
+   *
+   * Distinct de `operations` : celles-ci valent pour ce serveur-ci, celles-là
+   * vaudraient pour tous les suivants. C'est une portée différente, donc une
+   * décision différente — et la seule qui élargit ce qui s'exécute en champ
+   * libre. Elle passe par l'inbox, jamais par l'accumulation automatique.
+   *
+   * Borné à 2 : au-delà, l'agent ne propose plus une leçon, il réécrit la
+   * recette à chaque passage.
+   */
+  pour_la_recette: z
+    .array(
+      z.object({
+        nom: nomOperationSchema,
+        pourquoi: z
+          .string()
+          .min(20)
+          .describe('Pourquoi TOUTE la stack en a besoin, pas seulement ce serveur.'),
+      }),
+    )
+    .max(2)
+    .default([]),
 })
 export type OpsPlan = z.infer<typeof opsPlanSchema>
