@@ -38,6 +38,7 @@
  * jamais de description textuelle du DOM comme substitut à la vision.
  */
 
+import { existsSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { type Browser, type Page, chromium } from 'playwright'
@@ -84,9 +85,30 @@ let browserSingleton: Promise<Browser> | undefined
  */
 function getBrowser(): Promise<Browser> {
   if (!browserSingleton) {
-    browserSingleton = chromium.launch({ headless: true })
+    browserSingleton = chromium.launch({ headless: true, ...optionsDeBinaire() })
   }
   return browserSingleton
+}
+
+/**
+ * Le binaire à lancer : celui de Playwright, ou celui du système quand
+ * `CHROMIUM_EXECUTABLE_PATH` le désigne (voir `env.ts` pour le pourquoi).
+ *
+ * Le chemin est vérifié ICI plutôt que laissé à Playwright. Un chemin faux lui
+ * fait rendre une erreur qui parle d'installation manquante et suggère de
+ * lancer `playwright install` — soit exactement la fausse piste, puisque le
+ * cas d'usage de cette variable est précisément une machine où cette commande
+ * ne peut pas aboutir. On préfère dire quel chemin a été demandé, et par quoi.
+ */
+function optionsDeBinaire(): { executablePath?: string } {
+  const chemin = process.env.CHROMIUM_EXECUTABLE_PATH
+  if (!chemin) return {}
+  if (!existsSync(chemin)) {
+    throw new Error(
+      `CHROMIUM_EXECUTABLE_PATH pointe « ${chemin} », qui n'existe pas. Renseigne le chemin d'un Chromium réellement installé (\`which chromium\`), ou retire la variable pour utiliser celui de Playwright.`,
+    )
+  }
+  return { executablePath: chemin }
 }
 
 /**

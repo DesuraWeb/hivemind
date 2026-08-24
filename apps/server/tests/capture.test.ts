@@ -6,7 +6,7 @@ import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { sql } from 'kysely'
-import { afterAll, afterEach, beforeAll, expect, test } from 'vitest'
+import { afterAll, afterEach, beforeAll, expect, test, vi } from 'vitest'
 import { listRunArtifacts, recordCapturedPages, resolveArtifactPath } from '../src/artifacts/store'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
@@ -180,5 +180,28 @@ test('recordCapturedPages stocke des chemins relatifs à ARTIFACTS_ROOT qui rés
   expect(fromDb.map((r) => r.id).sort()).toEqual(records.map((r) => r.id).sort())
   for (const record of fromDb) {
     expect(existsSync(resolveArtifactPath(artifactsRoot, record))).toBe(true)
+  }
+})
+
+test('un CHROMIUM_EXECUTABLE_PATH faux dit lequel, au lieu de parler d’installation manquante', async () => {
+  // `vi.stubEnv` plutôt qu'une écriture directe : restaurer une variable
+  // absente demanderait `delete process.env.X`, et le remplacer par
+  // `= undefined` (ce que suggère le linter) écrirait la CHAÎNE « undefined »
+  // dans l'environnement — donc un chemin de Chromium nommé « undefined ».
+  vi.stubEnv('CHROMIUM_EXECUTABLE_PATH', '/chemin/qui/nexiste/pas/chromium')
+  // Le navigateur est un singleton de process : les tests précédents l'ont
+  // déjà lancé, et `getBrowser` rendrait cette instance sans jamais relire la
+  // variable. On repart d'un process sans navigateur — c'est aussi la seule
+  // situation où elle est lue en production, au tout premier lancement.
+  await closeBrowser()
+  try {
+    // Playwright rendrait ici une erreur qui suggère `playwright install` —
+    // soit exactement la fausse piste, puisque le cas d'usage de cette
+    // variable est une machine où cette commande ne peut pas aboutir.
+    await expect(capturePages('http://127.0.0.1:1', ['/'], tmpdir())).rejects.toThrow(
+      /CHROMIUM_EXECUTABLE_PATH pointe/,
+    )
+  } finally {
+    vi.unstubAllEnvs()
   }
 })

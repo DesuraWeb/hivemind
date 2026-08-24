@@ -81,6 +81,26 @@ const schema = z.object({
    */
   WEB_DIST: z.string().default('./apps/web/dist'),
   PORT: z.coerce.number().default(3000),
+  /**
+   * Interface d'écoute. **`127.0.0.1` par défaut, et c'est délibéré.**
+   *
+   * Le serveur écoutait sur `0.0.0.0`. Sur une machine nue derrière un reverse
+   * proxy, ça veut dire que l'application est joignable en clair depuis
+   * l'extérieur en contournant nginx, son TLS et son authentification — il
+   * suffit d'appeler le port applicatif directement.
+   *
+   * Constaté sur le VPS de l'agence au moment de la mise en service : `ufw`
+   * inactif, `iptables` en politique `ACCEPT` sans une seule règle. Le
+   * pare-feu a été posé, mais un pare-feu est une SECONDE barrière — il ne
+   * remplace pas le fait de ne pas s'exposer. Le défaut doit protéger une
+   * installation dont personne n'a encore réglé le réseau.
+   *
+   * Un déploiement en conteneur a besoin de `0.0.0.0` pour être joignable
+   * depuis l'hôte : il pose `HOST=0.0.0.0` explicitement, en sachant ce qu'il
+   * fait. C'est le bon sens de la contrainte — l'exposition se demande, elle
+   * ne s'hérite pas.
+   */
+  HOST: z.string().min(1).default('127.0.0.1'),
   DATABASE_URL: z.string().min(1),
   DATABASE_URL_TEST: z.string().optional(),
   MASTER_KEY: z.string().min(1),
@@ -108,6 +128,31 @@ const schema = z.object({
    */
   LOOP_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(3),
   ARTIFACTS_ROOT: z.string().default('./artifacts'),
+  /**
+   * Chromium fourni par le système, au lieu de celui que Playwright télécharge.
+   *
+   * Playwright 1.62 récupère `chromium` et `chromium-headless-shell` depuis le
+   * bucket « Chrome for Testing » de Google. Ce bucket **refuse certaines
+   * adresses IP selon leur localisation** : sur le VPS de l'agence, il répond
+   * `403 AccessDenied · this service is not available in your location`.
+   * Diagnostiqué en isolant les artefacts — `ffmpeg`, servi par l'ancien
+   * chemin, se télécharge sans problème depuis la même machine, et une
+   * révision de Chromium antérieure au passage à CFT aussi. Ce n'est donc ni
+   * le réseau, ni les droits, ni `PLAYWRIGHT_BROWSERS_PATH`.
+   *
+   * Trois sorties étaient possibles. Épingler une version antérieure ferait
+   * dépendre le projet d'un détail d'hébergement de Google. Un miroir maison
+   * demanderait un endroit où l'héberger, à maintenir. Reste celle-ci, la
+   * seule qui traite le problème général : **ce produit est auto-hébergé, et
+   * quiconque l'installe derrière un réseau restreint rencontrera ce mur.**
+   *
+   * Absente, rien ne change : Playwright utilise son navigateur habituel.
+   * Renseignée, elle pointe un binaire déjà présent (`chromium`,
+   * `chromium-browser`, Chrome…). Le juge capture alors avec CE navigateur,
+   * qui n'est pas la version que Playwright embarque — un écart de rendu
+   * reste possible, et vaut mieux qu'un juge qui ne démarre pas.
+   */
+  CHROMIUM_EXECUTABLE_PATH: z.string().optional(),
   MAIL_DRY_RUN: z.coerce.number().default(1),
   PROD_DISPATCH_DRY_RUN: z.coerce.number().default(1),
   SMTP_HOST: z.string().optional(),

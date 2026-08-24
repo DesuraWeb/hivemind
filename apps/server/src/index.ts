@@ -58,7 +58,7 @@ await startBoss(boss, {
   }),
 })
 
-await app.listen({ port: env.PORT, host: '0.0.0.0' })
+await app.listen({ port: env.PORT, host: env.HOST })
 
 let arretEnCours = false
 

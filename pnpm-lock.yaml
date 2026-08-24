@@ -53,6 +53,9 @@ importers:
       playwright:
         specifier: ^1.62.1
         version: 1.62.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.12
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -69,9 +72,6 @@ importers:
       '@types/pg':
         specifier: ^8.11.10
         version: 8.21.0
-      tsx:
-        specifier: ^4.19.2
-        version: 4.23.12
 
   apps/web:
     dependencies:
