@@ -41,6 +41,9 @@ Concrètement, aujourd'hui :
   la sonde, le catalogue et l'exécution sont testés contre un faux serveur.
 - La conscience collective apprend, et vous rappelle la revue quand la file
   grandit ou qu'un mois a passé — jamais plus souvent.
+- Les recettes de déploiement s'enrichissent seules à partir de trois signaux :
+  ce que le juge a trouvé, ce que vous avez corrigé en validant, ce qui a cassé.
+  Le quinzième déploiement d'une stack n'est plus le premier.
 
 ## Les frontières de sécurité
 
@@ -61,6 +64,13 @@ dans le type ou le schéma, et chacune a son test :
 - Ce qui s'exécute sur un serveur est ce qui vous a été montré. Le plan est figé
   dans l'item d'inbox avec son empreinte ; un plan modifié après validation est
   refusé au lieu d'être appliqué.
+
+Et une dernière, qui vaut pour tout ce que le système apprend : **le savoir
+s'accumule tout seul, le pouvoir ne s'élargit que par une décision humaine.**
+Une recette gagne des rappels sans rien demander — c'est du texte, ça informe.
+Elle ne gagne une ÉTAPE, qui s'exécutera d'office sur les prochains serveurs
+vierges, que si vous l'avez approuvée. Et une étape ne peut jamais introduire
+une opération absente du catalogue : ça, c'est un commit.
 
 Et une règle qui tient toute la partie exploitation : **un serveur n'est
 « vierge » que s'il a été MESURÉ vierge**. Cinq preuves, une seule incertitude
