@@ -13,7 +13,13 @@ PR. Le **reviewer** relit et boucle avec lui, dans une limite d'itérations. Le
 **juge** capture les pages à trois viewports et décrit ce qu'il voit — il ne
 décide pas. Le garant tranche, et rend un verdict.
 
+Un **communicant** propose un email au client quand quelque chose est mis en
+ligne. Un **agent d'exploitation** parle aux serveurs : il prépare un
+hébergement neuf, et sur une machine en production il propose un plan que vous
+validez et que Silithid applique — sans que vous ayez à taper les commandes.
+
 Rien ne part en production sans vous. Rien n'est envoyé à un client sans vous.
+Rien ne change sur un serveur qui sert déjà sans vous.
 
 ## Ce qui est vrai, et ce qui ne l'est pas
 
@@ -25,16 +31,21 @@ devient jamais un rapport de juge.
 Concrètement, aujourd'hui :
 
 - La boucle tourne de bout en bout, avec de vrais modèles, sur un vrai dépôt.
-- Le déploiement se fait sur un **aperçu local** : le staging réel est un
-  contrat (`DeployTarget`) dont il manque un pilote.
+  Trois peuvent avancer en même temps (`LOOP_CONCURRENCY`), chiffre calé sur la
+  RAM disponible et l'absence de swap, pas choisi au hasard.
+- Le déploiement se fait sur un **aperçu local** : le staging réel est écrit
+  (`DeployTarget` + une cible SSH/git) mais n'a jamais tourné contre un vrai
+  serveur.
 - Gmail fonctionne en brouillon seulement, et n'a jamais parlé au vrai Gmail.
-- La conscience collective apprend, mais aucune notification ne vous rappelle
-  la revue trimestrielle.
+- L'agent d'exploitation est complet et **n'a jamais touché une vraie machine** :
+  la sonde, le catalogue et l'exécution sont testés contre un faux serveur.
+- La conscience collective apprend, et vous rappelle la revue quand la file
+  grandit ou qu'un mois a passé — jamais plus souvent.
 
 ## Les frontières de sécurité
 
-Quatre choses sont **impossibles**, pas seulement interdites — l'impossibilité
-est dans le type ou le schéma, et chacune a son test :
+Six choses sont **impossibles**, pas seulement interdites — l'impossibilité est
+dans le type ou le schéma, et chacune a son test :
 
 - Un agent ne peut pas envoyer un email. Il rédige ; l'envoi exige une
   approbation humaine que lui seul ne peut pas fabriquer.
@@ -44,6 +55,18 @@ est dans le type ou le schéma, et chacune a son test :
   client ne s'emprunte jamais : la table ne peut pas la désigner.
 - Une PR qui touche la machine à états ou la politique d'outils lève un item
   distinct. Ce n'est pas un blocage, c'est l'impossibilité de passer inaperçu.
+- L'agent d'exploitation ne peut pas exécuter une commande. Il rend un plan
+  inerte ; le catalogue d'opérations est fermé, sans `shell`, `exec` ni `run`,
+  et le schéma de sortie n'accepte aucun autre nom.
+- Ce qui s'exécute sur un serveur est ce qui vous a été montré. Le plan est figé
+  dans l'item d'inbox avec son empreinte ; un plan modifié après validation est
+  refusé au lieu d'être appliqué.
+
+Et une règle qui tient toute la partie exploitation : **un serveur n'est
+« vierge » que s'il a été MESURÉ vierge**. Cinq preuves, une seule incertitude
+suffit à conclure « en service », et rien dans l'API ne permet de le déclarer à
+la main. Un serveur passé en service ne redevient jamais vierge — c'est un
+trigger, pas une règle applicative.
 
 ## Démarrer
 
