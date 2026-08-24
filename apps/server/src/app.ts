@@ -16,6 +16,7 @@ import { projectsRoutes } from './api/routes/projects'
 import { rolesRoutes } from './api/routes/roles'
 import { runsRoutes } from './api/routes/runs'
 import { savoirsRoutes } from './api/routes/savoirs'
+import { serveursRoutes } from './api/routes/serveurs'
 import { settingsRoutes } from './api/routes/settings'
 import { registerStatic } from './api/static'
 import { registerSession } from './auth/session'
@@ -30,6 +31,8 @@ import {
 } from './integrations/gmail'
 import { type Mailer, createMailer } from './integrations/mailer'
 import { createBoss } from './jobs/boss'
+import { createSondeHttp, createSshExecutor } from './ops/executor'
+import type { OpsExecutor, SondeHttp } from './ops/types'
 import { createRuntimeAdapter } from './runtime/index'
 import type { RuntimeAdapter } from './runtime/types'
 import { createSettingsStore } from './settings/store'
@@ -72,6 +75,13 @@ export interface AppDeps {
    * dépendances de l'application : c'est le seul des deux qu'un agent touche.
    */
   gmailDrafts?: GmailDraftPort
+  /**
+   * De quoi parler aux serveurs (Phase 6). Les tests passent un faux : aucun
+   * d'eux n'a de machine à toucher, et un test qui exigerait un vrai VPS ne
+   * serait jamais écrit.
+   */
+  opsExecutor?: OpsExecutor
+  opsHttp?: SondeHttp
 }
 
 /** Construit l'instance Fastify sans l'écouter — utilisable tel quel en test. */
@@ -107,6 +117,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(runsRoutes, { db: deps.db, boss })
   await app.register(journalRoutes, { db: deps.db })
   await app.register(savoirsRoutes, { db: deps.db })
+  await app.register(serveursRoutes, {
+    db: deps.db,
+    adapter,
+    // Construit ici et non injecté : l'exécuteur relit le coffre à chaque
+    // appel, il n'a aucun état à partager avec `index.ts`.
+    executor: deps.opsExecutor ?? createSshExecutor(settings),
+    http: deps.opsHttp ?? createSondeHttp(),
+    settings,
+  })
   await app.register(hiveRoutes, { db: deps.db, adapter, cwd: env.WORKTREES_ROOT })
 
   // Le front construit, en production seulement : un seul processus, un seul

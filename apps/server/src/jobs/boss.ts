@@ -7,8 +7,10 @@ import { runAuthHealthcheck } from '../health/auth-check'
 import type { GmailDraftPort } from '../integrations/gmail'
 import type { Mailer } from '../integrations/mailer'
 import { rappelerRevue } from '../knowledge/revue-notif'
+import type { OpsExecutor } from '../ops/types'
 import type { RuntimeAdapter } from '../runtime/types'
 import { COMMUNICANT_QUEUE, registerCommunicantWorker } from './communicant'
+import { OPS_APPLY_QUEUE, registerOpsApplyWorker } from './ops-apply'
 import {
   RUN_STEP_QUEUE,
   type RunStepJobData,
@@ -83,6 +85,13 @@ export interface BossDeps {
    * tests qui n'exercent pas la rédaction.
    */
   gmailDrafts?: GmailDraftPort
+  /**
+   * De quoi exécuter sur un serveur. Omis, la queue existe sans worker : les
+   * changements approuvés attendent au lieu d'échouer, et un redémarrage avec
+   * la dépendance les rattrape. C'est ce que gardent les tests — aucun d'eux
+   * n'a de serveur à toucher.
+   */
+  opsExecutor?: OpsExecutor
 }
 
 /**
@@ -145,6 +154,13 @@ export async function startBoss(boss: PgBoss, deps: BossDeps): Promise<void> {
     await rappelerRevue(deps.db)
   })
   await boss.schedule(REVUE_RAPPEL_QUEUE, REVUE_RAPPEL_CRON)
+
+  // Même arbitrage que la rédaction : la queue existe toujours (la route de
+  // résolution y envoie), le worker seulement si de quoi exécuter a été fourni.
+  await boss.createQueue(OPS_APPLY_QUEUE)
+  if (deps.opsExecutor) {
+    await registerOpsApplyWorker(boss, { db: deps.db, executor: deps.opsExecutor })
+  }
 
   await boss.createQueue(COMMUNICANT_QUEUE)
   if (deps.gmailDrafts) {

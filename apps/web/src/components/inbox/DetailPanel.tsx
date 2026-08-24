@@ -5,6 +5,7 @@ import { SEM, shortId, tagLabel } from './constants'
 import { AlertPanel } from './panels/AlertPanel'
 import { EmailApprovalPanel } from './panels/EmailApprovalPanel'
 import { GenericApprovalPanel } from './panels/GenericApprovalPanel'
+import { OpsApprovalPanel } from './panels/OpsApprovalPanel'
 import { ProdApprovalPanel } from './panels/ProdApprovalPanel'
 import { QuestionPanel } from './panels/QuestionPanel'
 import { RevuePanel } from './panels/RevuePanel'
@@ -32,6 +33,10 @@ export function pickPanel(item: InboxItemView): (props: PanelProps) => ReactElem
     if (item.sub === 'email') return EmailApprovalPanel
     if (item.sub === 'prod') return ProdApprovalPanel
     if (item.sub === 'savoir') return SavoirPanel
+    // Un changement serveur : la commande exacte, sa sauvegarde, son retour
+    // arrière. Sans ce panneau il tomberait dans le repli générique, qui
+    // demanderait d'approuver un titre — sur une machine de production.
+    if (item.sub === 'ops') return OpsApprovalPanel
     return GenericApprovalPanel
   }
   return GenericApprovalPanel

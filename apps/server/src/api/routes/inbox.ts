@@ -11,7 +11,9 @@ import { type InboxItemRow, createInboxItem, getInboxItem, listInbox } from '../
 import { type InboxResponse, resolveInboxItem } from '../../inbox/resolve'
 import type { GmailSendPort } from '../../integrations/gmail'
 import { COMMUNICANT_QUEUE, type CommunicantJobData } from '../../jobs/communicant'
+import { OPS_APPLY_QUEUE, type OpsApplyJobData } from '../../jobs/ops-apply'
 import { archiverSavoirApprouve } from '../../knowledge/propose'
+import { OPS_INBOX_SUBTYPE } from '../../ops/change-request'
 import type { RuntimeAdapter } from '../../runtime/types'
 import type { SettingsStore } from '../../settings/store'
 
@@ -225,6 +227,55 @@ async function enqueueClientEmailDraft(
   }
 }
 
+/**
+ * Suite serveur d'un changement d'exploitation approuvé : Silithid applique.
+ *
+ * C'est la demande explicite de Florian — « j'ai pas envie de me rendre fou à
+ * aller taper des commandes moi-même, mais par contre avec validation ». On
+ * ne se contente donc pas de lui montrer la commande : elle part.
+ *
+ * Enfilé, pas exécuté : un `apt-get install` sur un serveur lent prend une
+ * minute, et faire expirer la requête laisserait Florian sans savoir si son
+ * changement est parti — l'incertitude la plus désagréable de toutes sur une
+ * machine de production. Le résultat s'écrit ensuite dans l'item lui-même
+ * (`payload.applique`), et un échec lève une alerte.
+ *
+ * Le plan qui s'exécutera est celui que l'item porte, vérifié par empreinte au
+ * moment de l'exécution (`ops/change-request.ts`) : ce qui part est ce qui a
+ * été montré, même si quelqu'un a édité l'item entre-temps.
+ */
+async function enqueueOpsApply(
+  deps: InboxRoutesDeps,
+  item: InboxItemRow,
+  log: FastifyBaseLogger,
+): Promise<boolean> {
+  if (item.type !== 'approval' || item.subtype !== OPS_INBOX_SUBTYPE) return false
+  if (item.humanResponse?.approved !== true) return false
+
+  try {
+    await deps.boss.send(OPS_APPLY_QUEUE, { inboxItemId: item.id } satisfies OpsApplyJobData)
+    return true
+  } catch (err) {
+    // Ici, contrairement à la rédaction client, l'échec MÉRITE une alerte : un
+    // humain a décidé qu'un serveur devait changer, et sa décision est en
+    // train de se perdre. Ce n'est pas une proposition qui n'aboutit pas.
+    log.error({ err, itemId: item.id }, 'mise en file du changement serveur échouée')
+    await createInboxItem(deps.db, {
+      type: 'alert',
+      projectId: item.projectId,
+      runId: item.runId,
+      fromRole: 'system',
+      title: `Changement non appliqué · ${item.title}`,
+      payload: {
+        cause: 'la mise en file a échoué · le changement approuvé n’a pas démarré',
+        sourceItemId: item.id,
+        error: err instanceof Error ? err.message : String(err),
+      },
+    })
+    return false
+  }
+}
+
 export async function inboxRoutes(app: FastifyInstance, deps: InboxRoutesDeps): Promise<void> {
   app.get('/api/inbox', { preHandler: app.requireAuth }, async (req, reply) => {
     const parsed = listQuery.safeParse(req.query)
@@ -280,12 +331,14 @@ export async function inboxRoutes(app: FastifyInstance, deps: InboxRoutesDeps): 
       const emailSent = await sendApprovedEmailOrAlert(deps, result.item, req.log)
       const savoirArchived = await archiveSavoirOrAlert(deps, result.item, req.log)
       const emailDraftQueued = await enqueueClientEmailDraft(deps, result.item, req.log)
+      const opsApplyQueued = await enqueueOpsApply(deps, result.item, req.log)
       return {
         item: toApiItem(result.item, slug),
         runResumed: result.runResumed,
         emailSent,
         savoirArchived,
         emailDraftQueued,
+        opsApplyQueued,
       }
     } catch (err) {
       // `resolve.ts` (Task 2, non modifié ici) n'expose que des `Error`

@@ -7,6 +7,7 @@ import { createMailer } from './integrations/mailer'
 import { closeBrowser } from './integrations/playwright'
 import { createBoss, startBoss } from './jobs/boss'
 import { createStepRegistry } from './loop/registry'
+import { createSshExecutor } from './ops/executor'
 import { createRuntimeAdapter } from './runtime/index'
 import { createSettingsStore } from './settings/store'
 
@@ -47,6 +48,9 @@ await startBoss(boss, {
   // De quoi rédiger, pour le worker `communicant.draft` : la surface de
   // brouillon, jamais celle d'envoi.
   gmailDrafts: createLazyGmailDrafts(settings),
+  // De quoi exécuter un changement approuvé sur un serveur. L'accès est relu
+  // dans le coffre à chaque appel, avec la portée du serveur visé.
+  opsExecutor: createSshExecutor(settings),
   stepRegistry: createStepRegistry({
     adapter,
     worktreesRoot: env.WORKTREES_ROOT,

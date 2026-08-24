@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { Kysely } from 'kysely'
+import { type Kysely, sql } from 'kysely'
 import type { Database } from '../db/types'
 import { type InboxItemRow, createInboxItem } from '../inbox/repo'
 import { appendMessage } from '../loop/bus'
@@ -247,6 +247,24 @@ export async function executerChangementApprouve(
   )
 
   const recit = raconter(resultat, deps.serveur)
+
+  // Trace dans l'item lui-même, comme pour un email envoyé : sans elle, rien
+  // ne distingue un item approuvé dont le changement est passé d'un item
+  // approuvé dont l'exécution a échoué.
+  await deps.db
+    .updateTable('inbox_items')
+    .set({
+      payload: sql`payload || ${JSON.stringify({
+        applique: {
+          at: new Date().toISOString(),
+          approvedAt: approbation.approvedAtIso(),
+          ok: resultat.ok,
+          recit,
+        },
+      })}::jsonb`,
+    })
+    .where('id', '=', item.id)
+    .execute()
 
   if (item.runId) {
     await appendMessage(deps.db, {

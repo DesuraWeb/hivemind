@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { NOMS_OPERATIONS } from './operations'
+import { NOMS_OPERATIONS, type NomOperation } from './operations'
 
 /**
  * Le contrat de sortie du rôle `ops`.
@@ -23,7 +23,10 @@ import { NOMS_OPERATIONS } from './operations'
  * il apprend au tour suivant que cette voie n'existe pas.
  */
 
-const nomOperationSchema = z.enum(NOMS_OPERATIONS as [string, ...string[]])
+// Le cast garde le TYPE des noms (`NomOperation`) plutôt que de le dissoudre
+// en `string` : un plan validé est directement utilisable comme `Operation[]`,
+// sans re-narrowing qui pourrait être oublié quelque part.
+const nomOperationSchema = z.enum(NOMS_OPERATIONS as [NomOperation, ...NomOperation[]])
 
 export const operationPlanifieeSchema = z.object({
   nom: nomOperationSchema,
