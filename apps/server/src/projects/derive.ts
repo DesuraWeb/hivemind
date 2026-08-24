@@ -72,6 +72,10 @@ const ROLE_LABEL: Record<RoleKey, string> = {
   reviewer: 'reviewer',
   judge: 'juge',
   communicant: 'communicant',
+  // Aucun état de boucle ne mène à `ops` : il travaille hors de la machine à
+  // états, comme le communicant. Présent ici parce que `Record<RoleKey, …>`
+  // l'exige — et c'est tant mieux, l'oublier passerait inaperçu sinon.
+  ops: 'ops',
 }
 
 function roleForActiveState(state: RunState | null): string | null {

@@ -18,6 +18,20 @@ const TOOLS: Record<RoleKey, unknown> = {
   reviewer: { bash: true, fs: 'read', mcp: ['git', 'gh', 'bus'] },
   judge: { bash: false, fs: 'read', mcp: ['bus'] },
   communicant: { bash: false, fs: 'none', mcp: ['gmail_draft', 'client_kb', 'bus'] },
+  /**
+   * Le rôle qui parle aux serveurs, et celui dont la politique compte le plus.
+   *
+   * `bash: false` et `fs: 'none'` : aucun accès à la machine qui l'héberge. La
+   * seule surface est `ops_read`, qui n'expose qu'une LECTURE de fichier de
+   * configuration sur le serveur distant. Il n'existe aucun outil d'écriture,
+   * aucun outil d'exécution, sur aucune des deux machines.
+   *
+   * Ce qu'il produit est un PLAN, en sortie structurée. C'est du code serveur
+   * qui le valide contre le catalogue borné (`ops/operations.ts`) et le
+   * traduit en commandes. L'impossibilité d'exécuter n'est donc pas une
+   * consigne de prompt : il n'y a rien à appeler.
+   */
+  ops: { bash: false, fs: 'none', mcp: ['ops_read', 'client_kb', 'bus'] },
 }
 
 /**
