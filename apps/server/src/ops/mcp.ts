@@ -89,7 +89,10 @@ export function createOpsReadSurface(deps: OpsReadDeps): OpsReadSurface {
       // donc la même validation (absolu, sans remontée) que dans un plan.
       let commande: string
       try {
-        commande = rendre({ nom: 'lire_fichier', params: { chemin: args.chemin } }).commande
+        commande = rendre(
+          { nom: 'lire_fichier', params: { chemin: args.chemin } },
+          { sudo: deps.serveur.sudo },
+        ).commande
       } catch (err) {
         return texte(
           `Chemin refusé : ${err instanceof Error ? err.message : String(err)}. Un chemin doit être absolu et ne pas remonter de répertoire.`,

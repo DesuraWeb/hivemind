@@ -166,7 +166,7 @@ export async function proposerChangement(
   // Rend et VALIDE tout le plan avant de proposer quoi que ce soit : un plan
   // qu'on ne peut pas rendre ne doit jamais arriver en inbox, sans quoi
   // l'approbation porterait sur quelque chose d'inexécutable.
-  const rendus = rendrePlan(demande.operations)
+  const rendus = rendrePlan(demande.operations, { sudo: deps.serveur.sudo })
   const commandes = rendus.map((r) => r.commande)
 
   const irreversibles = rendus.filter((r) => r.inverse === null).map((r) => r.resume)

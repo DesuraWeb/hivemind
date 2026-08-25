@@ -1,5 +1,11 @@
 import { sh } from '../integrations/ssh'
-import { type CommandeRendue, type Operation, rendre, valider } from './operations'
+import {
+  type CommandeRendue,
+  type Operation,
+  type OptionsRendu,
+  rendre,
+  valider,
+} from './operations'
 import type { OpsExecutor, Serveur } from './types'
 
 /**
@@ -91,10 +97,12 @@ export function validerPlan(operations: Operation[]): { ok: true } | { ok: false
 }
 
 /** Rend toutes les commandes d'un plan, dans l'ordre. Ce que Florian lit avant d'approuver. */
-export function rendrePlan(operations: Operation[]): CommandeRendue[] {
+export function rendrePlan(operations: Operation[], opts: OptionsRendu = {}): CommandeRendue[] {
   const v = validerPlan(operations)
   if (!v.ok) throw new Error(v.raison)
-  return operations.map(rendre)
+  // `.map(rendre)` passerait l'INDEX en second argument, donc un nombre là où
+  // les options sont attendues. Explicite, du coup.
+  return operations.map((op) => rendre(op, opts))
 }
 
 export async function appliquer(
@@ -107,7 +115,10 @@ export async function appliquer(
   const appliquees: OperationAppliquee[] = []
 
   for (const [i, op] of operations.entries()) {
-    const rendu = rendre(op)
+    // L'élévation vient du SERVEUR, pas de l'appelant : c'est une propriété du
+    // compte SSH, et la laisser choisir ailleurs permettrait d'exécuter sans
+    // sudo sur une machine qui en a besoin, ou l'inverse.
+    const rendu = rendre(op, { sudo: deps.serveur.sudo })
     // `set -e` sur une opération multi-lignes (écriture avec sauvegarde) :
     // sans lui, une sauvegarde qui échoue laisserait l'écriture se faire quand
     // même — exactement le cas où le retour arrière disparaît en silence.

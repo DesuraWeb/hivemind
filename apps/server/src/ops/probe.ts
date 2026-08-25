@@ -323,6 +323,7 @@ export async function lireServeur(db: Kysely<Database>, id: string): Promise<Ser
     port: row.port,
     url: row.url,
     etat: row.etat,
+    sudo: row.sudo,
     etatMesureAt: row.etat_mesure_at ? new Date(row.etat_mesure_at as unknown as string) : null,
     preuves: Array.isArray(row.etat_preuves) ? (row.etat_preuves as PreuveSonde[]) : [],
   }

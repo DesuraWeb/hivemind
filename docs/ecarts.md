@@ -105,11 +105,9 @@ Sonde, catalogue borné, plans, sauvegardes, retours arrière : tout est testé
 contre un faux serveur. Le premier contact réel jugera les hypothèses de
 chemins (`/var/www`, `/etc/nginx/sites-enabled`, `phpenmod`).
 
-**Et un défaut connu** : le catalogue rend ses commandes sans `sudo`. Le compte
-`silithid-ops` a un sudoers borné sur le VPS, mais tant que les commandes ne
-sont pas préfixées, elles échoueront pour tout compte qui n'est pas root.
-
-Coût : une dizaine de lignes dans `operations.ts` et les tests qui suivent.
+~~**Et un défaut connu** : le catalogue rend ses commandes sans `sudo`.~~
+Corrigé le 25/08 · drapeau `sudo` par serveur, vrai par défaut. Les écritures
+passent par `tee` et non par une redirection élevée, qui ne marche pas.
 
 ### Les recettes ne se remplissent qu'à moitié
 

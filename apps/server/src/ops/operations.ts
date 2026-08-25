@@ -154,15 +154,62 @@ const HORODATAGE = '$(date +%Y%m%d-%H%M%S)'
  * plan qui contiendrait une opération fantôme doit échouer à la construction,
  * jamais s'exécuter à moitié.
  */
-export function rendre(operation: Operation): CommandeRendue {
+export interface OptionsRendu {
+  /**
+   * Préfixer les commandes privilégiées par `sudo`.
+   *
+   * Le catalogue rendait ses commandes SANS élévation. Sur une machine réelle,
+   * le compte de l'agent n'est pas root (et ne doit pas l'être) : `apt-get
+   * install` et `systemctl reload` échouaient donc systématiquement, alors même
+   * qu'un sudoers borné existait pour eux. Trouvé en préparant le VPS, pas par
+   * un test — aucun test n'avait de vrai serveur à qui parler.
+   */
+  sudo?: boolean
+}
+
+/**
+ * Élève une commande simple. **Pas les redirections** : voir `ecrireFichier`.
+ */
+function priv(commande: string, sudo: boolean): string {
+  return sudo ? `sudo ${commande}` : commande
+}
+
+/**
+ * Écrire un fichier, avec ou sans élévation.
+ *
+ * `sudo cat > /etc/x` **ne marche pas**, et c'est le piège classique : la
+ * redirection est ouverte par le SHELL, qui n'est pas élevé — `sudo` n'élève
+ * que `cat`. Le fichier est donc ouvert par l'utilisateur ordinaire, et
+ * l'écriture échoue avec un « Permission denied » qui semble venir de sudo
+ * alors qu'il vient du shell.
+ *
+ * La forme correcte fait porter l'élévation à ce qui ÉCRIT : `tee`. La sortie
+ * part dans `/dev/null` parce que `tee` recopie sinon tout le contenu sur la
+ * sortie standard, ce qui remplirait la trace d'audit du fichier écrit.
+ */
+function ecrireFichier(chemin: string, contenu: string, sudo: boolean): string {
+  // La redirection et le tube vont sur la LIGNE DE COMMANDE, avant le corps du
+  // here-document. Les mettre après le délimiteur de fin
+  // (`SILITHID_EOF | sudo tee …`) donne du shell INVALIDE : cette ligne ne
+  // correspond plus au délimiteur, le here-document ne se termine jamais, et la
+  // commande reste suspendue jusqu'au bout du script. Attrapé par un test, pas
+  // par relecture.
+  const tete = sudo
+    ? `cat <<'SILITHID_EOF' | sudo tee ${chemin} > /dev/null`
+    : `cat > ${chemin} <<'SILITHID_EOF'`
+  return `${tete}\n${contenu}\nSILITHID_EOF`
+}
+
+export function rendre(operation: Operation, opts: OptionsRendu = {}): CommandeRendue {
   const schema = OPERATIONS_SCHEMAS[operation.nom as NomOperation]
   if (!schema) throw new OperationInconnueError(operation.nom)
+  const sudo = opts.sudo === true
 
   switch (operation.nom) {
     case 'lire_fichier': {
       const p = OPERATIONS_SCHEMAS.lire_fichier.parse(operation.params)
       return {
-        commande: `cat ${sh(p.chemin)}`,
+        commande: priv(`cat ${sh(p.chemin)}`, sudo),
         sauvegarde: null,
         // Une lecture n'a pas d'inverse parce qu'elle n'a rien changé. Le dire
         // ainsi plutôt que `null` : `null` veut dire « irréversible ».
@@ -179,13 +226,13 @@ export function rendre(operation: Operation): CommandeRendue {
         // fois. Le contenu passe par un here-document avec un délimiteur cité,
         // donc aucune substitution : ce qui est écrit est ce qui a été montré.
         commande: [
-          `mkdir -p ${sh(RACINE_SAUVEGARDES)}`,
-          `[ -f ${sh(p.chemin)} ] && cp -p ${sh(p.chemin)} ${sauvegarde}`,
-          `cat > ${sh(p.chemin)} <<'SILITHID_EOF'\n${p.contenu}\nSILITHID_EOF`,
-          ...(p.mode ? [`chmod ${p.mode} ${sh(p.chemin)}`] : []),
+          priv(`mkdir -p ${sh(RACINE_SAUVEGARDES)}`, sudo),
+          `[ -f ${sh(p.chemin)} ] && ${priv(`cp -p ${sh(p.chemin)} ${sauvegarde}`, sudo)}`,
+          ecrireFichier(sh(p.chemin), p.contenu, sudo),
+          ...(p.mode ? [priv(`chmod ${p.mode} ${sh(p.chemin)}`, sudo)] : []),
         ].join('\n'),
         sauvegarde,
-        inverse: `cp -p ${sauvegarde} ${sh(p.chemin)}`,
+        inverse: priv(`cp -p ${sauvegarde} ${sh(p.chemin)}`, sudo),
         resume: `Écrire ${p.chemin}${p.mode ? ` (mode ${p.mode})` : ''}`,
       }
     }
@@ -193,7 +240,9 @@ export function rendre(operation: Operation): CommandeRendue {
     case 'installer_paquet': {
       const p = OPERATIONS_SCHEMAS.installer_paquet.parse(operation.params)
       return {
-        commande: `DEBIAN_FRONTEND=noninteractive apt-get install -y ${sh(p.paquet)}`,
+        // `DEBIAN_FRONTEND` DEVANT `sudo` serait perdu : sudo réinitialise
+        // l'environnement. Il doit être passé à la commande élevée.
+        commande: priv(`DEBIAN_FRONTEND=noninteractive apt-get install -y ${sh(p.paquet)}`, sudo),
         sauvegarde: null,
         // Volontairement PAS `apt-get remove` : désinstaller emporterait les
         // dépendances qu'un autre service utilise peut-être déjà. Un inverse
@@ -206,9 +255,9 @@ export function rendre(operation: Operation): CommandeRendue {
     case 'activer_extension_php': {
       const p = OPERATIONS_SCHEMAS.activer_extension_php.parse(operation.params)
       return {
-        commande: `phpenmod ${sh(p.extension)}`,
+        commande: priv(`phpenmod ${sh(p.extension)}`, sudo),
         sauvegarde: null,
-        inverse: `phpdismod ${sh(p.extension)}`,
+        inverse: priv(`phpdismod ${sh(p.extension)}`, sudo),
         resume: `Activer l’extension PHP ${p.extension}`,
       }
     }
@@ -219,7 +268,7 @@ export function rendre(operation: Operation): CommandeRendue {
         // `reload` et pas `restart` : un rechargement ne coupe pas les
         // connexions en cours. Sur un serveur en service, la différence se
         // mesure en requêtes perdues.
-        commande: `systemctl reload ${sh(p.service)}`,
+        commande: priv(`systemctl reload ${sh(p.service)}`, sudo),
         sauvegarde: null,
         inverse: 'sans objet · un rechargement ne modifie aucun état persistant',
         resume: `Recharger ${p.service}`,
@@ -233,15 +282,15 @@ export function rendre(operation: Operation): CommandeRendue {
       const ligne = `${p.planification} ${p.utilisateur} ${p.commande}`
       return {
         commande: [
-          `mkdir -p ${sh(RACINE_SAUVEGARDES)}`,
-          `[ -f ${sh(chemin)} ] && cp -p ${sh(chemin)} ${sauvegarde}`,
-          `cat > ${sh(chemin)} <<'SILITHID_EOF'\n${ligne}\nSILITHID_EOF`,
+          priv(`mkdir -p ${sh(RACINE_SAUVEGARDES)}`, sudo),
+          `[ -f ${sh(chemin)} ] && ${priv(`cp -p ${sh(chemin)} ${sauvegarde}`, sudo)}`,
+          ecrireFichier(sh(chemin), ligne, sudo),
           // cron ignore silencieusement un fichier au mauvais mode : sans
           // cette ligne, la tâche ne tournerait jamais et rien ne le dirait.
-          `chmod 644 ${sh(chemin)}`,
+          priv(`chmod 644 ${sh(chemin)}`, sudo),
         ].join('\n'),
         sauvegarde,
-        inverse: `rm -f ${sh(chemin)}`,
+        inverse: priv(`rm -f ${sh(chemin)}`, sudo),
         resume: `Poser le cron ${p.nom} · ${p.planification}`,
       }
     }

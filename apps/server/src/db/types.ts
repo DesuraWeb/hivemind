@@ -213,6 +213,8 @@ export interface ServeursTable {
   etat_mesure_at: Timestamp | null
   /** Ce que la sonde a constaté, preuve par preuve. Un verdict sans preuves ne se conteste pas. */
   etat_preuves: JSONColumnType<unknown[], string | undefined, string>
+  /** Le compte SSH doit-il passer par `sudo` ? Voir migration 0013. */
+  sudo: Generated<boolean>
   notes: string | null
   created_at: Generated<Timestamp>
 }

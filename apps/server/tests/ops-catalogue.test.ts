@@ -159,3 +159,106 @@ test('chaque opération du catalogue rend une commande, un résumé, et se prono
     expect(OPERATIONS_SCHEMAS[nom]).toBeDefined()
   }
 })
+
+// --- L'élévation, quand le compte n'est pas root ------------------------------
+
+test('sudo est ajouté aux commandes privilégiées, et pas ailleurs', () => {
+  const install = rendre(
+    { nom: 'installer_paquet', params: { paquet: 'php8.2-gd' } },
+    { sudo: true },
+  )
+  // `DEBIAN_FRONTEND` doit rester DERRIÈRE sudo : sudo réinitialise
+  // l'environnement, une variable posée devant serait perdue.
+  expect(install.commande).toBe(
+    "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y 'php8.2-gd'",
+  )
+
+  const reload = rendre({ nom: 'recharger_service', params: { service: 'nginx' } }, { sudo: true })
+  expect(reload.commande).toBe("sudo systemctl reload 'nginx'")
+
+  // Sans le drapeau, rien ne change : un serveur dont le compte est root garde
+  // des commandes nues.
+  expect(rendre({ nom: 'recharger_service', params: { service: 'nginx' } }).commande).toBe(
+    "systemctl reload 'nginx'",
+  )
+})
+
+test('une écriture élevée passe par tee, jamais par une redirection', () => {
+  const rendu = rendre(
+    {
+      nom: 'ecrire_fichier',
+      params: { chemin: '/etc/php/conf.d/99.ini', contenu: 'memory_limit = 512M' },
+    },
+    { sudo: true },
+  )
+
+  // LE piège. `sudo cat > /etc/x` échoue : la redirection est ouverte par le
+  // SHELL, qui n'est pas élevé — sudo n'élève que `cat`. L'erreur ressemble à
+  // un refus de sudo alors qu'elle vient du shell.
+  expect(rendu.commande).not.toMatch(/sudo cat >/)
+  expect(rendu.commande).toContain('| sudo tee ')
+  // La sortie de tee part au néant : sinon tout le contenu écrit est recopié
+  // sur la sortie standard et pollue la trace d'audit.
+  expect(rendu.commande).toContain('> /dev/null')
+  // Le contenu reste littéral : délimiteur cité, aucune substitution.
+  expect(rendu.commande).toContain("<<'SILITHID_EOF'")
+  expect(rendu.commande).toContain('memory_limit = 512M')
+
+  // La sauvegarde et le retour arrière sont élevés eux aussi · une copie vers
+  // /var/backups faite sans droits laisserait l'écriture sans filet.
+  expect(rendu.commande).toContain('sudo mkdir -p')
+  expect(rendu.commande).toContain('sudo cp -p')
+  expect(rendu.inverse).toMatch(/^sudo cp -p/)
+})
+
+test('le cron élevé écrit par tee et garde son mode', () => {
+  const rendu = rendre(
+    {
+      nom: 'poser_cron',
+      params: {
+        nom: 'silithid-purge',
+        planification: '0 3 * * *',
+        utilisateur: 'www-data',
+        commande: '/usr/local/bin/purge.sh',
+      },
+    },
+    { sudo: true },
+  )
+  expect(rendu.commande).not.toMatch(/sudo cat >/)
+  expect(rendu.commande).toContain('| sudo tee ')
+  expect(rendu.commande).toContain('sudo chmod 644')
+  expect(rendu.inverse).toMatch(/^sudo rm -f/)
+})
+
+test('toutes les opérations élevées commencent par sudo ou y font passer une écriture', () => {
+  const echantillons: Record<string, Record<string, unknown>> = {
+    lire_fichier: { chemin: '/etc/hosts' },
+    ecrire_fichier: { chemin: '/etc/x', contenu: 'y' },
+    installer_paquet: { paquet: 'curl' },
+    activer_extension_php: { extension: 'gd' },
+    recharger_service: { service: 'nginx' },
+    poser_cron: {
+      nom: 'x',
+      planification: '* * * * *',
+      utilisateur: 'root',
+      commande: '/bin/true',
+    },
+  }
+
+  for (const nom of NOMS_OPERATIONS) {
+    const rendu = rendre(
+      { nom, params: echantillons[nom] as Record<string, unknown> },
+      { sudo: true },
+    )
+    // Chaque ligne qui agit doit être élevée. Une seule ligne oubliée fait
+    // échouer l'opération entière au milieu, sur une machine de production.
+    for (const ligne of rendu.commande.split('\n')) {
+      const agit = /^(cat|mkdir|cp|chmod|rm|systemctl|apt-get|phpenmod|DEBIAN_FRONTEND)/.test(ligne)
+      if (!agit) continue
+      expect(
+        ligne.startsWith('sudo ') || ligne.includes('| sudo tee '),
+        `${nom} · ligne non élevée : ${ligne}`,
+      ).toBe(true)
+    }
+  }
+})

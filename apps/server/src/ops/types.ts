@@ -19,6 +19,8 @@ export interface Serveur {
   port: number
   url: string | null
   etat: EtatServeur
+  /** Le compte SSH passe-t-il par `sudo` ? Défaut vrai (migration 0013). */
+  sudo: boolean
   etatMesureAt: Date | null
   preuves: PreuveSonde[]
 }
