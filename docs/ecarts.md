@@ -124,11 +124,18 @@ Les rappels s'accumulent depuis trois sources. Les **étapes** demandent une
 validation humaine, par construction · c'est la ligne. Rien à corriger, mais à
 savoir : une recette neuve ne gagne des étapes que si on lui en approuve.
 
-### Le multi-modèle
+### Le multi-modèle · écarté
 
-Attribuer ChatGPT ou un autre CLI à un profil d'agent. Reporté par Florian.
-`RuntimeAdapter` est déjà le bon point d'extension · le travail est un second
-adaptateur, pas une refonte.
+Attribuer ChatGPT ou un autre CLI à un profil d'agent. **Écarté par Florian le
+25/08 : le produit tourne sur Claude, et c'est très bien comme ça.**
+
+Noté ici plutôt que supprimé, parce que la question reviendra et que
+l'arbitrage vaut d'être retrouvé. `RuntimeAdapter` reste le bon point
+d'extension le jour où elle revient. Et la vraie question ne sera pas « quel
+modèle » mais **quelle surface** : un CLI en sous-processus a ses propres
+outils et son propre bac à sable, donc la `ToolPolicy` de Silithid ne
+s'applique pas à lui · une API avec nos outils garde les garanties. Le second
+est cohérent avec le produit, le premier est plus rapide.
 
 ---
 

@@ -28,6 +28,13 @@ export interface ProjectDraft {
   stack: string
   repoFullName: string
   stagingUrl: string
+  /**
+   * Le juge visuel capture-t-il ce projet ? Vrai par défaut · on le décoche
+   * pour un projet sans interface (une API, une bibliothèque, un script), où
+   * la boucle paierait un navigateur et un échange de modèle pour regarder une
+   * page qui n'existe pas.
+   */
+  jugeVisuel: boolean
   steps: StepDraft[]
 }
 
@@ -53,6 +60,9 @@ export function initialProjectDraft(globe: string): ProjectDraft {
     clientId: '',
     stack: '',
     repoFullName: '',
+    // Vrai par défaut : le juge est le seul contrôle qui regarde le RÉSULTAT
+    // et non le code. Il ne doit pas disparaître par distraction.
+    jugeVisuel: true,
     stagingUrl: '',
     steps: [emptyStep(), emptyStep(), emptyStep()],
   }
@@ -104,6 +114,10 @@ export function toCreateProjectInput(draft: ProjectDraft): CreateProjectInput {
     repoFullName: draft.repoFullName.trim(),
     ...(draft.clientId !== '' ? { clientId: draft.clientId } : {}),
     ...(stack !== '' ? { stack } : {}),
+    // Envoyé seulement quand il diffère du défaut serveur : un corps qui
+    // répète le défaut le fige, et le défaut est le seul endroit où on veut
+    // pouvoir changer d'avis pour tous les projets à venir.
+    ...(draft.jugeVisuel ? {} : { jugeVisuel: false }),
     ...(staging !== '' ? { stagingUrl: staging } : {}),
     ...(steps.length > 0 ? { steps } : {}),
   }

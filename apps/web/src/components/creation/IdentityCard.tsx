@@ -84,6 +84,44 @@ export function IdentityCard({
               ))}
             </select>
           </Field>
+          {/* Décoché, la boucle traverse `deploying` et `judging` sans ouvrir
+              de navigateur. Coché par défaut, et c'est délibéré : le juge est
+              le seul contrôle qui regarde le RÉSULTAT et non le code. */}
+          <label
+            htmlFor="creation-juge"
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 10,
+              padding: '10px 0 2px',
+              cursor: 'pointer',
+            }}
+          >
+            <input
+              id="creation-juge"
+              type="checkbox"
+              checked={project.jugeVisuel}
+              onChange={(e) => onProject({ jugeVisuel: e.target.checked })}
+              style={{ marginTop: 2, accentColor: 'var(--accent)', cursor: 'pointer' }}
+            />
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+              <span style={{ font: '500 12.5px var(--font-sans)', color: 'var(--text-hi)' }}>
+                Contrôle visuel
+              </span>
+              <span
+                style={{
+                  font: '10.5px var(--font-mono)',
+                  color: 'var(--text-low)',
+                  lineHeight: 1.6,
+                }}
+              >
+                {project.jugeVisuel
+                  ? 'le juge capture 390 · 768 · 1440 et décrit les écarts'
+                  : 'aucune capture · à décocher seulement pour un projet sans interface'}
+              </span>
+            </span>
+          </label>
+
           <Field id="creation-stack" label="Stack · facultatif">
             <input
               id="creation-stack"

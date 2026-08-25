@@ -294,6 +294,8 @@ export interface CreateProjectInput {
   stack?: string
   tint?: string
   stagingUrl?: string
+  /** `false` sur un projet sans interface · absent, le serveur met `true`. */
+  jugeVisuel?: boolean
   steps?: CreateProjectStepInput[]
 }
 
