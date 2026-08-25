@@ -1,123 +1,153 @@
-# La mise en production · de l'hébergement du client au déploiement vérifié
+# De l'hébergement du client au déploiement qui apprend
 
 **Date** · 2026-08-25
-**État** · cadrage validé par Florian, section par section
+**État** · cadrage validé section par section
 
-## La question de départ
+## Ce qu'on veut pouvoir faire
 
-« On peut choisir si on met ça sur du staging ou sur le domaine définitif au
-lancement du projet ? Peut-on démarrer un projet sur du staging et après dire
-"j'ai transféré en prod" mais faut quand même faire des modifications pendant
-ce temps ? »
+Arriver, créer une orbe, cadrer un projet avec Hive, le développer, et le
+mettre en ligne — **sur n'importe quelle stack et n'importe quel
+hébergement**, sans jamais parler aux sous-agents. Et que chaque déploiement
+raté rende le suivant meilleur.
 
-Réponse honnête aujourd'hui : non aux deux, et pas pour la même raison.
-
-## Ce que le produit modélise réellement aujourd'hui
-
-**La boucle ne connaît que le staging.** `deploying` reçoit une `DeployTarget`
-(`deploy/types.ts`) : soit un aperçu local éphémère
-(`deploy/local-preview.ts`), soit un vrai staging par SSH et git
-(`deploy/ssh-git.ts`) dont l'URL est dérivée du slug. Le domaine définitif
-n'est pas une cible que la boucle sait écrire.
-
-**La prod n'est pas un déploiement, c'est une décision.** `runProdGate` lève
-un item d'inbox à la fin d'un step réussi — sans condition sur `autonomy`, le
-mode `auto` ne portant que sur l'itération dev↔reviewer. Rien ne pousse en
-production.
-
-**`projects.staging_url` est décoratif.** Une chaîne déclarée, affichée par
-`projects/repo.ts`. `resolveStaging` refuse déjà de la compter comme vérifiée
-et dit quand le juge n'a statué que sur un aperçu local — c'est la bonne
-posture, et c'est aussi l'aveu qu'il n'y a pas de vraie configuration.
-
-**Il n'existe aucun état « ce projet est en ligne ».** Un projet en
-construction et un site vivant depuis six mois sont identiques pour le
-système.
-
-**`buildRollback` est déjà honnête** : il refuse de se déclarer déterminé dès
-qu'un fichier de migration est dans le step, en disant que le retour arrière
-du schéma n'est pas déductible. C'est la règle de Florian, déjà tenue.
+Le produit ne connaît pas de liste de stacks supportées et n'en connaîtra
+pas. React, Astro, Python, Java, PrestaShop : ce qui rend l'agnosticisme réel
+n'est pas un catalogue de cas particuliers, c'est **la recette éditable en
+base plus la mémoire qui la remplit**. Coder une stack en dur serait la seule
+façon de garantir qu'on ne les couvre jamais toutes.
 
 ## Décisions prises
 
-- **Silithid pousse en prod, après approbation** — pas Florian à la main.
-- **Le code ET les migrations qu'il porte**, avec une sauvegarde juste avant.
-  Florian a choisi ce chemin en connaissance du prix : restaurer perd ce que
-  les visiteurs ont écrit depuis la sauvegarde.
-- **Pas de second agent.** Le rôle `ops` existe depuis la Phase 6. Un
-  deuxième rôle qui parle aux serveurs dupliquerait le coffre par serveur, le
-  catalogue borné, la sonde et la piste d'audit — et couperait en deux la
-  mémoire que `savoirs.domaine = 'exploitation'` sert précisément à réunir.
+- **Silithid pousse en prod, après approbation.** Le code ET les migrations
+  qu'il porte, avec une sauvegarde juste avant. Prix assumé : restaurer perd
+  ce que les visiteurs ont écrit depuis.
+- **Pas de second agent d'exploitation.** Le rôle `ops` existe (Phase 6). Un
+  deuxième dupliquerait le coffre, le catalogue borné, la sonde et la piste
+  d'audit — et couperait en deux la mémoire que `savoirs.domaine =
+  'exploitation'` sert à réunir.
+- **Le staging est permanent, pas une phase.** Pas de cycle de vie linéaire :
+  la question est « ce projet a-t-il une cible de prod », et les deux cibles
+  coexistent ensuite pour toujours.
+- **`auto` par défaut, l'inbox comme seul point de contact.** Sans effet sur
+  la prod : `runProdGate` se déclenche quel que soit le mode d'autonomie, et
+  c'est déjà le cas.
+- **La mémoire de déploiement est rappelée en cascade** (voir lot A).
+
+## Ce qui existe déjà, et qu'il ne faut pas réécrire
+
+**La boucle d'apprentissage tourne.** `ops/apprendre.ts` propose des savoirs
+depuis trois sources — ce que le juge a trouvé, ce que Florian a corrigé en
+validant, ce qui a cassé après coup — câblées dans l'inbox, le provisioning
+et les demandes de changement.
+
+**Le gate de prod est déjà honnête.** `resolveStaging` distingue une URL
+déclarée d'une URL vérifiée. `buildRollback` refuse de se déclarer déterminé
+dès qu'une migration est dans le step.
+
+**Le déploiement est déjà une abstraction.** `DeployTarget`, avec l'aperçu
+local et le SSH+git.
 
 ---
 
-## Lot A · L'hébergement du client
+## Lot A · La mémoire indexée sur le bon couple
 
-Prérequis de tout le reste : une configuration de déploiement pointe vers un
-serveur, et si ce serveur ne dit pas de quel type il est, la mise en prod ne
-saura pas si elle a le droit de recharger un service.
+**Le correctif le plus rentable du chantier, et il vient de l'exemple de
+Florian.**
 
-### Le type d'hébergement filtre le catalogue
+`recettePourStack(db, stack)` est indexée sur la stack seule. Or « Astro chez
+PlanetHoster demande de monter PHP » n'est pas un fait sur Astro : Astro sur
+un VPS n'a aucun PHP. Rangé sous `astro`, ce savoir sera rappelé à
+contretemps la moitié du temps — et **un rappel faux coûte plus cher qu'un
+rappel absent**, parce qu'il fait perdre du temps ET décrédibilise les autres.
 
-`serveurs.type` : `vps` | `mutualise`.
+### La cascade
 
-Quatre des six opérations sont **impossibles** sur du mutualisé :
-`installer_paquet` (pas d'apt), `activer_extension_php` (un panneau, pas un
-fichier), `recharger_service` (pas de systemctl), `poser_cron` (le panneau, le
-plus souvent). La colonne `sudo` modélise « on préfixe ou pas », pas « ce
-geste n'existe pas ici ».
+Même mécanique que les cercles de mémoire (`projet → client → globe → hive`),
+qui existe et est éprouvée. Le rappel cherche du plus précis au plus général :
 
-Le filtrage a lieu à la **construction de la surface**, pas dans le prompt :
-un agent à qui on demande de ne pas proposer l'impossible le proposera un
-jour. Les opérations indisponibles ne sont pas déclarées au modèle.
+1. `stack × hébergeur nommé` — « Astro chez PlanetHoster »
+2. `stack × type d'hébergement` — « Astro sur mutualisé »
+3. `stack` seule — « Astro »
 
-### Le rattachement
+Chaque savoir déclare à quel niveau il vaut. Hive décide de ce niveau au
+moment de proposer, et **il se trompera parfois** : c'est le coût accepté de
+la précision, et l'écran de revue des savoirs existe pour le corriger.
 
-Un serveur appartient à un client, et un projet déploie sur un serveur. Sans
-ça, la table est un parc plat et l'agent ne peut pas répondre à « où vit ce
-client » — la question la plus banale qu'on lui posera.
+Concrètement : une colonne d'hébergement sur `savoirs`, nulle quand le savoir
+vaut pour toute stack confondue.
 
-### Ce qui manque pour le mutualisé
+### Le vide se dit
 
-Déployer s'y réduit à poser des fichiers. Les gestes à ajouter sont ceux-là et
-rien de privilégié.
-
----
-
-## Lot B · Le cycle de vie du projet
-
-`projects.etat_vie` : `en_construction` | `en_ligne`, plus la date de mise en
-ligne. C'est ce qui rend « j'ai transféré en prod » exprimable, et ce qui fait
-changer de sens le reste :
-
-- Le gate ne demande plus « on lance ? » mais « on touche à du vivant ? ».
-- Le juge a une référence réelle.
-- La garde sur les URL indexées devient active — casser une URL indexée est
-  la faute la plus chère, et aujourd'hui rien ne distingue le moment où elle
-  devient possible.
+Quand aucun des trois niveaux ne rend rien, Hive l'annonce au lieu de
+proposer avec un aplomb qu'il n'a pas : « je n'ai jamais posé d'Astro sur du
+mutualisé · voilà ce que je vais devoir découvrir ». L'absence de mémoire
+devient une information plutôt qu'un silence indistinguable de la confiance.
 
 ---
 
-## Lot C · Deux cibles réelles
+## Lot B · L'hébergement du client
 
-Une configuration de déploiement par projet : une cible de staging, une cible
-de prod, chacune rattachée à un serveur existant. Hôte, chemin, branche,
-domaine.
+`serveurs.type` : `vps` | `mutualise`, et l'hébergeur nommé.
+
+**Le type filtre le catalogue à la construction de la surface, pas dans le
+prompt.** Quatre des six opérations sont impossibles sur du mutualisé :
+`installer_paquet` (pas d'apt), `activer_extension_php` (un panneau),
+`recharger_service` (pas de systemctl), `poser_cron` (le panneau, le plus
+souvent). Un agent à qui on demande de ne pas proposer l'impossible le
+proposera un jour ; une opération non déclarée, jamais.
+
+**Le rattachement au client et au projet.** Sans lui, `serveurs` est un parc
+plat et l'agent ne peut pas répondre à « où vit ce client ».
+
+**Les gestes du mutualisé.** Déployer s'y réduit à poser des fichiers. Rien de
+privilégié à ajouter.
+
+### Le pré-vol
+
+Avant un premier déploiement sur un couple neuf, une passe de lecture relève
+les versions réellement en place (PHP, Node, extensions) et les compare à ce
+que la stack exige. Trouver un PHP 7.4 avant de pousser coûte une minute ; le
+trouver pendant coûte un site cassé.
+
+---
+
+## Lot C · Où démarre le projet
+
+Entre dans la conversation de création, au même titre que le dépôt. Trois cas,
+et aucun n'est imposé :
+
+- **Staging d'abord**, prod plus tard.
+- **Prod directement** — un site interne, un jetable, un projet où le staging
+  ne vaut pas son coût.
+- **Déjà hébergé** sur un domaine existant, qu'on reprend.
+
+Hive pose la question, vérifie ce qu'il peut vérifier (le domaine répond-il,
+qu'y a-t-il déjà), et remplit la fiche.
+
+---
+
+## Lot D · Les deux cibles
+
+Une configuration de déploiement par projet : staging et prod, chacune
+rattachée à un serveur. Hôte, chemin, branche, domaine.
 
 Les accès viennent du coffre par serveur (`ops.<nom>.ssh_private_key`) : pas
-un secret de plus à gérer, et pas d'accès unique qui ouvrirait tout le parc.
+un secret de plus, et pas d'accès unique qui ouvrirait tout le parc.
 
-`staging_url` déclaré disparaît au profit de l'URL réellement déployée, celle
-que `resolveStaging` sait déjà distinguer.
+`projects.staging_url`, une chaîne déclarée que le gate refuse déjà de croire,
+disparaît au profit de l'URL réellement déployée.
+
+**Le staging survit à la mise en prod.** C'est ce qui permet de ne pas prendre
+de risque sur la prod : on pousse sur le staging, le juge y passe, et la
+promotion en prod est un second geste sur du code déjà vu tourner.
 
 ---
 
-## Lot D · La mise en prod
+## Lot E · La mise en prod
 
 Déclenchée par **l'approbation du gate**, jamais par la boucle. Ça préserve la
-propriété qu'a déjà le gate et qui est bonne : une mise en prod survit au run
-et peut arriver trois jours plus tard. Même mécanique que le staging
-(`createSshGitTarget`), autre cible.
+propriété qu'a déjà le gate : une mise en prod survit au run et peut arriver
+trois jours plus tard.
 
 ### Les migrations, en trois temps dont aucun n'est optionnel
 
@@ -129,41 +159,68 @@ et peut arriver trois jours plus tard. Même mécanique que le staging
 3. **Restauration automatique si elle échoue**, sans attendre une décision
    humaine.
 
-Sur du mutualisé, ces trois temps ne passent pas par les mêmes commandes que
-sur un VPS — d'où la dépendance au lot A.
+Sur du mutualisé, ces trois temps ne passent pas par les mêmes commandes —
+d'où la dépendance au lot B.
 
 ### Le gate montre le prix avant
 
-Quelles migrations vont jouer, où va le dump, et le fait que restaurer perd ce
-que les visiteurs ont écrit depuis. Dit une fois, clairement, à l'endroit de
-la décision.
+Quelles migrations vont jouer, où va le dump, et ce que restaurer ferait
+perdre.
 
 ---
 
-## Lot E · Vérifier après
+## Lot F · Le déploiement apprend
+
+**Le trou actuel** : les trois sources d'apprentissage écoutent le
+provisioning et les demandes de changement, parce que ça passe par l'agent
+d'exploitation. Un déploiement passe par `DeployTarget`, un chemin qui
+n'apprend rien — et c'est exactement là que les erreurs de version se
+produisent.
+
+Un déploiement raté, une commande qui échoue, une version qui ne convient
+pas : tout ça remonte comme savoir, au bon niveau de la cascade.
+
+---
+
+## Lot G · Vérifier après
 
 Après une mise en prod, le juge repasse sur l'URL réelle et une alerte se lève
 si ça ne va pas.
 
 Sans ça, « déployé » veut dire « la commande n'a pas rendu d'erreur », ce qui
 n'est pas la même chose — et Florian l'apprendrait par un client, ce qui est
-exactement la règle qu'il a posée : savoir depuis l'écran, jamais par
-quelqu'un d'autre.
+exactement la règle qu'il a posée.
 
 ---
 
-## Réserves à garder en vue
+## Risques à surveiller
 
-**Le catalogue d'opérations n'a rien pour déployer ni migrer.** L'élargir est
-la surface la plus sensible du produit : un agent qui écrit sur un site client
-en production. Chaque opération ajoutée doit être aussi bornée que les six
-existantes — paramètres validés, aucun passage de commande libre, `MOTS_INTERDITS`
-(`shell`, `exec`, `run`, `bash`…) toujours en garde.
+**L'inbox devenue illisible.** « L'inbox comme seul point de contact » ne tient
+que si elle reste lisible. Le jour où elle porte les mises en prod, les
+conflits de savoir, les bornes atteintes et les propositions de mémoire de six
+projets en parallèle, elle cessera d'être lue — et le silence par défaut
+deviendra un silence subi. À surveiller dès qu'il y a plus de deux projets
+actifs.
 
-**Une recette de déploiement fiable par stack est un vrai travail.** Ce
-chantier vaut ce que vaut la recette de la première stack sur laquelle il
-tourne. Mieux vaut une stack couverte sérieusement que quatre approximées.
+**Le catalogue d'opérations élargi** est la surface la plus sensible du
+produit : un agent qui écrit sur un site client en production. Chaque
+opération ajoutée doit être aussi bornée que les six existantes — paramètres
+validés, aucune commande libre, `MOTS_INTERDITS` toujours en garde.
+
+**Une recette fiable par stack est un vrai travail.** Le chantier vaut ce que
+vaut la recette de la stack sur laquelle il tourne. Mieux vaut une couverte
+sérieusement que quatre approximées — non pas pour limiter le produit à une
+stack, mais parce que la mémoire ne se remplit qu'en tournant pour de vrai.
 
 **La fenêtre entre sauvegarde et restauration** perd le contenu écrit par les
 visiteurs. Inhérent au choix assumé ; la seule atténuation est qu'elle reste
 courte.
+
+---
+
+## Hors périmètre, noté
+
+**La page d'accueil en assistant de société.** Hive en Jarvis : « bonjour
+Florian », le point du matin, ce qui a été fait dans la nuit, les rendez-vous
+à venir via un connecteur d'agenda. Le journal de nuit existe déjà et c'est sa
+matière première. Chantier distinct, à ne pas mélanger à celui-ci.
