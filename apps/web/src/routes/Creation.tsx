@@ -35,6 +35,18 @@ const CLIENTS_QUERY_KEY = ['clients'] as const
 const ROLE_TEMPLATES_QUERY_KEY = ['role-templates'] as const
 
 /** L'orbe de Hive au centre de la scène : config exacte du prototype. */
+/**
+ * Largeur maximale de la scène de création.
+ *
+ * Les fragments sont ancrés aux bords du cadre (`left: 32`, `right: 32`) :
+ * sans plafond, ils suivent la fenêtre et la fiche se disloque sur un grand
+ * écran. 1280 est la largeur pour laquelle le pack est composé : les deux
+ * colonnes (316 à gauche, 372 à droite) encadrent l'orbe au lieu de dériver
+ * loin d'elle. Essayé à 1440 d'abord, et le centre restait trop vide sur un
+ * 1920 · la composition ne se lisait plus comme un seul objet.
+ */
+const LARGEUR_SCENE = 1280
+
 const HIVE_CLUSTER = [{ id: 'hive', name: 'Hive', tint: '#7FD9CF', nodes: 400 }]
 const ORB_CONFIG = {
   PARTICLE_COUNT: 3400,
@@ -396,6 +408,11 @@ export function Creation() {
           padding: '18px 24px 0',
           flexShrink: 0,
           zIndex: 7,
+          // Même gabarit que la scène, sinon « Annuler » part au bord de
+          // l'écran pendant que la fiche reste centrée.
+          width: '100%',
+          maxWidth: LARGEUR_SCENE,
+          alignSelf: 'center',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
@@ -424,7 +441,23 @@ export function Creation() {
         </Link>
       </header>
 
-      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+      {/* La scène est PLAFONNÉE en largeur, et c'est la correction d'un vrai
+          défaut : les fragments sont ancrés aux bords de ce cadre (`left: 32`,
+          `right: 32`). Tant qu'il faisait toute la largeur de la fenêtre, plus
+          l'écran était large, plus la fiche s'écartait de l'orbe — sur un
+          1920, on regardait le centre, on y voyait une orbe et une question,
+          et les panneaux étaient si loin qu'ils passaient pour absents.
+          Constaté sur l'instance en ligne, reproduit ici à 1920 × 1080. */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          position: 'relative',
+          width: '100%',
+          maxWidth: LARGEUR_SCENE,
+          alignSelf: 'center',
+        }}
+      >
         {/* La colonne centrale se centre au-dessus du CTA, pas au milieu du
             cadre entier : le pack la centre sur `inset: 0` et pose le bouton
             « Créer » en surimpression du bas, ce qui ne tient qu'au-delà de
