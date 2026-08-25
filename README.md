@@ -175,6 +175,15 @@ Production : `pnpm build && pnpm start` · un seul processus sert l'API et le fr
 
 </details>
 
+## Ce qui manque
+
+L'écart entre le pack de design et le produit est tenu à un seul endroit :
+[docs/ecarts.md](docs/ecarts.md). Chaque manque y dit s'il est **délibéré** ou
+**pas fait**, et ce que coûterait de le combler.
+
+Pour faire tourner une première boucle de bout en bout :
+[docs/exploitation/premier-projet.md](docs/exploitation/premier-projet.md).
+
 ## Vos règles
 
 Les agents lisent un socle de règles · ce que « fini » veut dire, ce qu'on ne fait jamais sans demander. Un défaut générique est versionné ici ; le vôtre se pose dans `apps/server/src/db/seeds/prive/`, ignoré par git. Voir le [README](apps/server/src/db/seeds/prive/README.md) de ce dossier.

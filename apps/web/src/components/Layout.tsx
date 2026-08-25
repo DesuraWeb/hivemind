@@ -1,4 +1,5 @@
 import { Outlet, useRouterState } from '@tanstack/react-router'
+import { AlerteEnCours } from './AlerteEnCours'
 import { CommandPalette } from './CommandPalette'
 import { HiveStrip } from './HiveStrip'
 import { RailNav } from './RailNav'
@@ -54,6 +55,10 @@ export function Layout() {
           zIndex: 1,
         }}
       >
+        {/* Au-dessus de tout écran, jamais dedans : une panne connue doit se
+            voir depuis l'endroit où on travaille, pas seulement dans l'inbox
+            qu'on n'a pas pensé à ouvrir. Ne rend rien quand rien ne va mal. */}
+        <AlerteEnCours />
         <Outlet />
         {/* Reprend le mécanisme exact du dc-import MajordomeStrip dans les
             prototypes (Inbox/Clients/Globes/Reglages.dc.html, etc.) : enveloppe
