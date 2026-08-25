@@ -269,6 +269,18 @@ export interface SettingsTable {
   updated_at: Generated<Timestamp>
 }
 
+export interface CreationsTable {
+  id: Generated<string>
+  fiche: Generated<unknown>
+  conversation: Generated<unknown>
+  statut: Generated<string>
+  globe_id: string | null
+  project_id: string | null
+  cost_tokens: Generated<number>
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
 export interface Database {
   users: UsersTable
   globes: GlobesTable
@@ -287,4 +299,5 @@ export interface Database {
   usage_windows: UsageWindowsTable
   artifacts: ArtifactsTable
   settings: SettingsTable
+  creations: CreationsTable
 }

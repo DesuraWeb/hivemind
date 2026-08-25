@@ -438,6 +438,52 @@ export interface ApercuMemoireView {
   stack: { code: number; exploitation: number }
 }
 
+/** Un tour de parole sur l'écran de création. */
+export interface TourCreationView {
+  de: 'hive' | 'florian'
+  texte: string
+  a: string
+  /** Une panne, dite à la place de la réplique. */
+  panne?: boolean
+}
+
+/**
+ * La fiche que Hive remplit pendant la conversation.
+ *
+ * Tous les champs sont optionnels, à tous les niveaux : une retouche dit ce
+ * que Hive vient d'apprendre, jamais l'état complet du monde.
+ */
+export interface FicheCreationView {
+  orbeACreer?: { nom: string; couleur?: string } | null
+  projet?: {
+    nom?: string
+    orbe?: string
+    depot?: string
+    clientId?: string
+    stack?: string
+    staging?: string
+    jugeVisuel?: boolean
+  }
+  steps?: { titre: string; specs: string; auto?: boolean; iterations?: number }[]
+  roster?: { key: string; enabled?: boolean; systemPrompt?: string }[]
+  savoirs?: { cercle: string; sujet: string; contenu: string; stack?: string; domaine?: string }[]
+}
+
+export interface CreationView {
+  id: string
+  fiche: FicheCreationView
+  conversation: TourCreationView[]
+  statut: 'en_cours' | 'aboutie' | 'abandonnee'
+  globeId: string | null
+  projectId: string | null
+  costTokens: number
+  /** Dérivée de la fiche côté serveur, jamais stockée. */
+  etape: number
+  manques: string[]
+  /** Vrai quand le dernier tour est une panne. Présent sur la réponse d'un message. */
+  panne?: boolean
+}
+
 export const api = {
   me: () => request<Me>('GET', '/api/me'),
   login: (login: string, password: string) =>
@@ -532,6 +578,22 @@ export const api = {
      * sans consommer de token) : cette route peut être rafraîchie sans coût.
      */
     get: () => request<BudgetView>('GET', '/api/budget'),
+  },
+  creations: {
+    /** La conversation en cours, ou `null` : un rafraîchissement la retrouve. */
+    enCours: () => request<CreationView | null>('GET', '/api/creations/en-cours'),
+    ouvrir: () => request<CreationView>('POST', '/api/creations'),
+    /**
+     * Un tour de parole. Rend 200 même quand le modèle tombe : la panne est un
+     * tour du fil, pas un code d'erreur — Florian doit la lire sur l'écran où
+     * elle se produit, pas dans les logs.
+     */
+    dire: (id: string, texte: string) =>
+      request<CreationView>('POST', `/api/creations/${id}/message`, { texte }),
+    /** La correction manuelle. N'écrit que la fiche, jamais le fil. */
+    corriger: (id: string, fiche: FicheCreationView) =>
+      request<CreationView>('PATCH', `/api/creations/${id}/fiche`, fiche),
+    abandonner: (id: string) => request<void>('POST', `/api/creations/${id}/abandon`),
   },
   globes: {
     list: () => request<GlobeView[]>('GET', '/api/globes'),

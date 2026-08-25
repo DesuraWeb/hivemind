@@ -7,6 +7,7 @@ import { authRoutes } from './api/routes/auth'
 import { budgetRoutes } from './api/routes/budget'
 import { clientsRoutes } from './api/routes/clients'
 import { communicationRoutes } from './api/routes/communication'
+import { creationsRoutes } from './api/routes/creations'
 import { globesRoutes } from './api/routes/globes'
 import { healthRoutes } from './api/routes/health'
 import { hiveRoutes } from './api/routes/hive'
@@ -127,6 +128,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     settings,
   })
   await app.register(hiveRoutes, { db: deps.db, adapter, cwd: env.WORKTREES_ROOT })
+  await app.register(creationsRoutes, { db: deps.db, adapter, cwd: env.WORKTREES_ROOT })
 
   // Le front construit, en production seulement : un seul processus, un seul
   // port. En développement Vite le sert lui-même, avec son rechargement à

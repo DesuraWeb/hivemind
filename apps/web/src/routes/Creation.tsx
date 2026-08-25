@@ -3,11 +3,11 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react'
 import { OrbCanvas } from '../components/OrbCanvas'
 import { IdentityCard } from '../components/creation/IdentityCard'
-import { GlobePrepPanel, InfraPanel } from '../components/creation/InfraPanel'
-import { MemoryColumn } from '../components/creation/MemoryColumn'
+import { InfraPanel } from '../components/creation/InfraPanel'
 import { StepsColumn } from '../components/creation/StepsColumn'
 import { TeamOrbit } from '../components/creation/TeamOrbit'
 import {
+  DEFAULT_ITERATIONS,
   type GlobeDraft,
   type ProjectDraft,
   type StepDraft,
@@ -17,14 +17,14 @@ import {
   toCreateProjectInput,
 } from '../components/creation/draft'
 import { FRAGMENT_LABEL } from '../components/creation/kit'
+import { GLOBE_TINTS } from '../components/creation/script'
 import {
-  type CreationMode,
-  FINAL_STAGE,
-  GLOBE_TINTS,
-  INTRO_TEXT,
-  scriptOf,
-} from '../components/creation/script'
-import { ApiError, type CreateProjectInput, api } from '../lib/api'
+  ApiError,
+  type CreateProjectInput,
+  type CreationView,
+  type FicheCreationView,
+  api,
+} from '../lib/api'
 import { useAuth } from '../lib/auth-context'
 import type { OscilloscopeInstance } from '../vendor/oscilloscope'
 import { create as createOscilloscope } from '../vendor/oscilloscope'
@@ -46,6 +46,78 @@ const ROLE_TEMPLATES_QUERY_KEY = ['role-templates'] as const
  * 1920 · la composition ne se lisait plus comme un seul objet.
  */
 const LARGEUR_SCENE = 1280
+
+/**
+ * L'étape qui découvre le CTA. Dérivée de la fiche côté serveur
+ * (`creation/fiche.ts::etapeFiche`) : un fragment se découvre parce qu'il a du
+ * contenu, jamais parce qu'une horloge est arrivée au bout.
+ */
+const ETAPE_FINALE = 5
+
+/** Le délai avant d'envoyer une correction manuelle. Une frappe ≠ une requête. */
+const DELAI_CORRECTION = 700
+
+const CREATION_QUERY_KEY = ['creation-en-cours'] as const
+
+/**
+ * La fiche de Hive vers le brouillon de l'écran.
+ *
+ * Deux vocabulaires : la fiche est le langage du serveur et de l'agent, le
+ * brouillon celui des composants du pack, déjà écrits. Traduire aux deux
+ * frontières coûte vingt lignes et évite de renommer des props dans cinq
+ * composants pour un gain nul.
+ */
+function ficheVersBrouillon(fiche: FicheCreationView, base: ProjectDraft): ProjectDraft {
+  const p = fiche.projet ?? {}
+  const steps = fiche.steps ?? []
+  return {
+    ...base,
+    name: p.nom ?? base.name,
+    globe: p.orbe ?? base.globe,
+    clientId: p.clientId ?? base.clientId,
+    stack: p.stack ?? base.stack,
+    repoFullName: p.depot ?? base.repoFullName,
+    stagingUrl: p.staging ?? base.stagingUrl,
+    jugeVisuel: p.jugeVisuel ?? base.jugeVisuel,
+    // Les steps de la fiche gagnent quand elle en porte : Hive a réécrit la
+    // liste entière, pas un élément. Sinon on garde ceux de l'écran, qui
+    // peuvent être des lignes vierges que personne n'a encore remplies.
+    steps:
+      steps.length > 0
+        ? steps.map((st, i) => ({
+            id: base.steps[i]?.id ?? `hive-${i}`,
+            title: st.titre,
+            specs: st.specs,
+            auto: st.auto ?? false,
+            iterations: st.iterations ?? DEFAULT_ITERATIONS,
+          }))
+        : base.steps,
+  }
+}
+
+/** Le brouillon vers la fiche. Ce que l'écran affiche fait foi à la correction. */
+function brouillonVersFiche(d: ProjectDraft, fiche: FicheCreationView): FicheCreationView {
+  return {
+    ...fiche,
+    projet: {
+      nom: d.name,
+      orbe: d.globe,
+      ...(d.clientId ? { clientId: d.clientId } : {}),
+      stack: d.stack,
+      depot: d.repoFullName,
+      staging: d.stagingUrl,
+      jugeVisuel: d.jugeVisuel,
+    },
+    steps: d.steps
+      .filter((st) => st.title.trim() !== '' || st.specs.trim() !== '')
+      .map((st) => ({
+        titre: st.title,
+        specs: st.specs,
+        auto: st.auto,
+        iterations: st.iterations,
+      })),
+  }
+}
 
 const HIVE_CLUSTER = [{ id: 'hive', name: 'Hive', tint: '#7FD9CF', nodes: 400 }]
 const ORB_CONFIG = {
@@ -104,38 +176,47 @@ function errorLines(error: unknown): string[] {
 }
 
 /**
- * Scène de Création (`docs/design/Creation.dc.html`), projet et globe.
+ * Scène de Création : Hive arme une orbe et cadre un premier projet.
  *
- * ## Ce que l'écran fait, et ce qu'il ne prétend pas faire
+ * ## Ce que cet écran a cessé d'être
  *
- * La mise en scène du pack est reprise telle quelle dans sa forme : orbe de
- * Hive au centre, choix « Un projet / Un globe » au démarrage, oscilloscope au
- * ralenti tant qu'on n'a pas choisi, fragments qui se matérialisent au fil des
- * `stage`, équipe en orbite, CTA final, « ⟲ rejouer la conversation ».
+ * Il rejouait une conversation préscriptée. Cinq répliques tombaient sur des
+ * `setTimeout` (300, 4200, 8200, 11400, 15000 ms), la fiche se remplissait par
+ * un formulaire à droite, et les deux ne se parlaient pas. Un bouton
+ * « ⟲ rejouer la conversation » rendait le théâtre explicite, et le champ de
+ * saisie répondait « Hive ne traite pas encore la conversation ».
  *
- * Ce qui change, ce sont les affirmations. Le prototype fait dire à Hive qu'il
- * a challengé une stack, réglé des boucles, créé un dépôt GitHub et un staging
- * — et fait parler Florian. Aucun agent n'écoute cet écran, et
- * `POST /api/projects` écrit un projet et ses steps, rien d'autre. Les
- * répliques sont donc réécrites (`creation/script.ts`), le fragment
- * « Infra & accès » ne coche plus rien (`creation/InfraPanel.tsx`), et
- * l'héritage mémoire du globe redevient une description de la cascade
- * (`creation/MemoryColumn.tsx`). Chaque écart est justifié à l'endroit où il
- * est pris.
+ * Il y a maintenant un agent au bout. Florian écrit, Hive répond, challenge,
+ * et remplit l'écran par `proposer_fiche` — un outil que le prompt du
+ * majordome lui demandait déjà d'appeler et qui n'avait jamais existé.
  *
- * ## La mise en scène ne bloque personne
+ * ## L'étape vient de la fiche, plus jamais d'une horloge
  *
- * Les délais du pack (jusqu'à 15 s en mode projet) découvrent les fragments un
- * à un. Quiconque touche un champ, ou clique « passer », saute directement au
- * dernier `stage` : les minuteurs sont coupés, tout est découvert, le CTA est
- * là. Personne n'attend la fin d'une animation pour créer un projet.
+ * `etape` est dérivée côté serveur (`creation/fiche.ts::etapeFiche`) de ce que
+ * la fiche contient réellement. Un fragment se découvre parce qu'il a du
+ * contenu. Un écran qui avance sur une minuterie ment dès que l'agent est plus
+ * lent ou plus rapide que prévu — et un challenge avec recherche l'est.
  *
- * ## Le brouillon survit à l'échec
+ * ## Le choix « Un projet / Un globe » a disparu
  *
- * `project` et `globe` sont des états locaux, jamais dérivés du script ni
- * remis à zéro par lui : un 400 du serveur affiche le champ fautif sous le
- * CTA et laisse la fiche intacte. « Rejouer la conversation » rejoue la
- * narration seule, elle non plus n'efface rien.
+ * C'étaient les deux boutons que Florian ne voulait plus. C'est la
+ * conversation qui décide s'il faut une orbe neuve, et Hive la créera
+ * lui-même. La scène n'a plus qu'un flux.
+ *
+ * ## Rien n'est perdu, jamais
+ *
+ * Le message humain est écrit en base AVANT l'appel au modèle : une panne ne
+ * mange pas ce qui a été tapé. La conversation est persistée
+ * (`creations`), donc un rafraîchissement la retrouve. Et les corrections
+ * manuelles restent possibles sur chaque champ — l'échappatoire quand Hive n'a
+ * pas compris le nom, remontée en différé pour qu'une frappe ne soit pas une
+ * requête.
+ *
+ * ## Une panne se lit ici, pas dans les logs
+ *
+ * Modèle injoignable, budget à sec : la réplique centrale devient l'échec, en
+ * couleur d'alerte, avec sa cause. La route rend 200 pour ça — un code
+ * d'erreur afficherait un toast anonyme et perdrait la trace.
  */
 export function Creation() {
   const search = useSearch({ from: '/creation' })
@@ -151,11 +232,9 @@ export function Creation() {
   })
   const globes = globesQuery.data ?? []
 
-  const [mode, setMode] = useState<CreationMode | null>(search.mode ?? null)
-  const [stage, setStage] = useState(0)
-  const [sceneText, setSceneText] = useState('')
-  const [userLine, setUserLine] = useState('')
   const [hiveText, setHiveText] = useState('')
+  /** Le fil complet, déployé par-dessus la scène. Replié par défaut. */
+  const [filOuvert, setFilOuvert] = useState(false)
   const [project, setProject] = useState<ProjectDraft>(() =>
     initialProjectDraft(search.globe ?? ''),
   )
@@ -171,103 +250,82 @@ export function Creation() {
     })
   }, [globes])
 
+  /**
+   * La conversation en cours. Ouverte à la volée si aucune n'existe : Florian
+   * arrive sur l'écran et parle, il n'a pas à cliquer « commencer ».
+   */
+  const creationQuery = useQuery({
+    queryKey: CREATION_QUERY_KEY,
+    queryFn: async () => (await api.creations.enCours()) ?? (await api.creations.ouvrir()),
+  })
+  const creation = creationQuery.data ?? null
+
+  const dire = useMutation({
+    mutationFn: ({ id, texte }: { id: string; texte: string }) => api.creations.dire(id, texte),
+    onSuccess: (suite) => queryClient.setQueryData(CREATION_QUERY_KEY, suite),
+  })
+
+  const corriger = useMutation({
+    mutationFn: ({ id, fiche }: { id: string; fiche: FicheCreationView }) =>
+      api.creations.corriger(id, fiche),
+    onSuccess: (suite) => queryClient.setQueryData(CREATION_QUERY_KEY, suite),
+  })
+
+  /**
+   * Ce que Hive a rempli descend dans le brouillon affiché.
+   *
+   * Gardé par une empreinte : sans elle, chaque rendu réappliquerait la fiche
+   * et écraserait une correction en cours de frappe. On ne redescend que
+   * lorsque la fiche a réellement changé côté serveur.
+   */
+  const empreinteFiche = useRef('')
+  useEffect(() => {
+    if (!creation) return
+    const empreinte = JSON.stringify(creation.fiche)
+    if (empreinte === empreinteFiche.current) return
+    empreinteFiche.current = empreinte
+    setProject((prev) => ficheVersBrouillon(creation.fiche, prev))
+  }, [creation])
+
+  /**
+   * Les corrections manuelles remontent, en différé.
+   *
+   * `corrige` n'est armé que par une saisie humaine (`touch`), jamais par la
+   * descente ci-dessus : sans ce garde-fou, appliquer une fiche de Hive
+   * déclencherait un PATCH qui la lui renverrait telle quelle, à chaque tour.
+   */
+  const corrige = useRef(false)
+  const minuteurCorrection = useRef(0)
+  useEffect(() => {
+    if (!corrige.current || !creation) return
+    corrige.current = false
+    window.clearTimeout(minuteurCorrection.current)
+    const fiche = brouillonVersFiche(project, creation.fiche)
+    minuteurCorrection.current = window.setTimeout(() => {
+      empreinteFiche.current = JSON.stringify(fiche)
+      corriger.mutate({ id: creation.id, fiche })
+    }, DELAI_CORRECTION)
+  }, [project, creation, corriger.mutate])
+
+  useEffect(() => () => window.clearTimeout(minuteurCorrection.current), [])
+
   const oscHostRef = useRef<HTMLDivElement>(null)
   const oscRef = useRef<OscilloscopeInstance | null>(null)
-  const oscTimer = useRef(0)
-  const timers = useRef<number[]>([])
-
+  /**
+   * L'oscilloscope montre le tour EN VOL, pas une réplique qui tombe.
+   *
+   * Il jouait `speak` sur un minuteur de 2,3 s à chaque ligne scriptée : il
+   * faisait semblant. Un challenge avec recherche prend quinze à trente
+   * secondes, et sans ce signal on croit que c'est cassé.
+   *
+   * `listen` est laissé intact — il a été construit pour le micro, et le lot
+   * vocal le prendra tel quel.
+   */
   useEffect(() => {
-    const host = oscHostRef.current
-    if (!host) return
-    const osc = createOscilloscope(host, { state: 'idle' })
-    oscRef.current = osc
-    return () => {
-      osc.destroy()
-      oscRef.current = null
-    }
-  }, [])
-
-  /** Hive « parle » 2,3 s puis retombe au repos — sauf si le micro écoute. */
-  const speak = useCallback(() => {
     const osc = oscRef.current
     if (!osc || osc.state === 'listen') return
-    osc.setState('speak')
-    window.clearTimeout(oscTimer.current)
-    oscTimer.current = window.setTimeout(() => {
-      const current = oscRef.current
-      if (current && current.state === 'speak') current.setState('idle')
-    }, 2300)
-  }, [])
-
-  const clearTimers = useCallback(() => {
-    for (const id of timers.current) window.clearTimeout(id)
-    timers.current = []
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      clearTimers()
-      window.clearTimeout(oscTimer.current)
-    }
-  }, [clearTimers])
-
-  const play = useCallback(
-    (next: CreationMode) => {
-      clearTimers()
-      setMode(next)
-      setStage(0)
-      setSceneText('')
-      for (const step of scriptOf(next)) {
-        timers.current.push(
-          window.setTimeout(() => {
-            setStage(step.stage)
-            setSceneText(step.text)
-            speak()
-          }, step.at),
-        )
-      }
-    },
-    [clearTimers, speak],
-  )
-
-  const intro = useCallback(() => {
-    clearTimers()
-    setMode(null)
-    setStage(0)
-    setSceneText(INTRO_TEXT)
-    setUserLine('')
-    speak()
-  }, [clearTimers, speak])
-
-  const modeRef = useRef(mode)
-  modeRef.current = mode
-  const stageRef = useRef(stage)
-  stageRef.current = stage
-
-  /** Sauter la mise en scène : tout est découvert, tout de suite. */
-  const skip = useCallback(() => {
-    const current = modeRef.current
-    if (!current) return
-    clearTimers()
-    const script = scriptOf(current)
-    const last = script[script.length - 1]
-    setStage(FINAL_STAGE[current])
-    if (last) setSceneText(last.text)
-  }, [clearTimers])
-
-  /** Toute saisie vaut « j'ai compris, montre-moi le reste ». */
-  const reveal = useCallback(() => {
-    const current = modeRef.current
-    if (current && stageRef.current < FINAL_STAGE[current]) skip()
-  }, [skip])
-
-  const started = useRef(false)
-  useEffect(() => {
-    if (started.current) return
-    started.current = true
-    if (search.mode) play(search.mode)
-    else intro()
-  }, [search.mode, play, intro])
+    osc.setState(dire.isPending ? 'speak' : 'idle')
+  }, [dire.isPending])
 
   const createProject = useMutation({
     mutationFn: (input: CreateProjectInput) => api.projects.create(input),
@@ -299,7 +357,7 @@ export function Creation() {
    * n'est mémoïsé.
    */
   function touch() {
-    reveal()
+    corrige.current = true
     if (createProject.isError) createProject.reset()
     if (createGlobe.isError) createGlobe.reset()
   }
@@ -332,9 +390,22 @@ export function Creation() {
     setProject((prev) => ({ ...prev, steps: prev.steps.filter((s) => s.id !== id) }))
   }
 
-  const isProjet = mode === 'projet'
-  const isGlobe = mode === 'globe'
-  const final = mode !== null && stage >= FINAL_STAGE[mode]
+  /**
+   * Ce que la scène affiche au centre : la dernière réplique de Hive, ou la
+   * panne s'il vient d'en essuyer une. Plus aucune horloge n'intervient.
+   */
+  const dernierHive = [...(creation?.conversation ?? [])].reverse().find((t) => t.de === 'hive')
+  const dernierHumain = [...(creation?.conversation ?? [])]
+    .reverse()
+    .find((t) => t.de === 'florian')
+  const sceneText = dire.isPending
+    ? 'Je regarde…'
+    : (dernierHive?.texte ?? (creationQuery.isLoading ? '' : 'Hive ouvre la scène…'))
+  const userLine = dernierHumain ? `${me.login} · « ${dernierHumain.texte} »` : ''
+
+  const stage = creation?.etape ?? 0
+  const isProjet = true
+  const final = stage >= ETAPE_FINALE
   const pending = createProject.isPending || createGlobe.isPending
   const problems = isProjet
     ? projectProblems(project)
@@ -355,10 +426,10 @@ export function Creation() {
     top: 26,
     width: 316,
     zIndex: 6,
-    opacity: stage >= 1 && mode ? 1 : 0,
-    transform: `translateY(${stage >= 1 && mode ? '0px' : '14px'})`,
+    opacity: stage >= 1 ? 1 : 0,
+    transform: `translateY(${stage >= 1 ? '0px' : '14px'})`,
     transition: 'opacity 600ms var(--ease), transform 600ms var(--ease-out)',
-    pointerEvents: stage >= 1 && mode ? 'auto' : 'none',
+    pointerEvents: stage >= 1 ? 'auto' : 'none',
   }
 
   const fragment2: CSSProperties = {
@@ -370,13 +441,12 @@ export function Creation() {
     maxHeight: 'calc(100% - 52px)',
     overflowY: 'auto',
     paddingRight: 4,
-    pointerEvents: stage >= 2 && mode ? 'auto' : 'none',
+    pointerEvents: stage >= 2 ? 'auto' : 'none',
   }
 
-  // Le fragment du bas apparaît au stage qui le raconte (4 en projet, final en
-  // globe) — le pack ne le découvre qu'au dernier stage tout en lui donnant
-  // `pointer-events: auto` dès le stage 4, ce qui n'est cohérent qu'ici.
-  const bottomShown = isProjet ? stage >= 4 : final
+  // Le fragment du bas apparaît quand la fiche porte un roster ou de la
+  // mémoire (étape 4) : c'est ce qu'il raconte.
+  const bottomShown = stage >= 4
   const fragment4: CSSProperties = {
     position: 'absolute',
     left: 32,
@@ -425,7 +495,7 @@ export function Creation() {
               color: 'var(--text-mid)',
             }}
           >
-            {isProjet ? 'Création · projet' : isGlobe ? 'Création · globe' : 'Création'}
+            {'Création · orbe et projet'}
           </span>
           <span
             style={{
@@ -505,63 +575,38 @@ export function Creation() {
 
           <div
             style={{
-              maxWidth: 640,
+              // 1280 de scène, moins la colonne de gauche (316), celle de
+              // droite (372) et leurs marges (64) : il reste 528 px libres au
+              // centre. Le pack donnait 640 à cette zone, ce qui passait tant
+              // qu'elle affichait une réplique scriptée de deux lignes et
+              // chevauche les fragments dès qu'un agent répond vraiment.
+              maxWidth: 520,
               padding: '0 20px',
               textAlign: 'center',
               fontSize: 19,
               fontWeight: 500,
               lineHeight: 1.6,
-              color: 'var(--text-hi)',
+              // Une panne se lit à l'endroit où irait la réplique, pas dans un
+              // toast qui disparaît ni dans les logs du serveur.
+              color: dernierHive?.panne ? 'var(--sem-alert)' : 'var(--text-hi)',
               textWrap: 'pretty',
               minHeight: 62,
+              // Une réplique longue défile DANS sa zone au lieu de pousser la
+              // saisie hors de l'écran. Hive a pour consigne de rester court,
+              // mais une consigne de prompt ne tient pas une mise en page :
+              // le jour où il déborde, la scène doit rester utilisable.
+              maxHeight: 200,
+              overflowY: 'auto',
+              pointerEvents: 'auto',
             }}
           >
             {sceneText}
           </div>
 
-          {mode === null && (
-            <div style={{ display: 'flex', gap: 12, pointerEvents: 'auto' }}>
-              <button
-                type="button"
-                onClick={() => play('projet')}
-                className="creation-cta"
-                style={{
-                  padding: '12px 26px',
-                  borderRadius: 'var(--r-full)',
-                  border: '1px solid transparent',
-                  background: 'var(--accent)',
-                  color: 'var(--accent-ink)',
-                  font: '600 14px var(--font-sans)',
-                  cursor: 'pointer',
-                }}
-              >
-                Un projet
-              </button>
-              <button
-                type="button"
-                onClick={() => play('globe')}
-                className="creation-ghost"
-                style={{
-                  padding: '12px 26px',
-                  borderRadius: 'var(--r-full)',
-                  border: '1px solid var(--line-strong)',
-                  background: 'rgba(9, 14, 22, 0.6)',
-                  color: 'var(--text-hi)',
-                  font: '600 14px var(--font-sans)',
-                  cursor: 'pointer',
-                }}
-              >
-                Un globe
-              </button>
-            </div>
-          )}
-
           <div
             style={{
               width: 420,
               height: 52,
-              opacity: mode === null ? 0.35 : 1,
-              transition: 'opacity var(--dur-3) var(--ease)',
             }}
           >
             <div ref={oscHostRef} style={{ width: '100%', height: '100%' }} />
@@ -573,8 +618,6 @@ export function Creation() {
               alignItems: 'center',
               gap: 10,
               pointerEvents: 'auto',
-              opacity: mode === null ? 0.35 : 1,
-              transition: 'opacity var(--dur-3) var(--ease)',
             }}
           >
             <input
@@ -584,15 +627,15 @@ export function Creation() {
               onKeyDown={(e) => {
                 if (e.key !== 'Enter') return
                 const said = hiveText.trim()
-                if (said === '') return
-                // On affiche ce qui a été écrit, et on dit tout de suite que
-                // personne ne l'a lu : aucun agent n'est branché sur cet écran.
-                // Une réponse simulée de Hive serait une conversation inventée.
-                setUserLine(`${me.login} · « ${said} » · Hive ne traite pas encore la conversation`)
+                if (said === '' || !creation || dire.isPending) return
+                // Vidé tout de suite : ce que Florian a tapé est déjà écrit en
+                // base par le serveur avant l'appel au modèle, il ne peut pas
+                // être perdu par ce vidage.
                 setHiveText('')
+                dire.mutate({ id: creation.id, texte: said })
               }}
               type="text"
-              placeholder="ou écrivez à Hive…"
+              placeholder="parlez à Hive…"
               aria-label="Écrire à Hive"
               style={{
                 width: 320,
@@ -608,10 +651,10 @@ export function Creation() {
           </div>
         </div>
 
-        {mode !== null && (
+        {
           <IdentityCard
             style={fragment1}
-            mode={mode}
+            mode="projet"
             project={project}
             globe={globe}
             globes={globes}
@@ -619,9 +662,9 @@ export function Creation() {
             onProject={patchProject}
             onGlobe={patchGlobe}
           />
-        )}
+        }
 
-        {isProjet && (
+        {
           <StepsColumn
             style={fragment2}
             revealed={stage >= 2}
@@ -630,13 +673,10 @@ export function Creation() {
             onAdd={addStep}
             onRemove={removeStep}
           />
-        )}
-        {isGlobe && <MemoryColumn style={fragment2} revealed={stage >= 2} />}
+        }
+        <InfraPanel style={fragment4} draft={project} onPatch={patchProject} />
 
-        {isProjet && <InfraPanel style={fragment4} draft={project} onPatch={patchProject} />}
-        {isGlobe && <GlobePrepPanel style={fragment4} />}
-
-        {mode !== null && (
+        {
           <div
             style={{
               position: 'absolute',
@@ -673,7 +713,7 @@ export function Creation() {
                 opacity: pending || problems.length > 0 ? 0.55 : 1,
               }}
             >
-              {pending ? 'Création…' : isGlobe ? 'Créer le globe' : 'Créer le projet'}
+              {pending ? 'Création…' : 'Créer le projet'}
             </button>
             <span
               style={{
@@ -685,9 +725,7 @@ export function Creation() {
             >
               {problems.length > 0
                 ? `il manque ${problems.join(' · ')}`
-                : isGlobe
-                  ? "un globe de plus · rien d'autre ne change"
-                  : "le projet et ses steps sont enregistrés · aucun dépôt ni staging n'est créé"}
+                : "le projet et ses steps sont enregistrés · aucun dépôt ni staging n'est créé"}
             </span>
             {failure && (
               <div
@@ -709,11 +747,71 @@ export function Creation() {
               </div>
             )}
           </div>
+        }
+
+        {filOuvert && (
+          <div
+            style={{
+              position: 'absolute',
+              left: '50%',
+              bottom: 64,
+              transform: 'translateX(-50%)',
+              zIndex: 8,
+              width: 'min(560px, calc(100% - 64px))',
+              maxHeight: '52%',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+              padding: 18,
+              borderRadius: 'var(--r-lg)',
+              border: '1px solid var(--line-strong)',
+              // Opaque, et pas seulement sombre : à 0.94 la réplique centrale
+              // transparaissait à travers le fil et les deux textes se
+              // superposaient. Le flou couvre ce que l'opacité laisse passer.
+              background: 'var(--bg-0)',
+              backdropFilter: 'blur(12px)',
+              boxShadow: '0 18px 48px rgba(0, 0, 0, 0.55)',
+              pointerEvents: 'auto',
+            }}
+            // Le dernier tour est le plus utile : on ouvre sur la fin du fil,
+            // pas sur son début.
+            ref={(n) => {
+              if (n) n.scrollTop = n.scrollHeight
+            }}
+          >
+            {(creation?.conversation ?? []).map((tour) => (
+              <div
+                key={`${tour.a}-${tour.de}`}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 3,
+                  alignItems: tour.de === 'florian' ? 'flex-end' : 'flex-start',
+                }}
+              >
+                <span style={{ font: '10.5px var(--font-mono)', color: 'var(--text-low)' }}>
+                  {tour.de === 'florian' ? me.login : 'Hive'}
+                </span>
+                <span
+                  style={{
+                    font: '13.5px var(--font-sans)',
+                    lineHeight: 1.55,
+                    textAlign: tour.de === 'florian' ? 'right' : 'left',
+                    color: tour.panne ? 'var(--sem-alert)' : 'var(--text-hi)',
+                    textWrap: 'pretty',
+                  }}
+                >
+                  {tour.texte}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
 
         <button
           type="button"
-          onClick={() => (mode !== null && !final ? skip() : intro())}
+          onClick={() => setFilOuvert((v) => !v)}
           className="creation-ghost"
           style={{
             position: 'absolute',
@@ -728,7 +826,9 @@ export function Creation() {
             padding: 4,
           }}
         >
-          {mode !== null && !final ? 'passer la mise en scène →' : '⟲ rejouer la conversation'}
+          {filOuvert
+            ? 'replier le fil ⌄'
+            : `déployer le fil (${creation?.conversation.length ?? 0}) ⌃`}
         </button>
 
         {globesQuery.isSuccess && globes.length === 0 && isProjet && (

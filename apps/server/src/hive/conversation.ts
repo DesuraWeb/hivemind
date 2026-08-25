@@ -132,7 +132,14 @@ async function buildContext(db: Kysely<Database>): Promise<string> {
  *
  * La version la plus haute s'applique, comme partout ailleurs.
  */
-async function readMajordomeTemplate(
+/**
+ * Le prompt et la politique d'outils de Hive.
+ *
+ * Exportée parce que l'écran de création s'en sert aussi : c'est le même Hive,
+ * avec une tâche en plus (`creation/brief.ts`). Deux lectures parallèles du
+ * même template dériveraient le jour où l'une des deux change de version.
+ */
+export async function readMajordomeTemplate(
   db: Kysely<Database>,
 ): Promise<{ systemPrompt: string; tools: ToolPolicy }> {
   const row = await db
