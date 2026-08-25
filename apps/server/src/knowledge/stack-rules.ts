@@ -32,6 +32,30 @@ import type { Database } from '../db/types'
  */
 
 /**
+ * Où un savoir de déploiement est vrai.
+ *
+ * Vient du serveur visé. Les deux champs sont indépendants : on peut connaître
+ * le type sans connaître l'hébergeur (un VPS chez soi), et l'inverse n'arrive
+ * pas mais ne casserait rien.
+ */
+export interface ContexteHebergement {
+  /** L'hébergeur nommé, normalisé en minuscules : `planethoster`, `o2switch`… */
+  hebergeur?: string | null
+  /** `vps` ou `mutualise`. */
+  type?: string | null
+}
+
+/** Comment nommer un couple, pour pouvoir dire qu'on ne le connaît pas. */
+export function nommerCouple(stack: string | null, ou?: ContexteHebergement): string {
+  const s = stack?.trim() || 'stack inconnue'
+  const chez = ou?.hebergeur?.trim()
+  const type = ou?.type?.trim()
+  if (chez) return `${s} chez ${chez}`
+  if (type) return `${s} sur ${type}`
+  return s
+}
+
+/**
  * Savoirs de stack appris, pour la stack d'un projet.
  *
  * Comparaison en minuscules et par inclusion, la même que le socle statique :
@@ -56,12 +80,22 @@ export async function savoirsDeStack(
    * qu'on ne lit plus.
    */
   domaine: DomaineSavoir = 'code',
+  /**
+   * Où ce savoir sera utilisé. **Absent = seuls les savoirs universels
+   * remontent** (`hebergement is null`).
+   *
+   * C'est délibéré et ça préserve l'appelant historique : le cadrage d'un dev
+   * n'a aucun contexte d'hébergement, et une contrainte propre à PlanetHoster
+   * n'a rien à y faire. Sans ce défaut strict, ajouter un niveau à la mémoire
+   * changerait le prompt d'un rôle qui n'a rien demandé.
+   */
+  ou?: ContexteHebergement,
 ): Promise<string[]> {
   if (!stack) return []
 
   const lignes = await db
     .selectFrom('savoirs')
-    .select(['sujet', 'contenu', 'stack'])
+    .select(['sujet', 'contenu', 'stack', 'hebergement'])
     .where('etat', '=', 'actif')
     .where('cercle', '=', 'hive')
     .where('stack', 'is not', null)
@@ -70,9 +104,41 @@ export async function savoirsDeStack(
     .execute()
 
   const cible = stack.toLowerCase()
-  return lignes
-    .filter((l) => l.stack !== null && cible.includes(l.stack.toLowerCase()))
-    .map((l) => `- ${l.sujet} · ${l.contenu}`)
+  const chez = ou?.hebergeur?.trim().toLowerCase() || null
+  const type = ou?.type?.trim().toLowerCase() || null
+
+  /**
+   * La cascade, du plus précis au plus général — même mécanique que les
+   * cercles de mémoire. `null` remonte toujours : un savoir universel reste
+   * vrai chez cet hébergeur-là aussi.
+   */
+  function precision(niveau: string | null): 0 | 1 | 2 | null {
+    if (niveau === null) return 0
+    const n = niveau.trim().toLowerCase()
+    if (chez && n === chez) return 2
+    if (type && n === type) return 1
+    // Un savoir portant un AUTRE hébergement : écarté, pas rétrogradé. C'est
+    // tout l'intérêt du niveau — « Astro chez PlanetHoster » ne doit jamais
+    // remonter pour un déploiement sur VPS.
+    return null
+  }
+
+  return (
+    lignes
+      .filter((l) => l.stack !== null && cible.includes(l.stack.toLowerCase()))
+      .map((l) => ({ l, p: precision(l.hebergement) }))
+      .filter((x): x is { l: (typeof lignes)[number]; p: 0 | 1 | 2 } => x.p !== null)
+      // Le plus précis en tête : un agent qui lit une liste pondère le haut.
+      .sort((a, b) => b.p - a.p)
+      .map(({ l, p }) => {
+        // La portée est dite sur la ligne. Un agent doit pouvoir juger à quel
+        // point un rappel le concerne — et un humain qui relit, savoir lequel
+        // corriger.
+        const portee =
+          p === 2 ? `(chez ${l.hebergement}) ` : p === 1 ? `(sur ${l.hebergement}) ` : ''
+        return `- ${portee}${l.sujet} · ${l.contenu}`
+      })
+  )
 }
 
 /**

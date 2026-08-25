@@ -110,6 +110,16 @@ export const candidatSavoirSchema = z.object({
   contenu: z.string().min(20),
   cercle: z.enum(['projet', 'client', 'globe', 'hive']),
   stack: z.string().min(1).optional(),
+  /**
+   * Où ce savoir est vrai, quand il ne l'est pas partout : un hébergeur nommé
+   * (`planethoster`) ou un type d'hébergement (`mutualise`, `vps`).
+   *
+   * Absent = vrai partout, et c'est le bon défaut. Déclaré à tort, un savoir
+   * devient presque invisible ; omis à tort, il est rappelé à contretemps —
+   * mais l'écran de revue permet de corriger l'un comme l'autre, et le second
+   * cas se remarque, le premier non.
+   */
+  hebergement: z.string().min(1).max(60).optional(),
 })
 export type CandidatSavoir = z.infer<typeof candidatSavoirSchema>
 

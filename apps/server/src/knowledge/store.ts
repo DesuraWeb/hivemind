@@ -35,6 +35,13 @@ export interface Savoir {
   sujet: string
   contenu: string
   stack: string | null
+  /**
+   * Où ce savoir vaut : un hébergeur nommé, un type d'hébergement, ou `null`
+   * quand il vaut partout (migration 0016). Rendu à l'écran pour que Florian
+   * puisse corriger une portée mal déclarée — c'est la seule façon de réparer
+   * un savoir devenu invisible parce qu'il a été rangé trop bas.
+   */
+  hebergement: string | null
   /** `code` (dev, garant) ou `exploitation` (agent ops). Voir migration 0012. */
   domaine: DomaineSavoir
   rappels: number
@@ -51,6 +58,15 @@ export interface ArchiverInput extends CercleRef {
   sujet: string
   contenu: string
   stack?: string | null
+  /**
+   * Le niveau auquel le savoir vaut : un hébergeur nommé, un type
+   * d'hébergement, ou omis quand il vaut partout (migration 0016).
+   *
+   * Omis est le bon défaut : un savoir dont personne n'a déclaré la portée
+   * vaut partout, ce qui est le comportement d'avant. L'inverse — supposer
+   * qu'il est propre à un hébergeur — le rendrait invisible presque toujours.
+   */
+  hebergement?: string | null
   /**
    * Omis, `code` — le défaut de la colonne, et le bon : tous les savoirs qui
    * existaient avant la Phase 6 viennent du garant. Un savoir dont personne
@@ -70,6 +86,7 @@ function ligneVersSavoir(r: {
   sujet: string
   contenu: string
   stack: string | null
+  hebergement: string | null
   domaine: DomaineSavoir
   rappels: number
   created_at: unknown
@@ -83,6 +100,7 @@ function ligneVersSavoir(r: {
     sujet: r.sujet,
     contenu: r.contenu,
     stack: r.stack,
+    hebergement: r.hebergement,
     domaine: r.domaine,
     rappels: r.rappels,
     createdAt: new Date(r.created_at as string),
@@ -98,6 +116,7 @@ const COLONNES = [
   'sujet',
   'contenu',
   'stack',
+  'hebergement',
   'domaine',
   'rappels',
   'created_at',
@@ -114,6 +133,7 @@ export async function archiver(db: Kysely<Database>, input: ArchiverInput): Prom
       sujet: input.sujet.trim(),
       contenu: input.contenu.trim(),
       stack: input.stack ?? null,
+      hebergement: input.hebergement ?? null,
       ...(input.domaine ? { domaine: input.domaine } : {}),
       origine_run_id: input.origineRunId ?? null,
       origine_item_id: input.origineItemId ?? null,
@@ -161,6 +181,14 @@ export async function corriger(
         sujet: (sujet ?? actuel.sujet).trim(),
         contenu: contenu.trim(),
         stack: actuel.stack,
+        hebergement: actuel.hebergement,
+        // Recopié comme le reste, et il ne l'était PAS — bug trouvé en
+        // ajoutant la portée d'hébergement. Sans cette ligne, la nouvelle
+        // version retombe sur le défaut de colonne (`code`) : reformuler un
+        // savoir d'exploitation le faisait basculer en silence dans la mémoire
+        // du dev. Invisible pour l'agent ops qui venait de l'apprendre, et du
+        // bruit pour le garant qui ne l'a jamais demandé.
+        domaine: actuel.domaine,
         origine_run_id: actuel.origine_run_id,
         origine_item_id: actuel.origine_item_id,
         // Le compteur d'utilité NE REPART PAS à zéro : c'est le savoir qui a

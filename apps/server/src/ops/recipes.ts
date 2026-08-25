@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely'
 import type { Database } from '../db/types'
-import { savoirsDeStack } from '../knowledge/stack-rules'
+import { type ContexteHebergement, nommerCouple, savoirsDeStack } from '../knowledge/stack-rules'
 import { estAuCatalogue } from './operations'
 
 /**
@@ -272,14 +272,43 @@ export function formaterRecette(stack: string, recette: Recette, appris: string[
 export async function recetteComplete(
   db: Kysely<Database>,
   stack: string | null,
+  /** Où l'on déploie. Sans lui, seuls les savoirs universels remontent. */
+  ou?: ContexteHebergement,
 ): Promise<string | null> {
   const trouvee = await recettePourStack(db, stack)
   // Lus à chaque fois, jamais recopiés dans la recette : une seconde source de
   // vérité divergerait de la première au premier crash.
-  const appris = await savoirsDeStack(db, stack, 'exploitation')
+  const appris = await savoirsDeStack(db, stack, 'exploitation', ou)
+
+  // Le vide se dit.
+  //
+  // Quand aucun des trois niveaux de la cascade ne rend rien, on l'ANNONCE au
+  // lieu de laisser l'agent proposer avec un aplomb qu'il n'a pas. Un silence
+  // est indistinguable de la confiance : « rien à signaler » et « je n'ai
+  // jamais fait ça » mènent au même prompt, et pas au même plan.
+  const jamaisFait =
+    appris.length === 0 && (ou?.hebergeur || ou?.type)
+      ? [
+          '',
+          '## Ce couple est neuf',
+          [
+            `Aucun déploiement de ${nommerCouple(stack, ou)} n'a jamais été enregistré.`,
+            'Tu n’as pas de mémoire ici : lis ce qui est en place avant de proposer,',
+            'annonce à Florian ce que tu vas devoir découvrir, et ne présente aucune',
+            'version ni aucun chemin comme acquis.',
+          ].join(' '),
+        ]
+      : []
 
   if (!trouvee) {
-    if (appris.length === 0) return null
+    if (appris.length === 0 && jamaisFait.length === 0) return null
+    if (appris.length === 0) {
+      return [
+        `# Stack « ${stack} » · aucune recette écrite`,
+        'Personne n’a encore posé de marche à suivre pour cette stack.',
+        ...jamaisFait,
+      ].join('\n')
+    }
     return [
       `# Stack « ${stack} » · aucune recette écrite`,
       'Personne n’a encore posé de marche à suivre pour cette stack. Ce qui suit vient ' +
@@ -287,8 +316,9 @@ export async function recetteComplete(
       '',
       '## Appris sur les déploiements précédents',
       ...appris,
+      ...jamaisFait,
     ].join('\n')
   }
 
-  return formaterRecette(trouvee.stack, trouvee.recette, appris)
+  return [formaterRecette(trouvee.stack, trouvee.recette, appris), ...jamaisFait].join('\n')
 }

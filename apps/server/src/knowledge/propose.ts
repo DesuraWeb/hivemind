@@ -198,6 +198,16 @@ const ON_APPROVE =
  * zéro item, jamais un item vide. C'est le cas normal, et c'est ce qui garde
  * la revue du matin lisible.
  */
+/**
+ * La portée d'un candidat, en clair. Vide quand il n'en déclare aucune : une
+ * mention « partout » sur chaque savoir serait du bruit sur le cas normal.
+ */
+function portee(candidat: CandidatSavoir): string {
+  if (!candidat.stack) return ''
+  if (!candidat.hebergement) return ` · portée : ${candidat.stack}, partout`
+  return ` · portée : ${candidat.stack} uniquement sur « ${candidat.hebergement} »`
+}
+
 export async function proposerSavoirs(
   db: Kysely<Database>,
   opts: ProposerSavoirsOptions,
@@ -286,9 +296,14 @@ export async function proposerSavoirs(
       title: titre(candidat.contenu),
       payload: {
         cause: candidat.sujet,
+        // La PORTÉE est dite ici, dans la ligne lisible affichée à l'écran.
+        // C'est le seul endroit où Florian voit un savoir avant qu'il n'entre
+        // en mémoire, donc le seul où une portée mal déclarée se corrige. Un
+        // savoir rangé trop bas devient presque invisible ensuite, et rien à
+        // l'écran ne dirait pourquoi il ne remonte jamais.
         ctx: `${ctx.projectName} · ${opts.fromRole ?? 'garant'}${
           opts.runId ? ` (run ${opts.runId})` : ''
-        } · proposé pour : ${cible.libelle}`,
+        } · proposé pour : ${cible.libelle}${portee(candidat)}`,
         savoir: {
           sujet: candidat.sujet,
           contenu: candidat.contenu,
@@ -296,6 +311,10 @@ export async function proposerSavoirs(
           cercle_id: cible.cercleId,
           cible: cible.libelle,
           ...(candidat.stack ? { stack: candidat.stack } : {}),
+          // Par candidat et pas par appel : dans un même lot, « monter PHP
+          // chez PlanetHoster » et « poser le robots.txt » n'ont pas la même
+          // portée. Les ranger au même niveau rendrait l'un des deux faux.
+          ...(candidat.hebergement ? { hebergement: candidat.hebergement } : {}),
           // Recopié dans le payload : c'est lui qui décidera, à l'archivage,
           // dans laquelle des deux mémoires le savoir entre. Le déduire du
           // rôle au moment de l'archivage marcherait aujourd'hui et casserait
@@ -389,6 +408,7 @@ export async function archiverSavoirApprouve(
     cercle?: unknown
     cercle_id?: unknown
     stack?: unknown
+    hebergement?: unknown
     domaine?: unknown
   }
   if (typeof champs.sujet !== 'string' || typeof champs.contenu !== 'string') {
@@ -408,6 +428,7 @@ export async function archiverSavoirApprouve(
     sujet,
     contenu,
     ...(typeof champs.stack === 'string' ? { stack: champs.stack } : {}),
+    ...(typeof champs.hebergement === 'string' ? { hebergement: champs.hebergement } : {}),
     // Repris du payload, jamais déduit du rôle : un item écrit avant la
     // migration 0012 n'en porte pas, et retombe sur le défaut de la colonne.
     ...(champs.domaine === 'exploitation' ? { domaine: 'exploitation' as const } : {}),

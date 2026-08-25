@@ -163,6 +163,16 @@ export interface SavoirsTable {
    * deux mémoires (migration 0012).
    */
   domaine: Generated<DomaineSavoir>
+  /**
+   * Le niveau auquel ce savoir est vrai : un hébergeur nommé
+   * (`planethoster`), un type d'hébergement (`mutualise`, `vps`), ou `null`
+   * quand il vaut partout (migration 0016).
+   *
+   * « Astro chez PlanetHoster demande de monter PHP » n'est pas un fait sur
+   * Astro : sur un VPS il n'y a aucun PHP. Sans ce niveau, le savoir serait
+   * rappelé à contretemps une fois sur deux.
+   */
+  hebergement: string | null
   etat: Generated<'actif' | 'archive'>
   /** Score d'utilité, incrémenté à chaque rappel. */
   rappels: Generated<number>
