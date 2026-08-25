@@ -137,6 +137,42 @@ outils et son propre bac à sable, donc la `ToolPolicy` de Silithid ne
 s'applique pas à lui · une API avec nos outils garde les garanties. Le second
 est cohérent avec le produit, le premier est plus rapide.
 
+### L'écran de Création à 375 px · inutilisable
+
+La scène est une composition en positionnement absolu calée sur 1280 px de
+large : deux colonnes de fragments ancrées aux bords, l'orbe au centre. Sur un
+téléphone, tout se chevauche et rien n'est utilisable.
+
+Ce n'est pas une régression de la création conversationnelle · c'était déjà le
+cas quand la scène rejouait un script. Mais **ça ne respecte pas « fini = testé
+sur mobile 390 px »**, et c'est le seul écran du produit dans ce cas.
+
+Ce qu'il faudrait : sous une largeur de rupture, empiler verticalement au lieu
+de positionner en absolu — conversation, puis identité, puis steps, puis infra.
+L'orbe passe en bandeau. C'est son propre lot, pas un ajustement.
+
+### La chaîne outil → écran n'est pas testée de bout en bout
+
+Le faux adaptateur (`runtime/fake.ts`) **rapporte** un appel d'outil sans
+l'exécuter : il n'instancie pas les serveurs MCP en process. La chaîne « Hive
+appelle `proposer_fiche` → la fiche se remplit → le fragment apparaît » n'est
+donc vérifiée que par ses deux moitiés (la forme de la surface, et
+l'application des retouches, qui est pure).
+
+Vaut pour toutes les surfaces MCP du dépôt, pas seulement la création. Le jour
+où ça compte vraiment, la correction est dans le faux adaptateur : exécuter
+réellement l'outil scripté au lieu de l'annoncer.
+
+### Aucun test ne couvre le front
+
+`vitest.config.ts` ne prend que `apps/server/tests`, en environnement `node`.
+Tout le code de `apps/web` — dont le hook de voix, sa détection de la
+reconnaissance locale et son refus de basculer sur la reconnaissance serveur —
+n'est vérifié que par le typecheck et le build.
+
+Y remédier suppose jsdom et un second projet vitest : une dépendance et de la
+maintenance, donc un arbitrage de Florian, pas une décision d'implémentation.
+
 ---
 
 ## Ce qui bloque, et sur qui
@@ -146,3 +182,4 @@ est cohérent avec le produit, le premier est plus rapide.
 | Les quatre secrets Gmail | Florian |
 | Le DNS joker `*.stg.silithid.com` et son certificat | Florian |
 | Un dépôt de test pour la première boucle | Florian · voir [premier-projet.md](exploitation/premier-projet.md) |
+| Confirmer que le micro apparaît dans Arc | Florian · la reconnaissance locale est détectée à l'exécution, et le panneau de vérification n'a pas pu l'afficher |

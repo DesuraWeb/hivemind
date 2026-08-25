@@ -26,6 +26,7 @@ import {
   api,
 } from '../lib/api'
 import { useAuth } from '../lib/auth-context'
+import { useVoix } from '../lib/voix'
 import type { OscilloscopeInstance } from '../vendor/oscilloscope'
 import { create as createOscilloscope } from '../vendor/oscilloscope'
 
@@ -265,6 +266,13 @@ export function Creation() {
     onSuccess: (suite) => queryClient.setQueryData(CREATION_QUERY_KEY, suite),
   })
 
+  /**
+   * La voix. La reconnaissance ÉCRIT dans le champ au lieu d'envoyer
+   * directement : Florian relit avant d'envoyer, et corrige quand un nom
+   * propre est passé de travers. C'est son échappatoire, pas une friction.
+   */
+  const voix = useVoix((dit) => setHiveText((prev) => (prev ? `${prev} ${dit}` : dit)))
+
   const corriger = useMutation({
     mutationFn: ({ id, fiche }: { id: string; fiche: FicheCreationView }) =>
       api.creations.corriger(id, fiche),
@@ -323,9 +331,11 @@ export function Creation() {
    */
   useEffect(() => {
     const osc = oscRef.current
-    if (!osc || osc.state === 'listen') return
-    osc.setState(dire.isPending ? 'speak' : 'idle')
-  }, [dire.isPending])
+    if (!osc) return
+    // `listen` d'abord : quand le micro tourne, c'est ce qu'il faut montrer.
+    // Cet état existait depuis l'origine et n'avait jamais été atteint.
+    osc.setState(voix.ecoute ? 'listen' : dire.isPending ? 'speak' : 'idle')
+  }, [dire.isPending, voix.ecoute])
 
   const createProject = useMutation({
     mutationFn: (input: CreateProjectInput) => api.projects.create(input),
@@ -402,6 +412,21 @@ export function Creation() {
     ? 'Je regarde…'
     : (dernierHive?.texte ?? (creationQuery.isLoading ? '' : 'Hive ouvre la scène…'))
   const userLine = dernierHumain ? `${me.login} · « ${dernierHumain.texte} »` : ''
+
+  /**
+   * Hive parle. Les pannes aussi, et c'est le point : la règle est d'apprendre
+   * un échec depuis l'écran où il se produit — mais quand on a délibérément
+   * quitté l'écran pour travailler, une panne muette est pire que tout.
+   *
+   * Gardé par l'horodatage du tour : sans ça, chaque rendu relancerait la
+   * lecture de la même phrase.
+   */
+  const dernierLu = useRef('')
+  useEffect(() => {
+    if (!dernierHive || dernierHive.a === dernierLu.current) return
+    dernierLu.current = dernierHive.a
+    voix.dire(dernierHive.texte)
+  }, [dernierHive, voix.dire])
 
   const stage = creation?.etape ?? 0
   const isProjet = true
@@ -648,7 +673,73 @@ export function Creation() {
                 outline: 'none',
               }}
             />
+
+            {/*
+              Le micro n'apparaît QUE si la reconnaissance locale est
+              disponible. Pas d'API, pas de mode local, ou pack de langue
+              absent : pas de bouton — plutôt qu'une bascule silencieuse vers
+              la reconnaissance serveur, qui expédierait la voix de Florian
+              chez un tiers pendant qu'il décrit le projet d'un client.
+            */}
+            {voix.disponible === true && (
+              <button
+                type="button"
+                onClick={() => (voix.ecoute ? voix.arreterEcoute() : voix.demarrerEcoute())}
+                className="creation-ghost"
+                aria-label={voix.ecoute ? 'Arrêter la dictée' : 'Dicter'}
+                aria-pressed={voix.ecoute}
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 'var(--r-full)',
+                  border: `1px solid ${voix.ecoute ? 'var(--accent)' : 'var(--line-strong)'}`,
+                  background: voix.ecoute ? 'var(--accent)' : 'rgba(9, 14, 22, 0.6)',
+                  color: voix.ecoute ? 'var(--accent-ink)' : 'var(--text-hi)',
+                  cursor: 'pointer',
+                  font: '15px var(--font-sans)',
+                }}
+              >
+                ●
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={voix.basculerMuet}
+              className="creation-ghost"
+              aria-label={voix.muet ? 'Réactiver la lecture à voix haute' : 'Couper la voix'}
+              aria-pressed={voix.muet}
+              title={voix.muet ? 'Hive ne parle pas' : 'Hive lit ses réponses'}
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 'var(--r-full)',
+                border: '1px solid var(--line-strong)',
+                background: 'rgba(9, 14, 22, 0.6)',
+                color: voix.muet ? 'var(--text-low)' : 'var(--text-hi)',
+                cursor: 'pointer',
+                font: '15px var(--font-sans)',
+              }}
+            >
+              {voix.muet ? '🔇' : '🔊'}
+            </button>
           </div>
+
+          {/*
+            Ce que la voix a à dire d'elle-même. Un micro refusé ou un pack en
+            cours de téléchargement doit se lire ici : sans ça, un bouton qui
+            ne répond pas est indiscernable d'un bouton cassé.
+          */}
+          {(voix.panne || voix.installation) && (
+            <span
+              style={{
+                font: '11.5px var(--font-mono)',
+                color: voix.panne ? 'var(--sem-alert)' : 'var(--text-low)',
+              }}
+            >
+              {voix.panne ?? 'téléchargement du pack de langue français…'}
+            </span>
+          )}
         </div>
 
         {
