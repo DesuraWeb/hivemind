@@ -8,7 +8,7 @@ import { HiveThread } from './hive/HiveThread'
 
 // HiveStrip = reprise React de MajordomeStrip.dc.html (le fichier du pack
 // garde son nom, CLAUDE.md : « HIVE » partout dans l'UI, le composant React
-// s'appelle HiveStrip). Porte le socle (oscilloscope, micro rond, champ
+// s'appelle HiveStrip). Porte le socle (oscilloscope, champ
 // pilule) + la palette ⌘K (CommandPalette) + le fil de conversation ancré
 // au-dessus.
 //
@@ -23,7 +23,6 @@ import { HiveThread } from './hive/HiveThread'
 export function HiveStrip() {
   const oscContainerRef = useRef<HTMLDivElement>(null)
   const oscRef = useRef<OscilloscopeInstance | null>(null)
-  const [mic, setMic] = useState(false)
   const [text, setText] = useState('')
   const [open, setOpen] = useState(false)
   const [closedByUser, setClosedByUser] = useState(false)
@@ -65,16 +64,6 @@ export function HiveStrip() {
     }
   }, [])
 
-  function toggleMic() {
-    const next = !mic
-    setMic(next)
-    oscRef.current?.setState(next ? 'listen' : 'idle')
-  }
-
-  const micBorder = mic ? 'transparent' : 'var(--glass-border)'
-  const micBackground = mic ? 'var(--accent)' : 'var(--glass-bg)'
-  const micColor = mic ? 'var(--accent-ink)' : 'var(--text-mid)'
-
   return (
     <div
       style={{
@@ -112,45 +101,6 @@ export function HiveStrip() {
           paddingRight: 60,
         }}
       >
-        <button
-          type="button"
-          onClick={toggleMic}
-          title="Parler à Hive"
-          aria-pressed={mic}
-          className="hive-mic-btn"
-          style={{
-            width: 50,
-            height: 50,
-            flexShrink: 0,
-            borderRadius: 999,
-            border: `1px solid ${micBorder}`,
-            background: micBackground,
-            color: micColor,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'all var(--dur-2) var(--ease)',
-          }}
-        >
-          <svg width="19" height="19" viewBox="0 0 17 17" fill="none" aria-hidden="true">
-            <rect
-              x="6"
-              y="1.8"
-              width="5"
-              height="8.4"
-              rx="2.5"
-              stroke="currentColor"
-              strokeWidth="1.3"
-            />
-            <path
-              d="M3.4 8.2a5.1 5.1 0 0 0 10.2 0M8.5 13.3v2"
-              stroke="currentColor"
-              strokeWidth="1.3"
-              strokeLinecap="round"
-            />
-          </svg>
-        </button>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}

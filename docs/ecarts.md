@@ -24,7 +24,7 @@ reste parce qu'ils abîment la seule chose qui rende le produit crédible.
 | Écart | Nature | Coût |
 |---|---|---|
 | **L'écran `/conscience` nie la mémoire.** Il déclare « la conscience collective n'existe pas · aucune table de savoirs, aucun rappel compté, aucun emprunt ». C'était vrai quand il a été écrit · la Phase 7 a depuis livré les quatre cercles, le versionnement, le compteur de rappels, l'emprunt entre globes et la revue de péremption. **L'app nie une fonctionnalité qu'elle a.** | pas fait · dette laissée par la Phase 7 | une journée · l'écran doit lire `/api/savoirs`, et les blocs `spec` deviennent `built` |
-| **Le micro de la barre Hive fait semblant.** Il s'allume, il anime l'oscilloscope, et il n'écoute rien : ni `getUserMedia`, ni transcription. `RunControls.tsx` a retiré le sien en écrivant « un micro qui ne transcrit rien serait le mensonge le plus coûteux de l'écran » · `HiveStrip.tsx` l'a gardé. | pas fait · incohérence entre deux écrans | voir §3, c'est une décision à prendre |
+| ~~**Le micro fait semblant.**~~ Retiré le 25/08 de la barre Hive ET de l'écran de création · il y en avait deux. La dictée est mise de côté ; tant qu'elle n'existe pas, l'écran ne la promet plus. | corrigé | rien |
 | ~~**Une panne connue ne se voyait nulle part.**~~ Corrigé le 25/08 · bandeau d'alerte au-dessus de tous les écrans, alimenté par les items d'inbox ouverts. | corrigé | rien |
 
 ---
@@ -67,7 +67,17 @@ n'a **aucune** transcription. Trois voies :
 Tant que rien n'est décidé, **le micro ment**. Le retirer est le seul geste
 qui ne coûte presque rien et qui remet l'écran d'aplomb.
 
-### Le juge visuel obligatoire · deux raisons de le rendre optionnel
+### ~~Le juge visuel obligatoire~~ · corrigé le 25/08
+
+Drapeau `juge_visuel` par projet, **activé par défaut**. À faux, `deploying` et
+`judging` sont traversés sans navigateur ni échange de modèle, et le garant
+reçoit un rapport qui dit que personne n'a regardé — « rien trouvé » et « pas
+regardé » ne sont pas la même chose.
+
+La machine à états n'est pas touchée : `decide()` est un fichier sous garde, et
+la modifier pour une option de projet aurait été disproportionné.
+
+<details><summary>Le raisonnement d'origine</summary>
 
 Quand le garant ne désigne aucune page, `deploying` retombe sur `/` et capture
 quand même. Sur un projet sans interface (une API, une bibliothèque) on paie un
@@ -78,8 +88,7 @@ en plus des ~285 Mo de l'agent**, et avec `LOOP_CONCURRENCY=3` sur une machine
 qui sert deux applications clientes derrière un `MemoryMax=4G`, c'est de la RAM
 prise à d'autres.
 
-Coût : une demi-journée · un drapeau `juge_visuel` par projet, et
-`deploying`/`judging` sautés quand il est faux.
+</details>
 
 ### Le staging réel · écrit, jamais lancé
 

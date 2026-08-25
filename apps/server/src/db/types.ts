@@ -53,6 +53,11 @@ export interface ProjectsTable {
   context: string | null
   /** Technologie du projet : Laravel, PrestaShop, WordPress… */
   stack: string | null
+  /**
+   * Le juge visuel capture-t-il ce projet ? `true` par défaut · c'est le seul
+   * contrôle qui regarde le RÉSULTAT et non le code (migration 0014).
+   */
+  juge_visuel: Generated<boolean>
   /** Teinte du projet dans l'orbe et les listes. Distincte de globes.color. */
   tint: string | null
   /** Ligne de synthèse rédigée par Hive, jamais calculée par le front. */

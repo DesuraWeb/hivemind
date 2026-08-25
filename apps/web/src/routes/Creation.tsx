@@ -143,7 +143,6 @@ export function Creation() {
   const [stage, setStage] = useState(0)
   const [sceneText, setSceneText] = useState('')
   const [userLine, setUserLine] = useState('')
-  const [micOn, setMicOn] = useState(false)
   const [hiveText, setHiveText] = useState('')
   const [project, setProject] = useState<ProjectDraft>(() =>
     initialProjectDraft(search.globe ?? ''),
@@ -545,48 +544,6 @@ export function Creation() {
               transition: 'opacity var(--dur-3) var(--ease)',
             }}
           >
-            <button
-              type="button"
-              onClick={() => {
-                const next = !micOn
-                setMicOn(next)
-                oscRef.current?.setState(next ? 'listen' : 'idle')
-              }}
-              title="Parler à Hive"
-              aria-pressed={micOn}
-              className="hive-mic-btn"
-              style={{
-                width: 54,
-                height: 54,
-                borderRadius: 999,
-                border: `1px solid ${micOn ? 'transparent' : 'var(--glass-border)'}`,
-                background: micOn ? 'var(--accent)' : 'var(--glass-bg)',
-                color: micOn ? 'var(--accent-ink)' : 'var(--text-mid)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all var(--dur-2) var(--ease)',
-              }}
-            >
-              <svg width="21" height="21" viewBox="0 0 17 17" fill="none" aria-hidden="true">
-                <rect
-                  x="6"
-                  y="1.8"
-                  width="5"
-                  height="8.4"
-                  rx="2.5"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                />
-                <path
-                  d="M3.4 8.2a5.1 5.1 0 0 0 10.2 0M8.5 13.3v2"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </button>
             <input
               className="hive-input"
               value={hiveText}

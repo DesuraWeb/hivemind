@@ -61,9 +61,33 @@ export function createDeployingHandler(deps: DeployingDeps): StepHandler {
       .selectFrom('runs')
       .innerJoin('steps', 'steps.id', 'runs.step_id')
       .innerJoin('projects', 'projects.id', 'steps.project_id')
-      .select(['runs.worktree_path as worktreePath', 'projects.slug as projectSlug'])
+      .select([
+        'runs.worktree_path as worktreePath',
+        'projects.slug as projectSlug',
+        'projects.juge_visuel as jugeVisuel',
+      ])
       .where('runs.id', '=', runId)
       .executeTakeFirstOrThrow()
+
+    // Projet sans interface (API, bibliothèque, script) : rien à déployer,
+    // rien à capturer, et surtout rien à juger. On traverse l'état sans
+    // ouvrir de navigateur ni servir de fichiers.
+    //
+    // L'état n'est PAS sauté — `decide()` n'est pas touchée (c'est un fichier
+    // sous garde, et modifier la machine à états pour une option de projet
+    // serait disproportionné). Il devient simplement instantané, et la
+    // timeline dit pourquoi plutôt que de laisser un `ci_green` inexpliqué.
+    if (!runRow.jugeVisuel) {
+      await appendMessage(db, {
+        runId,
+        fromRole: 'system',
+        toRole: 'system',
+        kind: 'info',
+        body: 'Juge visuel désactivé sur ce projet · aucun déploiement, aucune capture.',
+        meta: { juge_visuel: false },
+      })
+      return { type: 'ci_green' } satisfies LoopEvent
+    }
 
     if (!runRow.worktreePath) {
       return {

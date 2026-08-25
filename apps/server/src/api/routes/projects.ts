@@ -31,6 +31,13 @@ const createBody = z.object({
   repoFullName: z.string().regex(/^[\w.-]+\/[\w.-]+$/, 'attendu : owner/name'),
   clientId: z.string().uuid().optional(),
   stack: z.string().max(120).optional(),
+  /**
+   * `false` sur un projet sans interface (API, bibliothèque, script) : la
+   * boucle traverse `deploying` et `judging` sans ouvrir de navigateur.
+   * Absent, c'est `true` — le juge est le seul contrôle qui regarde le
+   * résultat plutôt que le code, il ne se désactive pas par distraction.
+   */
+  jugeVisuel: z.boolean().optional(),
   tint: z.string().max(32).optional(),
   stagingUrl: z.string().max(255).optional(),
   steps: z
@@ -91,7 +98,8 @@ export async function projectsRoutes(
       return reply.code(400).send({ error: 'requete_invalide', details: parsed.error.issues })
     }
 
-    const { globe, name, repoFullName, clientId, stack, tint, stagingUrl, steps } = parsed.data
+    const { globe, name, repoFullName, clientId, stack, tint, stagingUrl, steps, jugeVisuel } =
+      parsed.data
     try {
       // `exactOptionalPropertyTypes` : une clé optionnelle absente doit être
       // absente, jamais présente et valant undefined. Même parade que la route
@@ -102,6 +110,7 @@ export async function projectsRoutes(
         repoFullName,
         ...(clientId !== undefined ? { clientId } : {}),
         ...(stack !== undefined ? { stack } : {}),
+        ...(jugeVisuel !== undefined ? { jugeVisuel } : {}),
         ...(tint !== undefined ? { tint } : {}),
         ...(stagingUrl !== undefined ? { stagingUrl } : {}),
         // Normalisé ici plutôt que d'assouplir `CreateStepInput` :
@@ -176,6 +185,8 @@ export async function projectsRoutes(
     stagingUrl: z.string().max(255).nullable().optional(),
     /** Mode par défaut des steps qui n'en fixent pas. `auto` ne porte JAMAIS sur la prod. */
     autonomyDefault: z.enum(['gated', 'auto']).optional(),
+    /** Voir la création · `false` saute le contrôle visuel sur ce projet. */
+    jugeVisuel: z.boolean().optional(),
   })
 
   /**
@@ -195,12 +206,13 @@ export async function projectsRoutes(
     const projectId = await getProjectIdBySlug(deps.db, p.data.id)
     if (!projectId) return reply.code(404).send({ error: 'projet_introuvable' })
 
-    const { stack, tint, stagingUrl, autonomyDefault } = body.data
+    const { stack, tint, stagingUrl, autonomyDefault, jugeVisuel } = body.data
     const patch = {
       ...(stack !== undefined ? { stack } : {}),
       ...(tint !== undefined ? { tint } : {}),
       ...(stagingUrl !== undefined ? { staging_url: stagingUrl } : {}),
       ...(autonomyDefault !== undefined ? { autonomy_default: autonomyDefault } : {}),
+      ...(jugeVisuel !== undefined ? { juge_visuel: jugeVisuel } : {}),
     }
     // Un corps vide n'est pas une erreur, mais ce n'est pas une écriture non
     // plus : `updateTable` sans `set` échouerait côté Kysely.

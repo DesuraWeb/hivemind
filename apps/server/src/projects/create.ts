@@ -46,6 +46,11 @@ export interface CreateProjectInput {
   repoFullName: string
   clientId?: string | null
   stack?: string | null
+  /**
+   * `false` sur un projet sans interface : la boucle traverse `deploying` et
+   * `judging` sans navigateur (migration 0014). Absent, la colonne vaut `true`.
+   */
+  jugeVisuel?: boolean
   tint?: string | null
   stagingUrl?: string | null
   steps?: CreateStepInput[]
@@ -115,6 +120,7 @@ export async function createProject(
         slug,
         repo_full_name: input.repoFullName,
         stack: input.stack ?? null,
+        ...(input.jugeVisuel !== undefined ? { juge_visuel: input.jugeVisuel } : {}),
         tint: input.tint ?? null,
         staging_url: input.stagingUrl ?? null,
       })

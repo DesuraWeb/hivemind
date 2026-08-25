@@ -228,9 +228,34 @@ export function createJudgingHandler(deps: JudgingDeps): StepHandler {
       .selectFrom('runs')
       .innerJoin('steps', 'steps.id', 'runs.step_id')
       .innerJoin('projects', 'projects.id', 'steps.project_id')
-      .select(['steps.project_id as projectId', 'projects.name as projectName'])
+      .select([
+        'steps.project_id as projectId',
+        'projects.name as projectName',
+        'projects.juge_visuel as jugeVisuel',
+      ])
       .where('runs.id', '=', runId)
       .executeTakeFirstOrThrow()
+
+    // Juge désactivé : `deploying` n'a rien capturé, il n'y a rien à regarder.
+    // On écrit quand même la passation juge→garant, parce que `verdict.ts`
+    // l'exige et surtout parce que le garant doit savoir sur quoi il tranche.
+    // Un rapport vide qui ne dirait pas POURQUOI il est vide laisserait croire
+    // à un juge qui n'a rien trouvé — ce n'est pas la même chose qu'un juge
+    // qui n'a pas regardé.
+    if (!runRow.jugeVisuel) {
+      await appendMessage(db, {
+        runId,
+        fromRole: 'judge',
+        toRole: 'garant',
+        kind: 'report',
+        body:
+          'Aucun contrôle visuel sur ce projet · le juge est désactivé (`projects.juge_visuel`). ' +
+          "Rien n'a été déployé ni capturé. Tranche depuis le cadrage et le rapport du reviewer " +
+          'seuls, et ne conclus rien sur le rendu : personne ne l’a regardé.',
+        meta: { juge_visuel: false, conformites: [], ecarts: [] },
+      })
+      return { type: 'judge_report' } satisfies LoopEvent
+    }
 
     const messages = await readRunMessages(db, runId)
     const frame = findFrame(messages)
