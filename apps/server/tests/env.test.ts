@@ -61,3 +61,13 @@ test('le Chromium du système est optionnel, et absent par défaut', () => {
       .CHROMIUM_EXECUTABLE_PATH,
   ).toBe('/usr/bin/chromium')
 })
+
+test('une configuration invalide dit OÙ le .env a été cherché', () => {
+  // Sans ça, un script lancé hors du dépôt échoue sur « Configuration
+  // invalide » sans le moindre indice : `findRepoRoot` remonte depuis le
+  // répertoire COURANT, donc le fichier n'est pas trouvé et la cause a l'air
+  // d'être la configuration elle-même. Remonté après une vraie mise en service.
+  expect(() => loadEnv({ NODE_ENV: 'test' } as NodeJS.ProcessEnv)).toThrow(
+    /source explicite, aucun \.env lu/,
+  )
+})

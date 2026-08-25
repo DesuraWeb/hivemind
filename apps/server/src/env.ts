@@ -52,14 +52,14 @@ export function fromRepoRoot(relatif: string): string {
  * Fait ici plutôt que via un flag de lancement : dev, prod et tests passent
  * tous par `loadEnv()`, donc un seul endroit à connaître.
  */
-function loadDotEnvFile(path?: string): void {
+function loadDotEnvFile(path?: string): string | null {
   const root = findRepoRoot()
   const resolved = path ?? (root ? join(root, '.env') : '.env')
   let raw: string
   try {
     raw = readFileSync(resolved, 'utf8')
   } catch {
-    return // absent : normal en CI, tout vient de l'environnement du job
+    return null // absent : normal en CI, tout vient de l'environnement du job
   }
   for (const line of raw.split('\n')) {
     const trimmed = line.trim()
@@ -70,6 +70,7 @@ function loadDotEnvFile(path?: string): void {
     if (process.env[key] !== undefined) continue
     process.env[key] = trimmed.slice(eq + 1).trim()
   }
+  return resolved
 }
 
 const schema = z.object({
@@ -166,11 +167,21 @@ const schema = z.object({
 export type Env = z.infer<typeof schema>
 
 export function loadEnv(source?: NodeJS.ProcessEnv): Env {
-  if (!source) loadDotEnvFile()
+  const fichier = source ? undefined : loadDotEnvFile()
   const parsed = schema.safeParse(source ?? process.env)
   if (!parsed.success) {
     const details = parsed.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`).join('\n')
-    throw new Error(`Configuration invalide :\n${details}`)
+    // DIRE OÙ ON A CHERCHÉ. Sans ça, un script lancé hors du dépôt échoue sur
+    // « Configuration invalide » sans le moindre indice : `findRepoRoot`
+    // remonte depuis le RÉPERTOIRE COURANT, donc le `.env` n'est pas trouvé et
+    // la cause a l'air d'être la configuration elle-même. Signalé après s'être
+    // fait avoir une fois, à la mise en service du VPS.
+    const ou = source
+      ? '  (source explicite, aucun .env lu)'
+      : fichier
+        ? `  .env lu : ${fichier}`
+        : `  aucun .env trouvé depuis ${process.cwd()} · la racine est le dossier qui contient pnpm-workspace.yaml, lance la commande depuis là ou passe les variables dans l'environnement`
+    throw new Error(`Configuration invalide :\n${details}\n${ou}`)
   }
   return parsed.data
 }

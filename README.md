@@ -145,9 +145,15 @@ git clone https://github.com/DesuraWeb/hivemind && cd hivemind
 pnpm install
 cp .env.example .env        # puis remplir · scripts/setup.sh génère les clés
 pnpm db:migrate && pnpm db:seed
+pnpm db:createuser florian  # le premier compte · sans lui, l'écran de connexion est infranchissable
 pnpm dev                    # API sur :3000
 pnpm dev:web                # front sur :5173
 ```
+
+Le mot de passe est demandé à l'invite, jamais passé en argument : les
+arguments d'un processus sont lisibles via `ps` et restent dans l'historique du
+shell. Entrée redirigée, il est lu sur `stdin` · utilisable depuis un playbook
+sans exposer le secret pour autant.
 
 Production : `pnpm build && pnpm start` · un seul processus sert l'API et le front. Voir [docs/exploitation/deploiement.md](docs/exploitation/deploiement.md).
 

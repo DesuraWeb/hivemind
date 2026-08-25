@@ -15,6 +15,7 @@
     "test": "vitest run",
     "db:migrate": "pnpm --filter @silithid/server db:migrate",
     "db:seed": "pnpm --filter @silithid/server db:seed",
+    "db:createuser": "pnpm --filter @silithid/server db:createuser",
     "db:reset": "./scripts/db-reset.sh",
     "build": "pnpm --filter @silithid/web build",
     "start": "pnpm --filter @silithid/server start"
