@@ -125,12 +125,19 @@ export function Project() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 20,
+          // Même correction que `SectionHeader` : sans repli, le fil d'Ariane,
+          // le nom du projet, son état et le lien de staging tenaient sur une
+          // seule ligne quoi qu'il arrive · à 375 px ils se SUPERPOSAIENT, tous
+          // illisibles à la fois.
+          flexWrap: 'wrap',
+          gap: '8px 20px',
           padding: '18px 24px 0',
           flexShrink: 0,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flexWrap: 'wrap' }}
+        >
           <Link
             to="/globes"
             style={{ font: '500 12px var(--font-sans)', color: 'var(--text-low)' }}

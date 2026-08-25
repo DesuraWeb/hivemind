@@ -28,12 +28,20 @@ export function SectionHeader({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: 20,
+        // Sans ce `wrap`, le label et sa méta tenaient sur une seule ligne quoi
+        // qu'il arrive : sous ~700 px la méta sortait du cadre et se faisait
+        // COUPER, pas défiler. « Analytics · économie du système » perdait sa
+        // fenêtre, l'inbox perdait son compte de décisions. Mesuré à 375 px sur
+        // huit écrans, tous touchés — c'est un composant partagé.
+        flexWrap: 'wrap',
+        gap: '6px 20px',
         padding: '18px 20px 0',
         flexShrink: 0,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
+      <div
+        style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap', minWidth: 0 }}
+      >
         <span
           style={{
             // Mono 10.5px / 0.18em, pas `--fs-label`/`--ls-label` en
@@ -57,14 +65,32 @@ export function SectionHeader({
             style={{
               font: '11.5px var(--font-mono)',
               color: 'var(--text-low)',
-              whiteSpace: 'nowrap',
+              // Plus de `nowrap` : une méta qui ne peut pas se replier ne peut
+              // que déborder. Elle passe à la ligne sur un écran étroit, ce qui
+              // est exactement ce qu'on veut d'une ligne de contexte.
+              minWidth: 0,
             }}
           >
             {meta}
           </span>
         )}
       </div>
-      {right && <div style={{ display: 'flex', alignItems: 'center', gap: 22 }}>{right}</div>}
+      {right && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            // Le groupe droit se replie aussi : le Journal y met sa fenêtre
+            // ET ses trois pilules, ce qui ne tient jamais sur une ligne à
+            // 375 px.
+            flexWrap: 'wrap',
+            gap: '8px 22px',
+            minWidth: 0,
+          }}
+        >
+          {right}
+        </div>
+      )}
     </header>
   )
 }

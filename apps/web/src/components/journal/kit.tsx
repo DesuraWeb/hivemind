@@ -163,6 +163,10 @@ export function PillGroup({ children }: { children: ReactNode }) {
         borderRadius: 'var(--r-full)',
         background: 'rgba(9, 14, 22, 0.6)',
         border: '1px solid var(--line)',
+        // Un groupe de pilules ne se comprime pas : sans ça il rétrécissait
+        // sous sa taille utile sur un écran étroit et « 30 j » se faisait
+        // couper. Il passe à la ligne avec le reste de la méta.
+        flexShrink: 0,
       }}
     >
       {children}

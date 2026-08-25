@@ -114,13 +114,12 @@ export function Journal() {
                 style={{
                   font: '11.5px var(--font-mono)',
                   color: 'var(--text-low)',
-                  whiteSpace: 'nowrap',
                 }}
               >
                 {meta}
               </span>
             )}
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
               {RANGES.map((r) => (
                 <Pill
                   key={r.hours}

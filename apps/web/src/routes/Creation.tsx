@@ -404,7 +404,8 @@ export function Creation() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 20,
+          flexWrap: 'wrap',
+          gap: '6px 20px',
           padding: '18px 24px 0',
           flexShrink: 0,
           zIndex: 7,
@@ -430,7 +431,6 @@ export function Creation() {
             style={{
               font: '11.5px var(--font-mono)',
               color: 'var(--text-low)',
-              whiteSpace: 'nowrap',
             }}
           >
             la fiche se matérialise autour de la conversation

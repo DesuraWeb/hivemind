@@ -114,12 +114,24 @@ export function GlobeInterior() {
           display: 'flex',
           alignItems: 'baseline',
           justifyContent: 'space-between',
-          gap: 20,
+          // Même correction que `SectionHeader` : sans repli, le compte de
+          // projets et le bouton « + Nouveau projet » sortaient du cadre sur un
+          // écran étroit, et se faisaient couper au lieu de passer à la ligne.
+          flexWrap: 'wrap',
+          gap: '8px 20px',
           padding: '18px 24px 0',
           flexShrink: 0,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: 12,
+            flexWrap: 'wrap',
+            minWidth: 0,
+          }}
+        >
           <span
             style={{
               font: '600 10.5px var(--font-mono)',

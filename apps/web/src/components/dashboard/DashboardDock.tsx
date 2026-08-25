@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { type ReactNode, useState } from 'react'
 import { api } from '../../lib/api'
+import { useIsMobile } from '../inbox/useIsMobile'
 import { BudgetPanel } from './BudgetPanel'
 
 /**
@@ -125,6 +126,7 @@ export interface DashboardDockProps {
 
 export function DashboardDock({ open, onToggle, children }: DashboardDockProps) {
   const [budgetOpen, setBudgetOpen] = useState(false)
+  const mobile = useIsMobile()
 
   if (!open) {
     return (
@@ -175,7 +177,11 @@ export function DashboardDock({ open, onToggle, children }: DashboardDockProps) 
         position: 'absolute',
         right: 20,
         top: 12,
-        bottom: 20,
+        // La barre Hive est posée en surimpression du bas et fait 88 px de
+        // haut. Sur un écran étroit le dock descendait dessous, et la jauge de
+        // budget se retrouvait littéralement SOUS le champ de saisie : deux
+        // textes superposés, illisibles tous les deux. Constaté à 375 px.
+        bottom: mobile ? 116 : 20,
         width: DOCK_WIDTH,
         zIndex: 10,
         display: 'flex',
