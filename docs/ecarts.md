@@ -23,7 +23,7 @@ reste parce qu'ils abîment la seule chose qui rende le produit crédible.
 
 | Écart | Nature | Coût |
 |---|---|---|
-| **L'écran `/conscience` nie la mémoire.** Il déclare « la conscience collective n'existe pas · aucune table de savoirs, aucun rappel compté, aucun emprunt ». C'était vrai quand il a été écrit · la Phase 7 a depuis livré les quatre cercles, le versionnement, le compteur de rappels, l'emprunt entre globes et la revue de péremption. **L'app nie une fonctionnalité qu'elle a.** | pas fait · dette laissée par la Phase 7 | une journée · l'écran doit lire `/api/savoirs`, et les blocs `spec` deviennent `built` |
+| ~~**L'écran `/conscience` nie la mémoire.**~~ Corrigé le 25/08 · il lit `GET /api/savoirs/apercu` et rend des chiffres mesurés. Ce qui reste absent (rappel sémantique, déduplication, export) y figure toujours, nommément. Un test refuse que la phrase revienne. | corrigé | rien |
 | ~~**Le micro fait semblant.**~~ Retiré le 25/08 de la barre Hive ET de l'écran de création · il y en avait deux. La dictée est mise de côté ; tant qu'elle n'existe pas, l'écran ne la promet plus. | corrigé | rien |
 | ~~**Une panne connue ne se voyait nulle part.**~~ Corrigé le 25/08 · bandeau d'alerte au-dessus de tous les écrans, alimenté par les items d'inbox ouverts. | corrigé | rien |
 

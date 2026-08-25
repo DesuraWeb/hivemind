@@ -419,6 +419,23 @@ export interface ResultatSondeView {
   figee: boolean
 }
 
+/** `GET /api/savoirs/apercu` (`knowledge/apercu.ts`). Aucun contenu de savoir n'y figure. */
+export interface ApercuMemoireView {
+  cercles: {
+    cercle: 'projet' | 'client' | 'globe' | 'hive'
+    actifs: number
+    /** `null` pour `hive`, qui est unique : la question de l'instance ne se pose pas. */
+    instances: number | null
+    rappels: number
+  }[]
+  actifs: number
+  versions: number
+  jamaisRappeles: number
+  plusUtile: { sujet: string; cercle: string; rappels: number } | null
+  emprunts: { actifs: number; lecture: number; fork: number }
+  stack: { code: number; exploitation: number }
+}
+
 export const api = {
   me: () => request<Me>('GET', '/api/me'),
   login: (login: string, password: string) =>
@@ -530,6 +547,8 @@ export const api = {
       request<StepCostView[]>('GET', `/api/analytics/steps/${encodeURIComponent(projectId)}`),
   },
   savoirs: {
+    /** L'état réel de la mémoire · des comptes, jamais du contenu en vrac. */
+    apercu: () => request<ApercuMemoireView>('GET', '/api/savoirs/apercu'),
     /**
      * La file de la revue de péremption. Gratuite : un `select` trié et une
      * phrase calculée, jamais un échange avec un modèle — l'écran peut donc

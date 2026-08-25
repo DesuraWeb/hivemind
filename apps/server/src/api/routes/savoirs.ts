@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { Kysely } from 'kysely'
 import { z } from 'zod'
 import type { Database } from '../../db/types'
+import { apercuMemoire } from '../../knowledge/apercu'
 import { archiverPerime, fileDeRevue, garder } from '../../knowledge/review'
 
 export interface SavoirsRoutesDeps {
@@ -23,6 +24,14 @@ const racineParams = z.object({ racineId: z.string().uuid() })
  * `knowledge/review.ts`, `phraseHive`). Ouvrir l'écran ne coûte donc rien.
  */
 export async function savoirsRoutes(app: FastifyInstance, deps: SavoirsRoutesDeps): Promise<void> {
+  /**
+   * L'état de la mémoire, pour l'écran `/conscience`. Des comptes, jamais du
+   * contenu en vrac : le contenu se lit dans la revue, savoir par savoir.
+   */
+  app.get('/api/savoirs/apercu', { preHandler: app.requireAuth }, async () => {
+    return apercuMemoire(deps.db)
+  })
+
   app.get('/api/savoirs/revue', { preHandler: app.requireAuth }, async () => {
     return fileDeRevue(deps.db)
   })
