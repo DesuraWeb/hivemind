@@ -163,6 +163,31 @@ export function createReviewingHandler(deps: ReviewingDeps): StepHandler {
       throw new Error(`run ${runId} : aucune PR ouverte à revoir (état reviewing)`)
     }
 
+    const role = await resolveProjectRole(db, runRow.projectId, 'reviewer')
+
+    // Reviewer désactivé sur ce projet (`roles.enabled`) : la revue est sautée
+    // et le code part au déploiement. C'est une boucle en solo, assumée — un
+    // projet jetable, un prototype, un script interne où une seconde lecture
+    // coûte plus qu'elle ne rapporte.
+    //
+    // L'état n'est PAS retiré de la machine : même arbitrage que
+    // `juge_visuel` dans `deploying.ts`. `decide()` est un fichier sous garde,
+    // et rendre la machine conditionnelle pour une option de projet la
+    // rendrait illisible. L'état devient instantané, et la timeline dit
+    // pourquoi plutôt que de laisser un `review_ok` inexpliqué — sans ce
+    // message, une PR passée sans revue ressemble à une PR revue et validée.
+    if (!role.enabled) {
+      await appendMessage(db, {
+        runId,
+        fromRole: 'system',
+        toRole: 'system',
+        kind: 'info',
+        body: 'Reviewer désactivé sur ce projet · aucune revue, la PR part au déploiement.',
+        meta: { role_enabled: false },
+      })
+      return { type: 'review_ok' } satisfies LoopEvent
+    }
+
     const messages = await readRunMessages(db, runId)
     const frame = findFrame(messages)
     if (!frame) {
@@ -173,8 +198,6 @@ export function createReviewingHandler(deps: ReviewingDeps): StepHandler {
       throw new Error(`run ${runId} : aucun rapport dev→garant trouvé dans le bus (état reviewing)`)
     }
     const previousPoints = findLatestReviewFeedback(messages)
-
-    const role = await resolveProjectRole(db, runRow.projectId, 'reviewer')
 
     const repoPath = await ensureProjectRepo({
       worktreesRoot: deps.worktreesRoot,

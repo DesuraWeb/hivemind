@@ -1,5 +1,7 @@
+import type { RoleKey } from '@silithid/shared'
 import type { Kysely } from 'kysely'
 import type { Database } from '../db/types'
+import { archiver } from '../knowledge/store'
 
 /**
  * Création d'un projet (`docs/design/Creation.dc.html`).
@@ -40,6 +42,44 @@ export interface CreateStepInput {
   maxIterations?: number
 }
 
+/**
+ * Un rôle que l'appelant veut voir différer du template.
+ *
+ * Le roster par défaut n'a pas à être fourni : `resolveProjectRole` matérialise
+ * paresseusement chaque rôle depuis `role_templates` à sa première résolution.
+ * On n'écrit ici QUE les écarts — un rôle absent de ce tableau garde le
+ * comportement du template, et l'écran de création n'a pas à connaître la
+ * liste des rôles pour créer un projet ordinaire.
+ */
+export interface CreateProjectRoleInput {
+  key: RoleKey
+  /**
+   * `false` saute ce rôle. Effectif pour `reviewer` et `communicant`, dont les
+   * handlers court-circuitent. `dev` et `garant` refusent : une boucle sans eux
+   * n'a pas de sens, et l'accepter produirait un projet qui échoue au premier
+   * run au lieu d'échouer ici, où l'erreur est lisible.
+   */
+  enabled?: boolean
+  /** Prompt sur mesure. Absent, celui du template est copié tel quel. */
+  systemPrompt?: string | null
+}
+
+/**
+ * Un savoir déposé à la création, dans un cercle lié à ce projet.
+ *
+ * Le cercle `hive` est absent du type, volontairement : c'est le cercle racine,
+ * les préférences transverses de Florian. Une création de projet n'a rien à y
+ * écrire — un savoir semé là s'appliquerait à tous les projets, pour toujours,
+ * parce qu'on a créé un projet une fois.
+ */
+export interface CreateProjectSavoirInput {
+  cercle: 'projet' | 'client' | 'globe'
+  sujet: string
+  contenu: string
+  stack?: string | null
+  domaine?: 'code' | 'exploitation'
+}
+
 export interface CreateProjectInput {
   globeSlug: string
   name: string
@@ -54,6 +94,10 @@ export interface CreateProjectInput {
   tint?: string | null
   stagingUrl?: string | null
   steps?: CreateStepInput[]
+  /** Écarts au roster par défaut. Voir `CreateProjectRoleInput`. */
+  roster?: CreateProjectRoleInput[]
+  /** Mémoire semée à la création, dans les cercles de ce projet. */
+  savoirs?: CreateProjectSavoirInput[]
 }
 
 export interface CreatedProject {
@@ -62,6 +106,20 @@ export interface CreatedProject {
   name: string
   globeSlug: string
   stepCount: number
+}
+
+/**
+ * Rôles dont la boucle ne peut pas se passer. Les désactiver produirait un
+ * projet qui échoue au premier run, loin d'ici, avec un message qui ne
+ * pointerait pas vers la décision fautive.
+ */
+const ROLES_INDISPENSABLES: readonly RoleKey[] = ['garant', 'dev']
+
+export class RosterInvalideError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'RosterInvalideError'
+  }
 }
 
 export class UnknownGlobeError extends Error {
@@ -96,6 +154,22 @@ export async function createProject(
   // créant le globe au passage : `projects.globe_id` est NOT NULL et un globe
   // créé par effet de bord n'aurait ni teinte, ni mémoire, ni position.
   if (!globe) throw new UnknownGlobeError(input.globeSlug)
+
+  for (const r of input.roster ?? []) {
+    if (r.enabled === false && ROLES_INDISPENSABLES.includes(r.key)) {
+      throw new RosterInvalideError(
+        `le rôle "${r.key}" ne peut pas être désactivé · la boucle ne tourne pas sans lui`,
+      )
+    }
+    // Le juge a déjà son interrupteur par projet (`projects.juge_visuel`).
+    // Accepter le second le rendrait ambigu le jour où les deux se
+    // contredisent : on refuse au lieu d'ignorer en silence.
+    if (r.enabled !== undefined && r.key === 'judge') {
+      throw new RosterInvalideError(
+        'le juge se désactive par `jugeVisuel` sur le projet, pas par le roster',
+      )
+    }
+  }
 
   // Transaction : un projet sans ses steps serait un projet qu'on ne peut pas
   // démarrer, affiché « prêt à démarrer » dans la liste. Les deux écritures
@@ -142,6 +216,60 @@ export async function createProject(
           max_iterations: step.maxIterations ?? 4,
         })
         .execute()
+    }
+
+    // Le roster : uniquement les écarts au template. Écrire une ligne `roles`
+    // ici PRÉEMPTE la matérialisation paresseuse — `resolveProjectRole` donne
+    // autorité à une ligne existante, donc ce qu'on écrit maintenant est ce que
+    // la boucle utilisera, sans autre câblage.
+    for (const r of input.roster ?? []) {
+      const template = await trx
+        .selectFrom('role_templates')
+        .selectAll()
+        .where('key', '=', r.key)
+        .where('project_type', '=', 'generic')
+        .orderBy('version', 'desc')
+        .executeTakeFirst()
+      if (!template) {
+        throw new RosterInvalideError(`aucun role_template "${r.key}" — rôle inconnu`)
+      }
+
+      await trx
+        .insertInto('roles')
+        .values({
+          project_id: project.id,
+          template_id: template.id,
+          key: template.key,
+          // Le prompt sur mesure, ou la copie du template. `roles` porte
+          // toujours un prompt complet : c'est ce qui rend la ligne éditable
+          // sans avoir à retourner voir de quoi elle hérite.
+          system_prompt: r.systemPrompt ?? template.system_prompt,
+          tools: JSON.stringify(template.tools),
+          model: template.model,
+          ...(r.enabled !== undefined ? { enabled: r.enabled } : {}),
+        })
+        .execute()
+    }
+
+    // Les savoirs semés. `cercle_id` ne peut être résolu qu'ici : l'identifiant
+    // du projet n'existe pas avant l'insertion, et un savoir de cercle `projet`
+    // sans instance viole la contrainte du schéma.
+    for (const sv of input.savoirs ?? []) {
+      const cercleId =
+        sv.cercle === 'projet' ? project.id : sv.cercle === 'globe' ? globe.id : input.clientId
+      if (!cercleId) {
+        throw new RosterInvalideError(
+          `savoir « ${sv.sujet} » de cercle "client" mais le projet n'a pas de fiche client`,
+        )
+      }
+      await archiver(trx, {
+        cercle: sv.cercle,
+        cercleId,
+        sujet: sv.sujet,
+        contenu: sv.contenu,
+        stack: sv.stack ?? null,
+        ...(sv.domaine ? { domaine: sv.domaine } : {}),
+      })
     }
 
     return {

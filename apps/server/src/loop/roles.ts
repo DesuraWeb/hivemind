@@ -7,6 +7,22 @@ export interface ResolvedRole {
   systemPrompt: string
   tools: Record<string, unknown>
   model: string | null
+  /**
+   * Ce rôle travaille-t-il sur ce projet ?
+   *
+   * La colonne existe au schéma depuis l'origine et n'était lue par personne :
+   * décocher un agent ne faisait rien. Elle devient effective là où sauter un
+   * agent a un sens — le reviewer et le communicant — en court-circuitant le
+   * handler, jamais en touchant `decide()`. Même motif que `juge_visuel`
+   * (`deploying.ts`) : l'état est traversé et la timeline dit pourquoi, plutôt
+   * que d'être sauté par une machine à états qu'on aurait rendue conditionnelle.
+   *
+   * `dev` et `garant` ne sont pas désactivables : une boucle sans eux n'a pas
+   * de sens. Le juge a déjà son interrupteur par projet (`projects.juge_visuel`)
+   * et ne prend pas celui-ci — deux drapeaux pour une même chose, c'est un
+   * jour où les deux se contredisent.
+   */
+  enabled: boolean
 }
 
 /**
@@ -38,6 +54,7 @@ export async function resolveProjectRole(
       systemPrompt: existing.system_prompt,
       tools: existing.tools as Record<string, unknown>,
       model: existing.model,
+      enabled: existing.enabled,
     }
   }
 
@@ -85,5 +102,6 @@ export async function resolveProjectRole(
     systemPrompt: row.system_prompt,
     tools: row.tools as Record<string, unknown>,
     model: row.model,
+    enabled: row.enabled,
   }
 }

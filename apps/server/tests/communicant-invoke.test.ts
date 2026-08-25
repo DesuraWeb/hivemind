@@ -15,6 +15,7 @@ import { createFakeGmailAccount } from '../src/integrations/gmail'
 import { createBoss } from '../src/jobs/boss'
 import { COMMUNICANT_QUEUE } from '../src/jobs/communicant'
 import { RUN_STEP_QUEUE } from '../src/jobs/run-step'
+import { resolveProjectRole } from '../src/loop/roles'
 import { createFakeAdapter } from '../src/runtime/fake'
 import type { RuntimeAdapter, SendOptions } from '../src/runtime/types'
 import { ensureGlobe } from './fixtures'
@@ -148,6 +149,37 @@ test("sans fiche client, le communicant n'est même pas réveillé", async () =>
   // quand même des tokens ne serait pas une abstention.
   expect(obs.sessions).toHaveLength(0)
   expect(obs.envois).toHaveLength(0)
+})
+
+test('désactivé sur le projet, il ne rédige pas non plus', async () => {
+  // Même nature que l'abstention du dessus, autre cause : ici le client
+  // existe, mais Florian a décidé qu'il écrirait lui-même. `roles.enabled`
+  // était au schéma depuis l'origine et n'était lu par personne — décocher
+  // un agent ne faisait rien (Lot 0).
+  const { projectId } = await creerProjet({ avecClient: true })
+  // On matérialise avant de décocher : tant que `roles` n'a pas de ligne pour
+  // ce couple, il n'y a rien à mettre à jour. Le chemin de Hive n'a pas ce
+  // détour — `createProject` écrit la ligne du roster directement.
+  await resolveProjectRole(db, projectId, 'communicant')
+  await db
+    .updateTable('roles')
+    .set({ enabled: false })
+    .where('project_id', '=', projectId)
+    .where('key', '=', 'communicant')
+    .execute()
+
+  const obs = adapterObservateur()
+  const result = await invoquerCommunicant({
+    db,
+    adapter: obs.adapter,
+    drafts: gmail.drafts,
+    projectId,
+    sujet: 'La boutique est en ligne.',
+  })
+
+  expect(result.itemId).toBeNull()
+  expect(result.raison).toMatch(/désactivé/)
+  expect(obs.sessions).toHaveLength(0)
 })
 
 test('avec une fiche client, il reçoit la fiche ET le brouillon, jamais l’envoi', async () => {

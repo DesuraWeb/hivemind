@@ -90,6 +90,22 @@ export async function invoquerCommunicant(
   }
 
   const role = await resolveProjectRole(deps.db, projet.id, 'communicant')
+
+  // Communicant désactivé sur ce projet (`roles.enabled`). Même nature que
+  // l'absence de fiche client juste au-dessus : ce n'est pas une panne, c'est
+  // une décision. Un projet interne, ou un client à qui Florian écrit
+  // lui-même, n'a pas à payer un appel de modèle pour produire un brouillon
+  // que personne n'enverra.
+  //
+  // La raison est rendue plutôt que tue : l'appelant l'affiche, et « aucun
+  // brouillon » cesse d'être indistinguable d'un échec silencieux.
+  if (!role.enabled) {
+    return {
+      itemId: null,
+      raison: 'communicant désactivé sur ce projet · aucun brouillon rédigé',
+    }
+  }
+
   const mcp = readPolicyMcp(role.tools)
 
   // Les deux surfaces dont il a besoin : la fiche client (pour le ton, qui
