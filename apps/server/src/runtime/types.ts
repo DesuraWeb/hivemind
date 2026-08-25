@@ -8,6 +8,20 @@ export interface ToolPolicy {
   fs: 'none' | 'read' | 'write'
   /** Allowlist de serveurs/outils MCP exposés au rôle. */
   mcp: string[]
+  /**
+   * Autorise la recherche web native du SDK.
+   *
+   * Absent = refusé. Un seul rôle l'obtient aujourd'hui : Hive sur l'écran de
+   * création, pour vérifier qu'une stack est encore maintenue avant de la
+   * proposer plutôt que de s'en remettre à sa date d'entraînement.
+   *
+   * Ce que ça coûte : un appel sortant, et **du contenu non fiable en
+   * retour**. Un résultat de recherche qui contient des instructions n'est pas
+   * une consigne — le brief de création le cadre explicitement. Les agents de
+   * la boucle ne l'obtiennent pas au passage : un dev avec un accès web et un
+   * accès disque en écriture est une surface qu'on n'ouvre pas pour rien.
+   */
+  web?: boolean
 }
 
 export type AgentEvent =

@@ -128,7 +128,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     settings,
   })
   await app.register(hiveRoutes, { db: deps.db, adapter, cwd: env.WORKTREES_ROOT })
-  await app.register(creationsRoutes, { db: deps.db, adapter, cwd: env.WORKTREES_ROOT })
+  await app.register(creationsRoutes, {
+    db: deps.db,
+    adapter,
+    cwd: env.WORKTREES_ROOT,
+    http: deps.opsHttp ?? createSondeHttp(),
+  })
 
   // Le front construit, en production seulement : un seul processus, un seul
   // port. En développement Vite le sert lui-même, avec son rechargement à

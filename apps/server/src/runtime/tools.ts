@@ -101,7 +101,7 @@ export interface ResolvedToolPolicy {
   }
 }
 
-const ALL_BUILTIN_TOOLS = ['Bash', 'Read', 'Glob', 'Grep', 'Write', 'Edit']
+const ALL_BUILTIN_TOOLS = ['Bash', 'Read', 'Glob', 'Grep', 'Write', 'Edit', 'WebSearch']
 
 /** Outils natifs Claude Code (hors MCP) que la politique autorise. */
 function builtinTools(policy: ToolPolicy): string[] {
@@ -109,6 +109,11 @@ function builtinTools(policy: ToolPolicy): string[] {
   if (policy.bash) tools.push('Bash')
   if (policy.fs !== 'none') tools.push('Read', 'Glob', 'Grep')
   if (policy.fs === 'write') tools.push('Write', 'Edit')
+  // `WebSearch` est natif au SDK : pas une dépendance, une ligne de politique.
+  // `WebFetch` n'est PAS ouvert — chercher rend des extraits indexés, aller
+  // chercher une page rend ce que cette page veut bien servir à un agent, ce
+  // qui est une surface d'injection nettement plus large pour un gain nul ici.
+  if (policy.web) tools.push('WebSearch')
   return tools
 }
 

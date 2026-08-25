@@ -226,3 +226,38 @@ test('reviewer désactivé · la revue est sautée, sans un seul appel de modèl
     .execute()
   expect(trace.map((m) => m.body).join('\n')).toMatch(/Reviewer désactivé/)
 })
+
+test("le slug d'orbe est le seul identifiant accepté, et c'est bien ce que l'écran envoie", async () => {
+  // Piège de lecture qui m'a fait diagnostiquer un bug inexistant :
+  // `GlobeView.id` contient le SLUG, pas l'identifiant de la ligne
+  // (`globes/repo.ts` sélectionne `slug` et le rend sous la clé `id`). Donc
+  // `<option value={g.id}>` envoie bien un slug, et la création marche.
+  //
+  // Ce test fige les deux moitiés ensemble pour que le jour où `GlobeView.id`
+  // redeviendra un vrai identifiant, quelque chose casse ICI plutôt qu'en
+  // production sur un `globe_introuvable` incompréhensible.
+  const globe = await db
+    .selectFrom('globes')
+    .select(['id', 'slug'])
+    .where('slug', '=', globeSlug)
+    .executeTakeFirstOrThrow()
+
+  const cree = await createProject(db, {
+    globeSlug: globe.slug,
+    name: 'Par slug',
+    repoFullName: 'desura/essai',
+  })
+  expect(cree.globeSlug).toBe(globe.slug)
+
+  // L'identifiant réel de la ligne n'est PAS accepté, et c'est cohérent : rien
+  // dans l'application ne le manipule.
+  await expect(
+    createProject(db, { globeSlug: globe.id, name: 'Par id', repoFullName: 'desura/essai' }),
+  ).rejects.toThrow(/globe introuvable/)
+})
+
+test('une orbe inconnue reste un refus net', async () => {
+  await expect(
+    createProject(db, { globeSlug: 'orbe-qui-nexiste-pas', name: 'X', repoFullName: 'd/e' }),
+  ).rejects.toThrow(/globe introuvable/)
+})

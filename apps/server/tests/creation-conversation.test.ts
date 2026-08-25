@@ -5,13 +5,16 @@ import { createUser } from '../src/auth/users'
 import { tourDeCreation } from '../src/creation/conversation'
 import { appliquerRetouche, etapeFiche, manquesFiche } from '../src/creation/fiche'
 import { CREATION_MCP_SERVER, createSurfaceCreation } from '../src/creation/outils'
-import { ouvrirCreation } from '../src/creation/repo'
+import { cloturerCreation, ouvrirCreation } from '../src/creation/repo'
 import { createDb, createPool } from '../src/db/client'
 import { runMigrations } from '../src/db/migrate'
 import { seedRoleTemplates } from '../src/db/seed'
 import { databaseUrl, loadEnv } from '../src/env'
+import { createGlobe } from '../src/globes/repo'
+import { createProject } from '../src/projects/create'
 import { createFakeAdapter } from '../src/runtime/fake'
 import type { RuntimeAdapter } from '../src/runtime/types'
+import { ensureGlobe } from './fixtures'
 
 /**
  * La conversation de création (Lot 1).
@@ -57,6 +60,27 @@ afterAll(async () => {
 })
 
 const auth = () => ({ cookie: `hm_session=${cookie}` })
+
+/**
+ * Le slug d'une orbe utilisable.
+ *
+ * `ensureGlobe` rend le vrai identifiant de ligne, alors que `createGlobe`
+ * rend le SLUG sous la clé `id` (`GlobeView`). Les deux ne sont pas
+ * interchangeables et `createProject` n'accepte que le slug : on le relit
+ * plutôt que de parier sur l'un ou l'autre.
+ */
+async function slugDuGlobe(): Promise<string> {
+  const g = await ensureGlobe(db)
+  const row = await db
+    .selectFrom('globes')
+    .select('slug')
+    .where('id', '=', g.id)
+    .executeTakeFirstOrThrow()
+  return row.slug
+}
+
+/** Aucune sortie réseau depuis un test : la sonde répond toujours « rien ». */
+const httpMuet = async () => ({ erreur: 'sonde neutralisée en test' })
 
 // ─── La fiche, en pur ───────────────────────────────────────────────────────
 
@@ -114,13 +138,21 @@ test('l’étape vient de ce que la fiche contient, jamais d’une horloge', () 
 
 // ─── La surface ─────────────────────────────────────────────────────────────
 
-test('la surface n’expose que remplir et lire, aucun outil d’écriture', () => {
-  const surface = createSurfaceCreation({ db })
-  expect(surface.toolNames.sort()).toEqual(['lire_contexte', 'proposer_fiche'])
+test('la surface expose exactement ce qui est prévu, et rien d’irréversible', () => {
+  const surface = createSurfaceCreation({ db, http: httpMuet, ficheInitiale: {} })
+  expect(surface.toolNames.sort()).toEqual([
+    'creer_orbe',
+    'creer_projet',
+    'lire_contexte',
+    'proposer_fiche',
+    'sonder_url',
+    'verifier_depot',
+  ])
   const appelables = new Set(surface.sendOptions.extraAllowedTools ?? [])
-  // Au lot 1, Hive REMPLIT l'écran et ne crée rien. Aucun outil de cette
-  // surface ne doit pouvoir toucher une table de domaine.
-  for (const interdit of ['creer_orbe', 'creer_projet', 'supprimer']) {
+  // Ce que Hive ne peut PAS faire : rien ne supprime, rien ne déploie, rien ne
+  // touche un run. Créer une orbe et un projet est réversible d'un geste
+  // (`globe_id`/`project_id` sur la création) ; le reste ne l'est pas.
+  for (const interdit of ['supprimer_projet', 'demarrer_run', 'deployer', 'lire_secret']) {
     expect(appelables.has(`mcp__${CREATION_MCP_SERVER}__${interdit}`)).toBe(false)
   }
 })
@@ -182,7 +214,7 @@ test('le modèle tombe · l’écran le dit, et ce que Florian a écrit est gard
   }
 
   const { creation: apres, panne } = await tourDeCreation(
-    { db, adapter: casse, cwd: '/tmp' },
+    { db, adapter: casse, cwd: '/tmp', http: httpMuet },
     creation.id,
     'Une refonte du site de Bastide en Astro.',
   )
@@ -266,4 +298,110 @@ test('toutes les routes de création exigent une session', async () => {
     const r = await app.inject({ method, url })
     expect(r.statusCode, `${method} ${url}`).toBe(401)
   }
+})
+
+test('annuler défait ce que la conversation a écrit', async () => {
+  const globe = await slugDuGlobe()
+  const projet = await createProject(db, {
+    globeSlug: globe,
+    name: 'À défaire',
+    repoFullName: 'desura/a-defaire',
+    steps: [{ title: 'Un', specs: 's' }],
+  })
+  const creation = await ouvrirCreation(db)
+  await cloturerCreation(db, creation.id, { projectId: projet.id, aboutie: true })
+
+  const r = await app.inject({
+    method: 'POST',
+    url: `/api/creations/${creation.id}/annuler`,
+    headers: auth(),
+  })
+
+  expect(r.statusCode).toBe(204)
+  // C'est ce qui rend acceptable qu'un agent écrive sans confirmation : sans
+  // ce geste, « il s'occupe de tout » voudrait dire « tu nettoies à la main ».
+  const reste = await db
+    .selectFrom('projects')
+    .select('id')
+    .where('id', '=', projet.id)
+    .executeTakeFirst()
+  expect(reste).toBeUndefined()
+})
+
+test('annuler refuse dès qu’une boucle a tourné', async () => {
+  const globe = await slugDuGlobe()
+  const projet = await createProject(db, {
+    globeSlug: globe,
+    name: 'Déjà lancé',
+    repoFullName: 'desura/lance',
+    steps: [{ title: 'Un', specs: 's' }],
+  })
+  const step = await db
+    .selectFrom('steps')
+    .select('id')
+    .where('project_id', '=', projet.id)
+    .executeTakeFirstOrThrow()
+  await db.insertInto('runs').values({ step_id: step.id, state: 'framing' }).execute()
+
+  const creation = await ouvrirCreation(db)
+  await cloturerCreation(db, creation.id, { projectId: projet.id, aboutie: true })
+
+  const r = await app.inject({
+    method: 'POST',
+    url: `/api/creations/${creation.id}/annuler`,
+    headers: auth(),
+  })
+
+  // À partir d'un run, ce n'est plus un brouillon de conversation, c'est du
+  // travail. Le cascade emporterait runs, messages et artefacts sans le dire.
+  expect(r.statusCode).toBe(409)
+  expect(r.json().error).toBe('projet_deja_lance')
+  const reste = await db
+    .selectFrom('projects')
+    .select('id')
+    .where('id', '=', projet.id)
+    .executeTakeFirst()
+  expect(reste).toBeDefined()
+})
+
+test('annuler laisse l’orbe si un autre projet s’y est posé', async () => {
+  const vue = await createGlobe(db, { name: 'Orbe partagée' })
+  // `GlobeView.id` porte le SLUG, pas l'identifiant de la ligne : pour écrire
+  // `creations.globe_id`, qui est une vraie colonne uuid, il faut le relire.
+  const orbe = await db
+    .selectFrom('globes')
+    .select(['id', 'slug'])
+    .where('slug', '=', vue.id)
+    .executeTakeFirstOrThrow()
+  const mien = await createProject(db, {
+    globeSlug: orbe.slug,
+    name: 'Le mien',
+    repoFullName: 'desura/mien',
+  })
+  await createProject(db, {
+    globeSlug: orbe.slug,
+    name: "Celui d'un autre",
+    repoFullName: 'desura/autre',
+  })
+
+  const creation = await ouvrirCreation(db)
+  await cloturerCreation(db, creation.id, {
+    globeId: orbe.id,
+    projectId: mien.id,
+    aboutie: true,
+  })
+  await app.inject({
+    method: 'POST',
+    url: `/api/creations/${creation.id}/annuler`,
+    headers: auth(),
+  })
+
+  // Un projet étranger a pu se poser entre-temps : il n'a rien à voir avec
+  // cette conversation, et emporter son orbe l'emporterait avec.
+  const survit = await db
+    .selectFrom('globes')
+    .select('id')
+    .where('id', '=', orbe.id)
+    .executeTakeFirst()
+  expect(survit).toBeDefined()
 })

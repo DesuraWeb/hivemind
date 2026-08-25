@@ -131,15 +131,22 @@ export async function corrigerFiche(
   return versCreation(ligne as Record<string, unknown>)
 }
 
+/**
+ * Rattache à la création ce qu'elle a écrit en base.
+ *
+ * `aboutie` est explicite parce qu'une orbe créée n'est qu'une étape : la
+ * conversation continue jusqu'au projet. Clore sur l'orbe rendrait l'écran
+ * muet au milieu du travail.
+ */
 export async function cloturerCreation(
   db: Kysely<Database>,
   id: string,
-  quoi: { globeId?: string | null; projectId?: string | null },
+  quoi: { globeId?: string | null; projectId?: string | null; aboutie?: boolean },
 ): Promise<Creation> {
   const ligne = await db
     .updateTable('creations')
     .set({
-      statut: 'aboutie',
+      ...(quoi.aboutie ? { statut: 'aboutie' as const } : {}),
       ...(quoi.globeId !== undefined ? { globe_id: quoi.globeId } : {}),
       ...(quoi.projectId !== undefined ? { project_id: quoi.projectId } : {}),
       updated_at: sql`now()`,

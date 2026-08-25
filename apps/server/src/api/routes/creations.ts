@@ -13,12 +13,15 @@ import {
   ouvrirCreation,
 } from '../../creation/repo'
 import type { Database } from '../../db/types'
+import type { SondeHttp } from '../../ops/types'
 import type { RuntimeAdapter } from '../../runtime/types'
 
 export interface CreationsRoutesDeps {
   db: Kysely<Database>
   adapter: RuntimeAdapter
   cwd: string
+  /** La sonde HTTP : vérifier un dépôt ou un staging avant de l'inscrire. */
+  http: SondeHttp
 }
 
 /**
@@ -100,7 +103,7 @@ export async function creationsRoutes(
     }
 
     const { creation: apres, panne } = await tourDeCreation(
-      { db: deps.db, adapter: deps.adapter, cwd: deps.cwd },
+      { db: deps.db, adapter: deps.adapter, cwd: deps.cwd, http: deps.http },
       id,
       parsed.data.texte,
     )
@@ -131,6 +134,56 @@ export async function creationsRoutes(
     // rempli par erreur, ce qui est précisément l'usage de cette route.
     const apres = await corrigerFiche(deps.db, id, parsed.data as Fiche)
     return vue(apres)
+  })
+
+  /**
+   * Défaire ce que cette conversation a écrit en base.
+   *
+   * C'est la contrepartie du fait que Hive crée sans demander de confirmation.
+   * Sans ce geste, « il s'occupe de toute la création » voudrait dire « il
+   * salit ta base et tu nettoies à la main » — et l'absence de clic de
+   * validation deviendrait un piège au lieu d'un confort.
+   *
+   * Refuse dès qu'un run existe sur le projet : à partir de là, ce n'est plus
+   * un brouillon de conversation, c'est du travail. Un `on delete cascade`
+   * emporterait les runs, les messages et les artefacts sans le dire.
+   */
+  app.post('/api/creations/:id/annuler', { preHandler: app.requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const creation = await lireCreation(deps.db, id)
+    if (!creation) return reply.code(404).send({ error: 'creation_introuvable' })
+
+    if (creation.projectId) {
+      const run = await deps.db
+        .selectFrom('runs')
+        .innerJoin('steps', 'steps.id', 'runs.step_id')
+        .select('runs.id')
+        .where('steps.project_id', '=', creation.projectId)
+        .executeTakeFirst()
+      if (run) {
+        return reply.code(409).send({
+          error: 'projet_deja_lance',
+          detail: 'une boucle a déjà tourné sur ce projet · annuler emporterait son travail',
+        })
+      }
+      await deps.db.deleteFrom('projects').where('id', '=', creation.projectId).execute()
+    }
+
+    // L'orbe seulement si elle est restée vide : un autre projet a pu s'y
+    // poser entre-temps, et il n'a rien à voir avec cette conversation.
+    if (creation.globeId) {
+      const autre = await deps.db
+        .selectFrom('projects')
+        .select('id')
+        .where('globe_id', '=', creation.globeId)
+        .executeTakeFirst()
+      if (!autre) {
+        await deps.db.deleteFrom('globes').where('id', '=', creation.globeId).execute()
+      }
+    }
+
+    await abandonnerCreation(deps.db, id)
+    return reply.code(204).send()
   })
 
   app.post('/api/creations/:id/abandon', { preHandler: app.requireAuth }, async (req, reply) => {

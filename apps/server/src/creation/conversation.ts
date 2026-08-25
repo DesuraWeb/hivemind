@@ -1,11 +1,18 @@
 import type { Kysely } from 'kysely'
 import type { Database } from '../db/types'
 import { readMajordomeTemplate } from '../hive/conversation'
+import type { SondeHttp } from '../ops/types'
 import type { RuntimeAdapter } from '../runtime/types'
 import { BRIEF_CREATION } from './brief'
-import { type Fiche, appliquerRetouche, manquesFiche } from './fiche'
+import { type Fiche, manquesFiche } from './fiche'
 import { createSurfaceCreation } from './outils'
-import { type Creation, type TourCreation, enregistrerTour, lireCreation } from './repo'
+import {
+  type Creation,
+  type TourCreation,
+  cloturerCreation,
+  enregistrerTour,
+  lireCreation,
+} from './repo'
 
 /**
  * Un tour de conversation avec Hive, sur l'écran de création.
@@ -33,6 +40,8 @@ const LIMITE_HISTORIQUE = 20
 export interface TourDeps {
   db: Kysely<Database>
   adapter: RuntimeAdapter
+  /** La sonde HTTP, pour vérifier un dépôt ou un staging. */
+  http: SondeHttp
   /** Hive n'a aucun accès fichier ici, mais le SDK exige un répertoire. */
   cwd: string
 }
@@ -79,7 +88,7 @@ export async function tourDeCreation(
   await enregistrerTour(db, creationId, { fiche: avant.fiche, conversation: avecHumain })
 
   const role = await readMajordomeTemplate(db)
-  const surface = createSurfaceCreation({ db })
+  const surface = createSurfaceCreation({ db, http: deps.http, ficheInitiale: avant.fiche })
 
   const historique = avecHumain
     .slice(-LIMITE_HISTORIQUE, -1)
@@ -91,7 +100,11 @@ export async function tourDeCreation(
       roleKey: 'majordome',
       systemPrompt: `${role.systemPrompt}\n\n${BRIEF_CREATION}`,
       cwd: deps.cwd,
-      tools: role.tools,
+      // `web: true` composé ICI et pas dans le seed du majordome : c'est le
+      // même rôle qui tient le bandeau HiveStrip, et lui n'a aucune raison
+      // d'aller sur le réseau. La recherche sert à vérifier qu'une stack est
+      // encore maintenue avant de la proposer.
+      tools: { ...role.tools, web: true },
       onEvent: () => {},
     })
 
@@ -105,21 +118,36 @@ export async function tourDeCreation(
       surface.sendOptions,
     )
 
-    // Les retouches sont appliquées dans l'ordre d'émission : Hive apprend
-    // souvent deux choses dans un tour et les émet séparément.
-    let fiche = avant.fiche
-    for (const r of surface.retouches) fiche = appliquerRetouche(fiche, r)
+    // La surface a porté la fiche pendant tout le tour : `proposer_fiche` l'a
+    // fait évoluer, et les outils de création ont lu CETTE fiche — c'est ce
+    // qui garantit que rien n'est créé qui ne soit passé par l'écran.
+    const fiche = surface.fiche()
+    const { globeId, projectId } = surface.creations()
 
     const reponse: TourCreation = {
       de: 'hive',
       texte: result.text,
       a: new Date().toISOString(),
     }
-    const creation = await enregistrerTour(db, creationId, {
+    const apresTour = await enregistrerTour(db, creationId, {
       fiche,
       conversation: [...avecHumain, reponse],
       costTokens: result.costTokens,
     })
+
+    // Ce que ce tour a écrit en base est rattaché à la création : c'est ce qui
+    // rend « annuler cette création » trivial, et c'est ce qui rend acceptable
+    // qu'un agent écrive sans demander de confirmation.
+    const creation =
+      globeId || projectId
+        ? await cloturerCreation(db, creationId, {
+            ...(globeId ? { globeId } : {}),
+            ...(projectId ? { projectId } : {}),
+            // Tant que le projet n'existe pas, la conversation continue : une
+            // orbe créée n'est qu'une étape.
+            aboutie: Boolean(projectId),
+          })
+        : apresTour
     return { creation, panne: false }
   } catch (erreur) {
     // La cause, pas « une erreur est survenue ». Florian doit pouvoir agir

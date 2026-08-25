@@ -1,8 +1,12 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk'
 import type { Kysely } from 'kysely'
+import { z } from 'zod'
 import type { Database } from '../db/types'
+import { createGlobe } from '../globes/repo'
+import type { SondeHttp } from '../ops/types'
+import { RosterInvalideError, UnknownGlobeError, createProject } from '../projects/create'
 import type { SendOptions } from '../runtime/types'
-import { type RetoucheFiche, retoucheFicheSchema } from './fiche'
+import { type Fiche, appliquerRetouche, manquesFiche, retoucheFicheSchema } from './fiche'
 
 /**
  * `creation` : la surface de l'assistant de création d'orbe.
@@ -28,18 +32,24 @@ const MAX_PAR_FAMILLE = 25
 
 export interface SurfaceCreationDeps {
   db: Kysely<Database>
+  http: SondeHttp
+  /** La fiche telle qu'elle est affichée au début du tour. */
+  ficheInitiale: Fiche
 }
 
 export interface SurfaceCreation {
   sendOptions: SendOptions
   /**
-   * Les retouches émises pendant le tour, dans l'ordre d'émission.
+   * La fiche à la fin du tour : l'initiale, plus toutes les retouches émises.
    *
-   * Un tableau et pas une seule valeur : Hive apprend souvent deux choses dans
-   * le même tour (le nom, puis le découpage qu'il en déduit) et les émet
-   * séparément. Garder la dernière seule perdrait la première.
+   * La surface la porte plutôt que d'accumuler des retouches à part, parce que
+   * les outils de création lisent CETTE fiche — c'est ce qui garantit que Hive
+   * ne peut créer que ce qui est à l'écran. Ils n'ont aucun paramètre de
+   * contenu : il n'y a rien à inventer hors bande.
    */
-  retouches: RetoucheFiche[]
+  fiche: () => Fiche
+  /** Ce que ce tour a réellement écrit en base. */
+  creations: () => { globeId: string | null; projectId: string | null }
   toolNames: string[]
 }
 
@@ -48,7 +58,9 @@ function texte(text: string) {
 }
 
 export function createSurfaceCreation(deps: SurfaceCreationDeps): SurfaceCreation {
-  const retouches: RetoucheFiche[] = []
+  let fiche: Fiche = deps.ficheInitiale
+  let globeId: string | null = null
+  let projectId: string | null = null
 
   const proposer = tool(
     'proposer_fiche',
@@ -70,8 +82,13 @@ export function createSurfaceCreation(deps: SurfaceCreationDeps): SurfaceCreatio
           `Fiche refusée : ${parsed.error.issues.map((i) => `${i.path.join('.')} · ${i.message}`).join(' ; ')}. Corrige et rappelle l'outil.`,
         )
       }
-      retouches.push(parsed.data)
-      return texte("Écran mis à jour. Continue la conversation, n'annonce pas l'outil.")
+      fiche = appliquerRetouche(fiche, parsed.data)
+      const manques = manquesFiche(fiche)
+      return texte(
+        manques.length > 0
+          ? `Écran mis à jour. Il manque encore : ${manques.join(', ')}. Continue la conversation, n'annonce pas l'outil.`
+          : "Écran mis à jour, la fiche est complète. Continue la conversation, n'annonce pas l'outil.",
+      )
     },
   )
 
@@ -142,7 +159,129 @@ export function createSurfaceCreation(deps: SurfaceCreationDeps): SurfaceCreatio
     },
   )
 
-  const tools = [proposer, contexte]
+  const sonder = tool(
+    'sonder_url',
+    "Vérifie qu'une URL répond. Sers-t'en pour le staging avant de l'inscrire dans la fiche.",
+    { url: z.string().url() },
+    async (args) => {
+      const r = await deps.http(args.url)
+      if ('erreur' in r) return texte(`${args.url} ne répond pas · ${r.erreur}`)
+      return texte(`${args.url} répond · HTTP ${r.statut}`)
+    },
+  )
+
+  const verifier = tool(
+    'verifier_depot',
+    "Vérifie qu'un dépôt GitHub `proprietaire/nom` est atteignable, avant de l'inscrire dans la fiche.",
+    { depot: z.string().regex(/^[\w.-]+\/[\w.-]+$/, 'attendu : proprietaire/nom') },
+    async (args) => {
+      const r = await deps.http(`https://github.com/${args.depot}`)
+      if ('erreur' in r)
+        return texte(`Impossible de joindre GitHub · ${r.erreur}. Ne conclus rien.`)
+      if (r.statut >= 200 && r.statut < 400) return texte(`${args.depot} existe et est public.`)
+      // Le point à ne surtout pas déformer : cette sonde est ANONYME. Un dépôt
+      // privé rend 404 exactement comme un dépôt inexistant. Annoncer « ce
+      // dépôt n'existe pas » sur un 404 serait faux une fois sur deux, et
+      // enverrait Florian corriger un nom qui était bon.
+      if (r.statut === 404) {
+        return texte(
+          `${args.depot} rend 404 pour une requête anonyme. Ça veut dire « inexistant » OU « privé » — la sonde ne peut pas les distinguer. Demande à Florian, ne tranche pas.`,
+        )
+      }
+      return texte(`${args.depot} rend HTTP ${r.statut}. Ne conclus rien de définitif.`)
+    },
+  )
+
+  const creerOrbe = tool(
+    'creer_orbe',
+    "Crée l'orbe décrite dans la fiche. Aucun paramètre : ce qui est à l'écran fait foi.",
+    {},
+    async () => {
+      const orbe = fiche.orbeACreer
+      if (!orbe?.nom?.trim()) {
+        return texte(
+          "Aucune orbe à créer dans la fiche. Appelle d'abord `proposer_fiche` avec `orbeACreer`.",
+        )
+      }
+      if (globeId) return texte('Cette orbe a déjà été créée pendant cette conversation.')
+
+      const cree = await createGlobe(
+        deps.db,
+        orbe.couleur ? { name: orbe.nom, color: orbe.couleur } : { name: orbe.nom },
+      )
+      globeId = cree.id
+      // La fiche bascule sur l'orbe créée : le projet devra s'y poser, et sans
+      // ça `manquesFiche` réclamerait encore « l'orbe d'accueil ».
+      fiche = appliquerRetouche(fiche, { orbeACreer: null, projet: { orbe: cree.id } })
+      return texte(`Orbe « ${cree.name} » créée.`)
+    },
+  )
+
+  const creerProjet = tool(
+    'creer_projet',
+    "Crée le projet décrit dans la fiche, avec ses steps, son roster et sa mémoire. Aucun paramètre : ce qui est à l'écran fait foi.",
+    {},
+    async () => {
+      if (projectId) return texte('Ce projet a déjà été créé pendant cette conversation.')
+      const manques = manquesFiche(fiche)
+      if (manques.length > 0) {
+        return texte(`Fiche incomplète, rien n'a été créé. Il manque : ${manques.join(', ')}.`)
+      }
+      const p = fiche.projet ?? {}
+
+      try {
+        const cree = await createProject(deps.db, {
+          globeSlug: p.orbe as string,
+          name: p.nom as string,
+          repoFullName: p.depot as string,
+          ...(p.clientId ? { clientId: p.clientId } : {}),
+          ...(p.stack ? { stack: p.stack } : {}),
+          ...(p.staging ? { stagingUrl: p.staging } : {}),
+          ...(p.jugeVisuel !== undefined ? { jugeVisuel: p.jugeVisuel } : {}),
+          steps: (fiche.steps ?? []).map((st) => ({
+            title: st.titre,
+            specs: st.specs,
+            autonomy: st.auto ? ('auto' as const) : null,
+            ...(st.iterations ? { maxIterations: st.iterations } : {}),
+          })),
+          ...(fiche.roster
+            ? {
+                roster: fiche.roster.map((r) => ({
+                  key: r.key,
+                  ...(r.enabled !== undefined ? { enabled: r.enabled } : {}),
+                  ...(r.systemPrompt !== undefined ? { systemPrompt: r.systemPrompt } : {}),
+                })),
+              }
+            : {}),
+          ...(fiche.savoirs
+            ? {
+                savoirs: fiche.savoirs.map((sv) => ({
+                  cercle: sv.cercle,
+                  sujet: sv.sujet,
+                  contenu: sv.contenu,
+                  ...(sv.stack !== undefined ? { stack: sv.stack } : {}),
+                  ...(sv.domaine !== undefined ? { domaine: sv.domaine } : {}),
+                })),
+              }
+            : {}),
+        })
+        projectId = cree.id
+        return texte(
+          `Projet « ${cree.name} » créé dans l'orbe \`${cree.globeSlug}\` avec ${cree.stepCount} step(s). Dis-le à Florian.`,
+        )
+      } catch (err) {
+        // Rendre la cause au modèle plutôt que de lever : il peut corriger la
+        // fiche et réessayer dans le même tour. Une exception ici remonterait
+        // en panne générique et perdrait le motif exact du refus.
+        if (err instanceof RosterInvalideError || err instanceof UnknownGlobeError) {
+          return texte(`Refusé, rien n'a été créé · ${err.message}`)
+        }
+        throw err
+      }
+    },
+  )
+
+  const tools = [proposer, contexte, sonder, verifier, creerOrbe, creerProjet]
   const server = createSdkMcpServer({ name: CREATION_MCP_SERVER, tools })
 
   return {
@@ -150,7 +289,8 @@ export function createSurfaceCreation(deps: SurfaceCreationDeps): SurfaceCreatio
       extraMcpServers: { [CREATION_MCP_SERVER]: server },
       extraAllowedTools: tools.map((t) => `mcp__${CREATION_MCP_SERVER}__${t.name}`),
     },
-    retouches,
+    fiche: () => fiche,
+    creations: () => ({ globeId, projectId }),
     toolNames: tools.map((t) => t.name),
   }
 }
