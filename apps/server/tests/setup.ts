@@ -42,7 +42,24 @@ const LOCK_ID = 8_140_825
 let client: pg.Client | undefined
 
 beforeAll(async () => {
-  const connectionString = process.env.DATABASE_URL
+  // LA BASE DE TEST, pas celle de développement.
+  //
+  // Ce fichier lisait `DATABASE_URL` alors que les tests, eux, tournent sur
+  // `DATABASE_URL_TEST` (`env.ts::databaseUrl`, qui bascule sur `NODE_ENV`).
+  // Deux conséquences, toutes deux constatées le 25/08 :
+  //
+  // 1. **La purge nettoyait la mauvaise base.** La base de test avait accumulé
+  //    1 121 jobs pg-boss — exactement le problème que cette purge existe pour
+  //    empêcher, et qui avait coûté une heure de diagnostic la première fois
+  //    (un run immobile en `framing`, sans message d'erreur).
+  // 2. **Lancer `pnpm test` sabotait un serveur en cours.** La purge des
+  //    planifications supprimait les crons du serveur de développement qui
+  //    tournait sur la même machine : sonde de budget, healthcheck d'auth et
+  //    rappel de revue s'arrêtaient en silence jusqu'au redémarrage suivant.
+  //
+  // Le verrou consultatif suit la même base, pour la même raison : il doit
+  // sérialiser l'accès à ce que les tests touchent réellement.
+  const connectionString = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL
   // Sans URL, il n'y a pas de base à protéger : les tests purs (machine à
   // états, politique d'outils) n'en touchent aucune et ne doivent pas échouer
   // ici.
