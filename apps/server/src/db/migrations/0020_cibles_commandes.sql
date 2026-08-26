@@ -1,0 +1,35 @@
+-- Ce qu'il faut savoir faire sur cette cible pour y migrer sans filet cassé.
+--
+-- ## Pourquoi ces commandes sont DÉCLARÉES et pas devinées
+--
+-- Sauvegarder une base ne se fait pas de la même façon selon la stack et
+-- l'hébergeur : `mysqldump` ici, `pg_dump` là, un script du panneau ailleurs.
+-- Inventer la commande serait exactement ce que le produit interdit à ses
+-- agents — présenter une supposition comme un constat, sur l'opération la
+-- moins réversible qui soit.
+--
+-- Elles sont donc posées par un humain, une fois, par cible. Ce que la mémoire
+-- apprendra (lot F) aidera à les ÉCRIRE, jamais à les exécuter sans qu'on les
+-- ait vues.
+--
+-- ## `{{fichier}}`
+--
+-- La commande de sauvegarde reçoit le chemin du dump, substitué par le code.
+-- C'est nous qui le choisissons, parce que c'est nous qui devons pouvoir
+-- VÉRIFIER qu'il n'est pas vide ensuite. Une commande qui choisirait son
+-- propre chemin rendrait la vérification impossible, et une sauvegarde
+-- non vérifiée est pire que pas de sauvegarde : elle autorise le geste
+-- suivant.
+--
+-- La commande de restauration reçoit le même jeton, avec le fichier qui vient
+-- d'être vérifié.
+--
+-- ## Nulles par défaut, et ce que ça implique
+--
+-- Une cible sans commande de sauvegarde ne peut pas recevoir de migration :
+-- la mise en prod REFUSE plutôt que de migrer à l'aveugle. C'est le
+-- comportement voulu, pas une limitation à contourner — un projet sans base
+-- n'en a simplement jamais besoin.
+alter table cibles_deploiement add column commande_sauvegarde text;
+alter table cibles_deploiement add column commande_migration text;
+alter table cibles_deploiement add column commande_restauration text;

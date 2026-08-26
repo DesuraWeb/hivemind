@@ -12,6 +12,7 @@ import { type InboxResponse, resolveInboxItem } from '../../inbox/resolve'
 import type { GmailSendPort } from '../../integrations/gmail'
 import { COMMUNICANT_QUEUE, type CommunicantJobData } from '../../jobs/communicant'
 import { OPS_APPLY_QUEUE, type OpsApplyJobData } from '../../jobs/ops-apply'
+import { PROD_DEPLOY_QUEUE, type ProdDeployJobData } from '../../jobs/prod-deploy'
 import { archiverSavoirApprouve } from '../../knowledge/propose'
 import { apprendreDuRetour } from '../../ops/apprendre'
 import { OPS_INBOX_SUBTYPE } from '../../ops/change-request'
@@ -230,6 +231,49 @@ async function enqueueClientEmailDraft(
 }
 
 /**
+ * Suite serveur d'une mise en production approuvée : Silithid déploie.
+ *
+ * Le gate annonçait « aucune cible » depuis toujours : rien n'exécutait cette
+ * décision, elle restait une lecture. Elle part maintenant.
+ *
+ * Enfilé, pas exécuté dans la requête : une sauvegarde, un déploiement et une
+ * migration prennent plus qu'une requête HTTP, et la faire expirer laisserait
+ * Florian sans savoir si sa prod est partie — l'incertitude la plus
+ * désagréable de toutes sur un site vivant.
+ */
+async function enqueueProdDeploy(
+  deps: InboxRoutesDeps,
+  item: InboxItemRow,
+  log: FastifyBaseLogger,
+): Promise<boolean> {
+  if (item.type !== 'approval' || item.subtype !== 'prod') return false
+  if (item.humanResponse?.approved !== true) return false
+  if (!item.projectId) return false
+
+  try {
+    await deps.boss.send(PROD_DEPLOY_QUEUE, { inboxItemId: item.id } satisfies ProdDeployJobData)
+    return true
+  } catch (err) {
+    // Une alerte, comme pour le changement serveur et pour la même raison : un
+    // humain a décidé qu'une PRODUCTION devait changer, et sa décision est en
+    // train de se perdre en silence.
+    log.error({ err, itemId: item.id }, 'mise en file du déploiement de production échouée')
+    await createInboxItem(deps.db, {
+      type: 'alert',
+      projectId: item.projectId,
+      runId: item.runId,
+      fromRole: 'system',
+      title: `Mise en prod non partie · ${item.title}`,
+      payload: {
+        cause: 'prod.mise_en_file_echouee',
+        ctx: 'la décision a été prise et le déploiement n’a pas pu être enfilé · à relancer à la main',
+      },
+    })
+    return false
+  }
+}
+
+/**
  * Suite serveur d'un changement d'exploitation approuvé : Silithid applique.
  *
  * C'est la demande explicite de Florian — « j'ai pas envie de me rendre fou à
@@ -411,6 +455,7 @@ export async function inboxRoutes(app: FastifyInstance, deps: InboxRoutesDeps): 
       const savoirArchived = await archiveSavoirOrAlert(deps, result.item, req.log)
       const emailDraftQueued = await enqueueClientEmailDraft(deps, result.item, req.log)
       const opsApplyQueued = await enqueueOpsApply(deps, result.item, req.log)
+      const prodDeployQueued = await enqueueProdDeploy(deps, result.item, req.log)
       await apprendreDuPlanTranche(deps, result.item, req.log)
       const etapeAjoutee = await ajouterEtapeOuAlerter(deps, result.item, req.log)
       return {
@@ -420,6 +465,7 @@ export async function inboxRoutes(app: FastifyInstance, deps: InboxRoutesDeps): 
         savoirArchived,
         emailDraftQueued,
         opsApplyQueued,
+        prodDeployQueued,
         etapeAjoutee,
       }
     } catch (err) {

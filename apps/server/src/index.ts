@@ -7,7 +7,7 @@ import { createMailer } from './integrations/mailer'
 import { closeBrowser } from './integrations/playwright'
 import { createBoss, startBoss } from './jobs/boss'
 import { createStepRegistry } from './loop/registry'
-import { createSshExecutor } from './ops/executor'
+import { createSondeHttp, createSshExecutor } from './ops/executor'
 import { createRuntimeAdapter } from './runtime/index'
 import { createSettingsStore } from './settings/store'
 
@@ -51,6 +51,11 @@ await startBoss(boss, {
   // De quoi exécuter un changement approuvé sur un serveur. L'accès est relu
   // dans le coffre à chaque appel, avec la portée du serveur visé.
   opsExecutor: createSshExecutor(settings),
+  // De quoi mettre en production : le coffre pour les accès par serveur, et la
+  // sonde pour vérifier que le site répond après coup. Les trois ensemble avec
+  // l'exécuteur, ou le worker n'est pas enregistré du tout.
+  vault: settings,
+  sondeHttp: createSondeHttp(),
   stepRegistry: createStepRegistry({
     adapter,
     worktreesRoot: env.WORKTREES_ROOT,

@@ -386,6 +386,9 @@ export async function runProdGate(
         ecarts: opts.verdict.ecarts,
         staging: opts.staging,
         rollback,
+        // Relues telles quelles par le job de déploiement, jamais recalculées :
+        // ce qui part en prod doit être exactement ce qui a été MONTRÉ ici.
+        migrations: opts.changedFiles.filter((f) => isMigration(f.path)).map((f) => f.path),
         warnings: buildWarnings(opts.changedFiles),
         on_approve: ON_APPROVE_NO_TARGET,
       },

@@ -63,6 +63,16 @@ export interface ApprendreDeps {
   projectId: string
   /** La stack visée. Sans elle, le savoir n'atteindrait aucune recette. */
   stack: string | null
+  /**
+   * Le NIVEAU auquel ce qu'on apprend est vrai : un hébergeur nommé
+   * (`planethoster`), un type d'hébergement (`mutualise`), ou absent quand ça
+   * vaut partout (migration 0016).
+   *
+   * Absent était le seul comportement possible avant la cascade, et tous les
+   * savoirs appris atterrissaient donc au niveau le plus général. « Monter PHP
+   * chez PlanetHoster » y était rappelé sur un VPS, où il n'y a aucun PHP.
+   */
+  hebergement?: string | null
   runId?: string | null
 }
 
@@ -161,6 +171,45 @@ export async function apprendreDeLEchec(
 }
 
 /**
+ * Source 4 · ce qu'une mise en production a appris.
+ *
+ * Les trois sources existantes écoutent le provisioning et les demandes de
+ * changement, parce que ça passe par l'agent d'exploitation. Un déploiement
+ * passe par `DeployTarget` — un chemin qui n'apprenait RIEN, alors que c'est
+ * exactement là que les erreurs de version se produisent.
+ *
+ * Seuls les ÉCHECS remontent. Un déploiement qui se passe bien n'apprend rien
+ * qu'on ne sache déjà : la recette a marché, c'est son rôle. Ce qui vaut une
+ * ligne, c'est une sauvegarde qui rend zéro octet, une migration qui casse sur
+ * cette base-là, un site qui rend 502 après une mise en ligne pourtant réussie.
+ */
+export async function apprendreDuDeploiement(
+  deps: ApprendreDeps,
+  resultat: { ok: boolean; etapes: Array<{ nom: string; ok: boolean; detail: string }> },
+): Promise<number> {
+  if (resultat.ok || !deps.stack) return 0
+
+  const rate = resultat.etapes.find((e) => !e.ok)
+  if (!rate) return 0
+
+  const candidats: CandidatSavoir[] = [
+    {
+      sujet: sujet('mise en prod', `${rate.nom} · ${rate.detail}`),
+      contenu: [
+        `L'étape « ${rate.nom} » d'une mise en production a échoué : ${rate.detail}`,
+        '',
+        'À anticiper au prochain déploiement de cette stack sur cet hébergement,',
+        'plutôt que de le redécouvrir sur un site vivant.',
+      ].join('\n'),
+      cercle: 'hive',
+      stack: deps.stack,
+    },
+  ]
+
+  return proposer(deps, candidats)
+}
+
+/**
  * Le point d'écriture commun.
  *
  * `domaine: 'exploitation'` range le savoir dans la mémoire de l'agent ops et
@@ -172,7 +221,12 @@ async function proposer(deps: ApprendreDeps, candidats: CandidatSavoir[]): Promi
   const { proposes } = await proposerSavoirs(deps.db, {
     runId: deps.runId ?? null,
     projectId: deps.projectId,
-    candidats,
+    // La portée est posée ICI, une fois, plutôt que sur chaque candidat de
+    // chaque source : tout ce qu'un déploiement apprend est vrai au même
+    // niveau, celui du serveur sur lequel il a tourné.
+    candidats: deps.hebergement
+      ? candidats.map((c) => ({ ...c, hebergement: deps.hebergement as string }))
+      : candidats,
     fromRole: 'ops',
     domaine: 'exploitation',
   })

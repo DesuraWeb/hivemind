@@ -38,6 +38,11 @@ export interface CibleDeploiement {
   chemin: string
   branche: string
   domaine: string | null
+  /** Reçoit `{{fichier}}`. Absente, aucune migration ne peut partir sur cette cible. */
+  commandeSauvegarde: string | null
+  commandeMigration: string | null
+  /** Reçoit `{{fichier}}`. Absente, un échec de migration ne se défait pas tout seul. */
+  commandeRestauration: string | null
 }
 
 const COLONNES = [
@@ -53,6 +58,9 @@ const COLONNES = [
   'cibles_deploiement.chemin as chemin',
   'cibles_deploiement.branche as branche',
   'cibles_deploiement.domaine as domaine',
+  'cibles_deploiement.commande_sauvegarde as commandeSauvegarde',
+  'cibles_deploiement.commande_migration as commandeMigration',
+  'cibles_deploiement.commande_restauration as commandeRestauration',
 ] as const
 
 function versCible(r: Record<string, unknown>): CibleDeploiement {
@@ -69,6 +77,9 @@ function versCible(r: Record<string, unknown>): CibleDeploiement {
     chemin: r.chemin as string,
     branche: r.branche as string,
     domaine: (r.domaine ?? null) as string | null,
+    commandeSauvegarde: (r.commandeSauvegarde ?? null) as string | null,
+    commandeMigration: (r.commandeMigration ?? null) as string | null,
+    commandeRestauration: (r.commandeRestauration ?? null) as string | null,
   }
 }
 
@@ -108,6 +119,9 @@ export interface PoserCibleInput {
   chemin: string
   branche?: string
   domaine?: string | null
+  commandeSauvegarde?: string | null
+  commandeMigration?: string | null
+  commandeRestauration?: string | null
 }
 
 export class CheminInvalideError extends Error {
@@ -146,6 +160,9 @@ export async function poserCible(
       chemin,
       ...(input.branche ? { branche: input.branche } : {}),
       domaine: input.domaine ?? null,
+      commande_sauvegarde: input.commandeSauvegarde ?? null,
+      commande_migration: input.commandeMigration ?? null,
+      commande_restauration: input.commandeRestauration ?? null,
     })
     .onConflict((oc) =>
       oc.columns(['project_id', 'cible']).doUpdateSet({
@@ -153,6 +170,9 @@ export async function poserCible(
         chemin,
         ...(input.branche ? { branche: input.branche } : {}),
         domaine: input.domaine ?? null,
+        commande_sauvegarde: input.commandeSauvegarde ?? null,
+        commande_migration: input.commandeMigration ?? null,
+        commande_restauration: input.commandeRestauration ?? null,
         updated_at: sql`now()`,
       }),
     )

@@ -137,11 +137,65 @@ export interface SshGitTargetDeps {
    * correctif appliqué d'un seul côté.
    */
   resolveUrl?: (ctx: DeployContext) => string
+  /**
+   * Poser le `robots.txt` qui interdit l'indexation. **Vrai par défaut**, ce
+   * qui est le comportement d'un staging et celui qui existait.
+   *
+   * `false` sur une PRODUCTION, et ce n'est pas un détail : poser
+   * `Disallow: /` sur le site d'un client le fait sortir de l'index. Casser
+   * une URL indexée est la faute la plus chère du métier ; les désindexer
+   * toutes d'un coup en est la version maximale, et elle serait notre fait.
+   *
+   * Le défaut reste `true` parce qu'oublier de bloquer un staging expose le
+   * site dupliqué d'un client — l'erreur inverse, moins grave mais réelle. Le
+   * mauvais cas doit demander une déclaration explicite, dans les deux sens.
+   */
+  bloquerLesRobots?: boolean
 }
 
 /** Nom d'hôte du staging d'un projet. Exporté : le gate prod et l'UI l'affichent. */
 export function stagingUrl(domain: string, projectSlug: string): string {
   return `https://${projectSlug}.${domain}`
+}
+
+/**
+ * Le script poussé sur le serveur, construit à part.
+ *
+ * Extrait parce que c'est LUI qui peut être faux, pas le transport SSH. Un
+ * test qui passerait par une connexion ne vérifierait rien d'utile et
+ * n'attraperait pas ce qu'on veut attraper ici : la présence ou l'absence du
+ * `robots.txt` selon la cible.
+ *
+ * Un seul aller-retour SSH plutôt qu'un par commande : chaque connexion coûte
+ * une poignée de main, et un déploiement à moitié fait entre deux connexions
+ * serait plus difficile à diagnostiquer qu'un script qui échoue d'un bloc.
+ * `set -e` fait échouer au premier problème.
+ */
+export function construireScriptDeploiement(opts: {
+  dir: string
+  repoUrl: string
+  branch: string
+  /** `false` sur une production. Voir `SshGitTargetDeps.bloquerLesRobots`. */
+  bloquerLesRobots: boolean
+}): string {
+  const { dir } = opts
+  return [
+    'set -e',
+    `mkdir -p ${sh(dir)}`,
+    `if [ ! -d ${sh(`${dir}/.git`)} ]; then git clone ${sh(opts.repoUrl)} ${sh(dir)}; fi`,
+    `cd ${sh(dir)}`,
+    `git fetch --depth 1 origin ${sh(opts.branch)}`,
+    // `reset --hard` et non `pull` : la cible est un miroir, jamais une copie
+    // de travail. Une modification faite à la main sur le serveur ne doit pas
+    // pouvoir bloquer un déploiement par un conflit.
+    'git reset --hard FETCH_HEAD',
+    'git clean -fd',
+    // Posé APRÈS le clean, sinon il serait balayé par celui-ci. Et JAMAIS sur
+    // une production : `Disallow: /` y ferait sortir le site de l'index.
+    ...(opts.bloquerLesRobots
+      ? [`printf '%s' ${sh(ROBOTS_TXT)} > ${sh(`${dir}/robots.txt`)}`]
+      : []),
+  ].join('\n')
 }
 
 export function createSshGitTarget(deps: SshGitTargetDeps): DeployTarget {
@@ -166,20 +220,12 @@ export function createSshGitTarget(deps: SshGitTargetDeps): DeployTarget {
       // coûte une poignée de main, et un déploiement à moitié fait entre deux
       // connexions serait plus difficile à diagnostiquer qu'un script qui
       // échoue d'un bloc. `set -e` fait échouer au premier problème.
-      const script = [
-        'set -e',
-        `mkdir -p ${sh(dir)}`,
-        `if [ ! -d ${sh(`${dir}/.git`)} ]; then git clone ${sh(repoUrl)} ${sh(dir)}; fi`,
-        `cd ${sh(dir)}`,
-        `git fetch --depth 1 origin ${sh(source.branch)}`,
-        // `reset --hard` et non `pull` : le staging est un miroir, jamais une
-        // copie de travail. Une modification faite à la main sur le serveur ne
-        // doit pas pouvoir bloquer un déploiement par un conflit.
-        'git reset --hard FETCH_HEAD',
-        'git clean -fd',
-        // Posé APRÈS le clean, sinon il serait balayé par celui-ci.
-        `printf '%s' ${sh(ROBOTS_TXT)} > ${sh(`${dir}/robots.txt`)}`,
-      ].join('\n')
+      const script = construireScriptDeploiement({
+        dir,
+        repoUrl,
+        branch: source.branch,
+        bloquerLesRobots: deps.bloquerLesRobots !== false,
+      })
 
       try {
         // Clé sur disque le temps de l'appel, `known_hosts` exigé, pas d'invite

@@ -314,6 +314,11 @@ export interface CiblesDeploiementTable {
   chemin: string
   branche: Generated<string>
   domaine: string | null
+  /** Reçoit `{{fichier}}`, le chemin du dump que le code choisit pour pouvoir le vérifier. */
+  commande_sauvegarde: string | null
+  commande_migration: string | null
+  /** Reçoit `{{fichier}}`, le dump vérifié juste avant la migration. */
+  commande_restauration: string | null
   created_at: Generated<Timestamp>
   updated_at: Generated<Timestamp>
 }

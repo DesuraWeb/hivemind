@@ -2,15 +2,19 @@ import type { Kysely } from 'kysely'
 import { PgBoss } from 'pg-boss'
 import { type BudgetSettingsSource, runBudgetTick } from '../budget/scheduler'
 import type { Database } from '../db/types'
+import { createSshGitTarget } from '../deploy/ssh-git'
 import { type Env, databaseUrl } from '../env'
 import { runAuthHealthcheck } from '../health/auth-check'
 import type { GmailDraftPort } from '../integrations/gmail'
 import type { Mailer } from '../integrations/mailer'
 import { rappelerRevue } from '../knowledge/revue-notif'
 import type { OpsExecutor } from '../ops/types'
+import type { SondeHttp } from '../ops/types'
 import type { RuntimeAdapter } from '../runtime/types'
+import type { SettingsStore } from '../settings/store'
 import { COMMUNICANT_QUEUE, registerCommunicantWorker } from './communicant'
 import { OPS_APPLY_QUEUE, registerOpsApplyWorker } from './ops-apply'
+import { PROD_DEPLOY_QUEUE, registerProdDeployWorker } from './prod-deploy'
 import {
   RUN_STEP_QUEUE,
   type RunStepJobData,
@@ -92,6 +96,16 @@ export interface BossDeps {
    * n'a de serveur à toucher.
    */
   opsExecutor?: OpsExecutor
+  /**
+   * Le coffre complet et la sonde HTTP, pour la mise en production.
+   *
+   * Les trois ensemble ou aucun : sans exécuteur on ne sauvegarde pas, sans
+   * coffre on ne se connecte pas, sans sonde on ne vérifie pas que le site
+   * répond après coup. En fournir deux sur trois donnerait une prod qui part
+   * sans filet ou qu'on ne contrôle pas — pire que pas de prod du tout.
+   */
+  vault?: SettingsStore
+  sondeHttp?: SondeHttp
 }
 
 /**
@@ -160,6 +174,58 @@ export async function startBoss(boss: PgBoss, deps: BossDeps): Promise<void> {
   await boss.createQueue(OPS_APPLY_QUEUE)
   if (deps.opsExecutor) {
     await registerOpsApplyWorker(boss, { db: deps.db, executor: deps.opsExecutor })
+  }
+
+  // La queue existe toujours (la route de résolution y envoie), le worker
+  // seulement si de quoi déployer ET vérifier a été fourni.
+  await boss.createQueue(PROD_DEPLOY_QUEUE)
+  if (deps.opsExecutor && deps.vault && deps.sondeHttp) {
+    const executor = deps.opsExecutor
+    const vault = deps.vault
+    await registerProdDeployWorker(boss, {
+      db: deps.db,
+      settings: vault,
+      executor,
+      http: deps.sondeHttp,
+      // `bloquerLesRobots: false` · le `Disallow: /` du staging désindexerait
+      // le site du client. C'est la seule différence entre les deux cibles au
+      // niveau du poussage, et c'est la plus lourde de conséquences.
+      poserLeCode: async (acces, ctx) => {
+        const cible = createSshGitTarget({
+          config: {
+            host: acces.hote,
+            user: acces.utilisateur,
+            privateKey: acces.clePrivee,
+            root: acces.chemin,
+            domain: acces.domaine ?? acces.hote,
+          },
+          resolveSource: async () => ({
+            repoFullName: (
+              await deps.db
+                .selectFrom('projects')
+                .select('repo_full_name as repo')
+                .where('slug', '=', ctx.projectSlug)
+                .executeTakeFirstOrThrow()
+            ).repo,
+            // La branche de la CIBLE, pas celle du run : une prod déploie ce
+            // qui a été fusionné, jamais la branche de travail d'un step.
+            branch: acces.branche,
+          }),
+          resolveDir: () => acces.chemin,
+          resolveUrl: () => (acces.domaine ? `https://${acces.domaine}` : `https://${acces.hote}`),
+          bloquerLesRobots: false,
+        })
+        const r = await cible.deploy({
+          runId: ctx.runId ?? '',
+          worktreePath: '',
+          projectSlug: ctx.projectSlug,
+        })
+        return r.ok
+          ? { ok: true, detail: `code posé dans ${acces.chemin}` }
+          : { ok: false, detail: r.reason }
+      },
+      horodater: () => new Date().toISOString().replace(/[:.]/g, '-'),
+    })
   }
 
   await boss.createQueue(COMMUNICANT_QUEUE)
