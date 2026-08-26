@@ -25,6 +25,73 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 const LANGUE = 'fr-FR'
 const CLE_MUET = 'silithid.voix.muet'
+const CLE_VOIX = 'silithid.voix.nom'
+
+/**
+ * Les voix de FANTAISIE d'Apple, écartées d'office.
+ *
+ * macOS en installe une dizaine en français, et elles sont volontairement
+ * caricaturales — c'est leur rôle. Le premier sélecteur prenait « la première
+ * voix dont la langue commence par fr », donc l'une d'elles au hasard de
+ * l'ordre alphabétique. Sur une machine où Thomas est installé.
+ */
+const VOIX_FANTAISIE = new Set([
+  'eddy',
+  'flo',
+  'grandma',
+  'grandpa',
+  'reed',
+  'rocko',
+  'sandy',
+  'shelley',
+  'bahh',
+  'bells',
+  'boing',
+  'bubbles',
+  'jester',
+  'organ',
+  'superstar',
+  'trinoids',
+  'whisper',
+  'wobble',
+  'zarvox',
+  'albert',
+  'cellos',
+  'good news',
+  'bad news',
+])
+
+/**
+ * Les voix françaises « sérieuses », par ordre de préférence.
+ *
+ * Ce classement vaut pour macOS et ne prétend rien ailleurs : sur un autre
+ * système, aucune ne correspondra et on retombera sur le tri générique.
+ */
+const PREFERENCES = ['thomas', 'jacques', 'amélie', 'amelie', 'audrey', 'aurelie', 'marie']
+
+function score(v: SpeechSynthesisVoice): number {
+  const nom = v.name.toLowerCase()
+  if (VOIX_FANTAISIE.has(nom) || [...VOIX_FANTAISIE].some((f) => nom.startsWith(`${f} (`))) {
+    return -1
+  }
+  const rang = PREFERENCES.findIndex((p) => nom.startsWith(p))
+  // Le français de France d'abord : Florian n'est pas québécois, et une voix
+  // fr_CA s'entend immédiatement sur un texte écrit en fr_FR.
+  const France = v.lang.toLowerCase().replace('_', '-').startsWith('fr-fr') ? 100 : 0
+  return France + (rang >= 0 ? 50 - rang : 0)
+}
+
+/** Les voix françaises utilisables, la meilleure en tête. */
+export function voixFrancaises(): SpeechSynthesisVoice[] {
+  if (!window.speechSynthesis) return []
+  return window.speechSynthesis
+    .getVoices()
+    .filter((v) => v.lang.toLowerCase().replace('_', '-').startsWith('fr'))
+    .map((v) => ({ v, s: score(v) }))
+    .filter((x) => x.s >= 0)
+    .sort((a, b) => b.s - a.s)
+    .map((x) => x.v)
+}
 
 /** Ce que le SDK navigateur expose et que la lib DOM ne décrit pas encore. */
 interface ReconnaissanceVocale extends EventTarget {
@@ -69,6 +136,11 @@ export interface EtatVoix {
   muet: boolean
   /** La dernière panne de la voix elle-même, à afficher. */
   panne: string | null
+  /** Les voix françaises utilisables, la meilleure en tête. Vide tant qu'elles ne sont pas chargées. */
+  voix: SpeechSynthesisVoice[]
+  /** Le nom de la voix choisie, ou `null` pour « la meilleure disponible ». */
+  voixChoisie: string | null
+  choisirVoix: (nom: string | null) => void
   demarrerEcoute: () => void
   arreterEcoute: () => void
   basculerMuet: () => void
@@ -84,6 +156,23 @@ export function useVoix(onTexte: (texte: string) => void): EtatVoix {
   const [ecoute, setEcoute] = useState(false)
   const [panne, setPanne] = useState<string | null>(null)
   const [muet, setMuet] = useState(() => localStorage.getItem(CLE_MUET) === '1')
+  const [voix, setVoix] = useState<SpeechSynthesisVoice[]>([])
+  const [voixChoisie, setVoixChoisie] = useState<string | null>(() =>
+    localStorage.getItem(CLE_VOIX),
+  )
+
+  /**
+   * `getVoices()` rend souvent une liste VIDE au premier appel : le navigateur
+   * les charge en différé et prévient par `voiceschanged`. Ne lire qu'une fois
+   * au montage donnerait une liste vide, donc aucune voix choisie, donc la
+   * voix par défaut du système — celle dont Florian dit qu'elle est éclatée.
+   */
+  useEffect(() => {
+    const relire = () => setVoix(voixFrancaises())
+    relire()
+    window.speechSynthesis?.addEventListener('voiceschanged', relire)
+    return () => window.speechSynthesis?.removeEventListener('voiceschanged', relire)
+  }, [])
 
   const reco = useRef<ReconnaissanceVocale | null>(null)
   // Dans une ref : le gestionnaire `onresult` est installé une fois, et sans
@@ -192,12 +281,26 @@ export function useVoix(onTexte: (texte: string) => void): EtatVoix {
       window.speechSynthesis.cancel()
       const u = new SpeechSynthesisUtterance(texte)
       u.lang = LANGUE
-      const voix = window.speechSynthesis.getVoices().find((v) => v.lang.startsWith('fr'))
-      if (voix) u.voice = voix
+      // La voix CHOISIE, sinon la meilleure disponible. Prendre « la première
+      // dont la langue commence par fr » donnait une voix de fantaisie
+      // québécoise sur une machine où Thomas est installé.
+      const dispo = voixFrancaises()
+      const retenue = (voixChoisie ? dispo.find((v) => v.name === voixChoisie) : null) ?? dispo[0]
+      if (retenue) {
+        u.voice = retenue
+        u.lang = retenue.lang
+      }
       window.speechSynthesis.speak(u)
     },
-    [muet],
+    [muet, voixChoisie],
   )
+
+  const choisirVoix = useCallback((nom: string | null) => {
+    setVoixChoisie(nom)
+    if (nom) localStorage.setItem(CLE_VOIX, nom)
+    else localStorage.removeItem(CLE_VOIX)
+    window.speechSynthesis?.cancel()
+  }, [])
 
   const basculerMuet = useCallback(() => {
     setMuet((v) => {
@@ -215,6 +318,9 @@ export function useVoix(onTexte: (texte: string) => void): EtatVoix {
     ecoute,
     muet,
     panne,
+    voix,
+    voixChoisie,
+    choisirVoix,
     demarrerEcoute,
     arreterEcoute,
     basculerMuet,

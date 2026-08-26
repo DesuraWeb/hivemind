@@ -739,6 +739,39 @@ export function Creation() {
               </button>
             )}
 
+            {/*
+              Le choix de la voix, là où on l'entend. Un réglage rangé dans un
+              autre écran se règle une fois et jamais plus ; celui-ci se change
+              en écoutant, ce qui est le seul moyen de trancher entre deux
+              voix. N'apparaît que quand il y a un choix à faire.
+            */}
+            {!voix.muet && voix.voix.length > 1 && (
+              <select
+                className="creation-field"
+                value={voix.voixChoisie ?? ''}
+                onChange={(e) => voix.choisirVoix(e.target.value || null)}
+                aria-label="Voix de Hive"
+                title="La voix qui lit les réponses"
+                style={{
+                  background: 'rgba(9, 14, 22, 0.6)',
+                  border: '1px solid var(--line-strong)',
+                  borderRadius: 'var(--r-full)',
+                  padding: '11px 14px',
+                  font: '500 12px var(--font-mono)',
+                  color: 'var(--text-mid)',
+                  outline: 'none',
+                  maxWidth: 150,
+                }}
+              >
+                <option value="">{voix.voix[0]?.name ?? 'voix système'}</option>
+                {voix.voix.slice(1).map((v) => (
+                  <option key={v.name} value={v.name}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <button
               type="button"
               onClick={voix.basculerMuet}
