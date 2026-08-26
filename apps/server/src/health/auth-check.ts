@@ -59,11 +59,42 @@ export async function runAuthHealthcheck(
     if (timer) clearTimeout(timer)
   }
 
-  if (result.ok) return { ok: true }
+  if (result.ok) {
+    await closeAlert(deps)
+    return { ok: true }
+  }
 
   const error = result.error ?? 'Cause inconnue.'
   await raiseAlert(deps, error)
   return { ok: false, error }
+}
+
+/**
+ * L'authentification est revenue : l'alerte ouverte devient fausse.
+ *
+ * Elle n'était jamais fermée. Une panne passagère laissait donc une alerte
+ * DÉFINITIVE, affichée sur tous les écrans par le bandeau permanent — et une
+ * alerte qui ment est pire qu'une alerte absente : elle apprend à ne plus
+ * lire les alertes. Constaté en production, où elle était restée ouverte
+ * alors que l'authentification fonctionnait.
+ *
+ * Fermée en `done` et non `dismissed` : le problème a bien été résolu, il n'a
+ * pas été écarté. La trace reste lisible dans l'historique de l'inbox.
+ */
+async function closeAlert(deps: AuthHealthcheckDeps): Promise<void> {
+  await deps.db
+    .updateTable('inbox_items')
+    .set({
+      status: 'done',
+      human_response: JSON.stringify({
+        resolvedBy: 'healthcheck',
+        raison: "l'authentification agent répond de nouveau",
+      }),
+    })
+    .where('type', '=', 'alert')
+    .where('status', '=', 'open')
+    .where(sql<boolean>`payload->>'cause' = ${ALERT_KEY}`)
+    .execute()
 }
 
 async function raiseAlert(deps: AuthHealthcheckDeps, error: string): Promise<void> {

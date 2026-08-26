@@ -273,6 +273,27 @@ export function Creation() {
    */
   const voix = useVoix((dit) => setHiveText((prev) => (prev ? `${prev} ${dit}` : dit)))
 
+  /**
+   * Abandonner la conversation en cours et en ouvrir une neuve.
+   *
+   * Rien ne le permettait : la conversation reprend au chargement, et les
+   * routes d'abandon existaient sans que l'écran ne les appelle. On restait
+   * donc prisonnier de la dernière discussion, y compris une discussion de
+   * test — constaté sur le serveur de production.
+   */
+  const recommencer = useMutation({
+    mutationFn: async (id: string) => {
+      await api.creations.abandonner(id)
+      return api.creations.ouvrir()
+    },
+    onSuccess: (neuve) => {
+      queryClient.setQueryData(CREATION_QUERY_KEY, neuve)
+      setProject(initialProjectDraft(search.globe ?? ''))
+      empreinteFiche.current = JSON.stringify(neuve.fiche)
+      setFilOuvert(false)
+    },
+  })
+
   const corriger = useMutation({
     mutationFn: ({ id, fiche }: { id: string; fiche: FicheCreationView }) =>
       api.creations.corriger(id, fiche),
@@ -504,7 +525,7 @@ export function Creation() {
           padding: '18px 24px 0',
           flexShrink: 0,
           zIndex: 7,
-          // Même gabarit que la scène, sinon « Annuler » part au bord de
+          // Même gabarit que la scène, sinon « Fermer » part au bord de
           // l'écran pendant que la fiche reste centrée.
           width: '100%',
           maxWidth: LARGEUR_SCENE,
@@ -531,8 +552,13 @@ export function Creation() {
             la fiche se matérialise autour de la conversation
           </span>
         </div>
+        {/*
+          Nommé pour ce qu'il fait. Il s'appelait « Annuler » et n'annulait
+          rien : il navigue, et le brouillon survit — ce qui est le bon
+          comportement, mais pas ce que le mot promettait.
+        */}
         <Link to="/globes" style={{ font: '500 12px var(--font-sans)', color: 'var(--text-low)' }}>
-          Annuler
+          Fermer
         </Link>
       </header>
 
@@ -898,6 +924,29 @@ export function Creation() {
               </div>
             ))}
           </div>
+        )}
+
+        {creation && (creation.conversation.length > 1 || creation.etape > 0) && (
+          <button
+            type="button"
+            onClick={() => recommencer.mutate(creation.id)}
+            disabled={recommencer.isPending}
+            className="creation-ghost"
+            style={{
+              position: 'absolute',
+              left: 28,
+              bottom: 24,
+              zIndex: 7,
+              background: 'transparent',
+              border: 'none',
+              cursor: recommencer.isPending ? 'default' : 'pointer',
+              font: '500 11px var(--font-mono)',
+              color: 'var(--text-low)',
+              padding: 4,
+            }}
+          >
+            {recommencer.isPending ? 'on repart…' : '⟲ repartir de zéro'}
+          </button>
         )}
 
         <button

@@ -121,6 +121,30 @@ interface RateLimitInfo {
   utilization?: number
 }
 
+/**
+ * Assemble les blocs de texte d'une réponse en un seul texte.
+ *
+ * ## Le bug qu'elle corrige
+ *
+ * `text += block.text` soudait deux blocs distincts. Constaté en production :
+ * Hive a dit « … et sur tes stacks. », a appelé un outil, puis a repris par
+ * « Astro chez PlanetHoster … », et Florian a lu
+ * « sur tes stacks.Astro chez PlanetHoster ».
+ *
+ * Deux blocs de texte dans une réponse sont deux unités distinctes du
+ * protocole, séparées par un appel d'outil dans l'immense majorité des cas.
+ * Les recoller sans rien entre eux n'est jamais correct.
+ *
+ * Les blocs vides sont écartés plutôt que joints : un bloc vide produirait
+ * une ligne blanche au milieu d'une réponse, ce qui se voit à l'écran.
+ */
+export function assemblerTexte(blocs: readonly string[]): string {
+  return blocs
+    .map((b) => b.trim())
+    .filter((b) => b !== '')
+    .join('\n\n')
+}
+
 export function createClaudeAdapter(): RuntimeAdapter {
   const live = new Map<string, Live>()
 
@@ -175,7 +199,7 @@ export function createClaudeAdapter(): RuntimeAdapter {
       if (!entry) throw new Error(`Session inconnue : ${session.id}`)
       const { options } = entry
 
-      let text = ''
+      const blocs: string[] = []
       let costTokens = 0
       let isError = false
       const toolCalls: { name: string; input: unknown }[] = []
@@ -223,7 +247,20 @@ export function createClaudeAdapter(): RuntimeAdapter {
         if (msg.type === 'assistant') {
           for (const block of msg.message.content) {
             if (block.type === 'text') {
-              text += block.text
+              // Accumulés SÉPARÉMENT, jamais concaténés bout à bout.
+              //
+              // `text += block.text` soudait deux blocs distincts : Hive a dit
+              // « … et sur tes stacks. », a appelé un outil, puis a repris par
+              // « Astro chez PlanetHoster … » — et Florian a lu
+              // « sur tes stacks.Astro chez PlanetHoster ». Constaté sur le
+              // serveur de production, pas déduit.
+              //
+              // Deux blocs de texte dans une réponse sont deux unités
+              // distinctes du protocole, séparées par un appel d'outil dans
+              // l'immense majorité des cas. Les recoller sans rien entre eux
+              // n'est jamais correct ; les séparer par un blanc l'est
+              // toujours.
+              blocs.push(block.text)
               options.onEvent({ type: 'text', text: block.text })
             } else if (block.type === 'tool_use') {
               options.onEvent({ type: 'tool_use', name: block.name, input: block.input })
@@ -247,7 +284,7 @@ export function createClaudeAdapter(): RuntimeAdapter {
         }
       }
 
-      return { text, costTokens, isError, toolCalls }
+      return { text: assemblerTexte(blocs), costTokens, isError, toolCalls }
     },
 
     async resume(sessionId) {

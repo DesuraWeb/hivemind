@@ -12,6 +12,7 @@ import { seedRoleTemplates } from '../src/db/seed'
 import { databaseUrl, loadEnv } from '../src/env'
 import { createGlobe } from '../src/globes/repo'
 import { createProject } from '../src/projects/create'
+import { assemblerTexte } from '../src/runtime/claude'
 import { createFakeAdapter } from '../src/runtime/fake'
 import type { RuntimeAdapter } from '../src/runtime/types'
 import { ensureGlobe } from './fixtures'
@@ -404,4 +405,42 @@ test('annuler laisse l’orbe si un autre projet s’y est posé', async () => {
     .where('id', '=', orbe.id)
     .executeTakeFirst()
   expect(survit).toBeDefined()
+})
+
+test('deux fragments de réponse ne se soudent jamais', () => {
+  // Constaté en production, pas déduit : Hive a dit « … et sur tes stacks. »,
+  // a appelé un outil, puis a repris par « Astro chez PlanetHoster … » — et
+  // Florian a lu « sur tes stacks.Astro chez PlanetHoster ».
+  const colle = assemblerTexte([
+    "Je regarde ce que j'ai déjà sur Bastide et sur tes stacks.",
+    'Astro chez PlanetHoster, c’est du statique poussé sur un mutualisé.',
+  ])
+  expect(colle).not.toContain('stacks.Astro')
+  expect(colle).toBe(
+    "Je regarde ce que j'ai déjà sur Bastide et sur tes stacks.\n\nAstro chez PlanetHoster, c’est du statique poussé sur un mutualisé.",
+  )
+})
+
+test('un bloc vide ne produit pas de ligne blanche', () => {
+  expect(assemblerTexte(['Une phrase.', '   ', 'Une autre.'])).toBe('Une phrase.\n\nUne autre.')
+  expect(assemblerTexte([])).toBe('')
+})
+
+test('après un abandon, l’écran repart d’une conversation vierge', async () => {
+  // Rien ne le permettait : la conversation reprend au chargement, et les
+  // routes d'abandon existaient sans que l'écran ne les appelle. On restait
+  // prisonnier de la dernière discussion, y compris une discussion de test —
+  // constaté sur le serveur de production.
+  await db
+    .updateTable('creations')
+    .set({ statut: 'abandonnee' })
+    .where('statut', '=', 'en_cours')
+    .execute()
+
+  const id = (await app.inject({ method: 'POST', url: '/api/creations', headers: auth() })).json()
+    .id
+  await app.inject({ method: 'POST', url: `/api/creations/${id}/abandon`, headers: auth() })
+
+  const apres = await app.inject({ method: 'GET', url: '/api/creations/en-cours', headers: auth() })
+  expect(apres.json()).toBeNull()
 })

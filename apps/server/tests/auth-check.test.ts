@@ -143,3 +143,46 @@ test('un runtime qui ne répond jamais est traité comme une panne', async () =>
   expect(result.error).toMatch(/Pas de réponse du runtime/)
   expect(mailer.sent).toHaveLength(1)
 })
+
+test('l’authentification revenue ferme l’alerte, au lieu de la laisser mentir', async () => {
+  // Elle n'était JAMAIS fermée. Une panne passagère laissait donc une alerte
+  // définitive, affichée sur tous les écrans par le bandeau permanent —
+  // constaté en production, où elle était restée ouverte alors que
+  // l'authentification fonctionnait. Une alerte qui ment est pire qu'une
+  // alerte absente : elle apprend à ne plus lire les alertes.
+  const mailer = fakeMailer()
+  await runAuthHealthcheck({
+    db,
+    adapter: brokenAdapter(),
+    mailer,
+    alertTo: 'alerts@exemple.test',
+  })
+  const ouverte = await db
+    .selectFrom('inbox_items')
+    .selectAll()
+    .where('status', '=', 'open')
+    .execute()
+  expect(ouverte).toHaveLength(1)
+
+  const apres = await runAuthHealthcheck({
+    db,
+    adapter: createFakeAdapter(),
+    mailer,
+    alertTo: 'alerts@exemple.test',
+  })
+  expect(apres.ok).toBe(true)
+
+  const restantes = await db
+    .selectFrom('inbox_items')
+    .select(['status', 'human_response'])
+    .where('type', '=', 'alert')
+    .execute()
+  expect(restantes.every((i) => i.status === 'done')).toBe(true)
+  // `done` et non `dismissed` : le problème a été RÉSOLU, pas écarté. Et la
+  // raison reste lisible dans l'historique.
+  expect(JSON.stringify(restantes[0]?.human_response)).toContain('healthcheck')
+
+  // Le retour à la normale ne s'annonce pas par un email : personne ne veut
+  // être réveillé pour une bonne nouvelle.
+  expect(mailer.sent).toHaveLength(1)
+})
