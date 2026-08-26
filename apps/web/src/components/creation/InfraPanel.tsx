@@ -64,6 +64,47 @@ export function InfraPanel({
     <div style={{ ...style, display: 'flex', flexDirection: 'column', gap: 8 }}>
       <span style={FRAGMENT_LABEL}>Infra &amp; accès · à fournir</span>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {/*
+          En TÊTE du panneau, avant le dépôt : c'est la décision qui donne son
+          sens à tout le reste. Un site repris est déjà en ligne, et chaque
+          step peut y casser une URL indexée — le savoir change la façon dont
+          on lit les trois lignes suivantes.
+        */}
+        <div style={MONO_ROW}>
+          <span style={KEY_CELL}>démarre sur</span>
+          <select
+            className="creation-field"
+            value={draft.demarrage}
+            onChange={(e) => onPatch({ demarrage: e.target.value as ProjectDraft['demarrage'] })}
+            aria-label="Où le projet démarre"
+            style={INLINE_INPUT}
+          >
+            {/* Vide et non « staging » : on ne défaute pas, on demande. */}
+            <option value="">à définir</option>
+            <option value="staging">un staging</option>
+            <option value="prod">la production directement</option>
+            <option value="existant">un site déjà en ligne</option>
+          </select>
+          <span style={NOTE_CELL}>
+            {draft.demarrage === 'existant' ? 'site vivant' : 'non bloquant'}
+          </span>
+        </div>
+        {draft.demarrage !== '' && draft.demarrage !== 'staging' && (
+          <div style={MONO_ROW}>
+            <span style={KEY_CELL}>domaine</span>
+            <input
+              className="creation-field"
+              value={draft.domaine}
+              onChange={(e) => onPatch({ domaine: e.target.value })}
+              placeholder="rivierapool.fr"
+              aria-label="Domaine du projet"
+              style={INLINE_INPUT}
+            />
+            <span style={NOTE_CELL}>
+              {draft.demarrage === 'existant' ? 'requis' : 'à la mise en prod'}
+            </span>
+          </div>
+        )}
         <div style={MONO_ROW}>
           <span style={KEY_CELL}>dépôt GitHub</span>
           <input

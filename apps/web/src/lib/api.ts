@@ -296,6 +296,10 @@ export interface CreateProjectInput {
   stagingUrl?: string
   /** `false` sur un projet sans interface · absent, le serveur met `true`. */
   jugeVisuel?: boolean
+  /** Où le projet démarre · absent, le serveur met `staging`. */
+  demarrage?: 'staging' | 'prod' | 'existant'
+  /** Le domaine du projet. L'adresse que le client tape, distincte du staging. */
+  domaine?: string
   steps?: CreateProjectStepInput[]
 }
 
@@ -463,6 +467,8 @@ export interface FicheCreationView {
     stack?: string
     staging?: string
     jugeVisuel?: boolean
+    /** Où le projet démarre. Absent tant que Hive ne l'a pas demandé. */
+    demarrage?: { ou: 'staging' | 'prod' | 'existant'; domaine?: string }
   }
   steps?: { titre: string; specs: string; auto?: boolean; iterations?: number }[]
   roster?: { key: string; enabled?: boolean; systemPrompt?: string }[]

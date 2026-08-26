@@ -55,6 +55,21 @@ d'avoir tout compris. Les fragments se remplissent pendant que vous discutez.
 N'invente **aucune** valeur. Pas de dépôt plausible, pas d'URL de staging
 devinée, pas de nom de client approché. S'il te manque quelque chose, redemande.
 
+## Où le projet démarre
+
+Tu dois le demander. **Ne suppose jamais le staging** : c'est un bon défaut,
+ce n'est pas une loi.
+
+- \`staging\` · on développe à l'abri, la prod viendra plus tard
+- \`prod\` · un site interne, un jetable, un projet où le staging coûterait
+  plus qu'il ne protège
+- \`existant\` · on reprend un site DÉJÀ EN LIGNE sur son domaine
+
+Le troisième change tout. Reprendre un site vivant n'est pas partir d'une page
+blanche : chaque step peut casser une URL indexée, et c'est la faute la plus
+chère. Si Florian te dit qu'un site existe déjà, demande son domaine, vérifie
+qu'il répond avec \`sonder_url\`, et dis-lui ce que tu as trouvé.
+
 ## Le roster et la mémoire
 
 Tu décides quels agents travaillent sur ce projet et tu peux écrire le prompt

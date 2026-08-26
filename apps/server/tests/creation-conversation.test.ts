@@ -119,7 +119,12 @@ test('ce qui manque est dit en clair, et rien n’est deviné', () => {
   expect(manquesFiche({})).toContain('le nom du projet')
   expect(manquesFiche({})).toContain('le dépôt')
   const complete = {
-    projet: { nom: 'Essai', depot: 'desura/essai', orbe: 'atelier' },
+    projet: {
+      nom: 'Essai',
+      depot: 'desura/essai',
+      orbe: 'atelier',
+      demarrage: { ou: 'staging' as const },
+    },
     steps: [{ titre: 'Un pas', specs: 'des specs' }],
   }
   expect(manquesFiche(complete)).toEqual([])
@@ -131,7 +136,12 @@ test('l’étape vient de ce que la fiche contient, jamais d’une horloge', () 
   expect(etapeFiche({ projet: { nom: 'Essai', stack: 'astro' } })).toBe(2)
   expect(
     etapeFiche({
-      projet: { nom: 'Essai', depot: 'desura/essai', orbe: 'atelier' },
+      projet: {
+        nom: 'Essai',
+        depot: 'desura/essai',
+        orbe: 'atelier',
+        demarrage: { ou: 'staging' },
+      },
       steps: [{ titre: 'Un pas', specs: 's' }],
     }),
   ).toBe(5)
@@ -443,4 +453,84 @@ test('après un abandon, l’écran repart d’une conversation vierge', async (
 
   const apres = await app.inject({ method: 'GET', url: '/api/creations/en-cours', headers: auth() })
   expect(apres.json()).toBeNull()
+})
+
+test('le staging n’est pas supposé · on le demande', () => {
+  // « Il ne faut pas se bloquer sur obligatoirement du staging. » Défauter
+  // referait le chemin unique qu'on corrige : un site repris est DÉJÀ en
+  // ligne, et un jetable n'a rien à protéger.
+  const sansDemarrage = {
+    projet: { nom: 'Essai', depot: 'desura/essai', orbe: 'atelier' },
+    steps: [{ titre: 'Un pas', specs: 's' }],
+  }
+  expect(manquesFiche(sansDemarrage)).toContain(
+    'où démarre le projet · staging, prod, ou déjà en ligne',
+  )
+
+  const avec = appliquerRetouche(sansDemarrage, { projet: { demarrage: { ou: 'staging' } } })
+  expect(manquesFiche(avec)).toEqual([])
+})
+
+test('un site repris sans son domaine, c’est un site qu’on ne sait pas trouver', () => {
+  const repris = {
+    projet: {
+      nom: 'Reprise',
+      depot: 'desura/reprise',
+      orbe: 'atelier',
+      demarrage: { ou: 'existant' as const },
+    },
+    steps: [{ titre: 'Un pas', specs: 's' }],
+  }
+  expect(manquesFiche(repris)).toEqual(['le domaine du site repris'])
+
+  const complet = appliquerRetouche(repris, {
+    projet: { demarrage: { ou: 'existant', domaine: 'bastide.fr' } },
+  })
+  expect(manquesFiche(complet)).toEqual([])
+})
+
+test('les deux autres cas se passent de domaine · il viendra', () => {
+  for (const ou of ['staging', 'prod'] as const) {
+    const f = {
+      projet: { nom: 'X', depot: 'd/e', orbe: 'atelier', demarrage: { ou } },
+      steps: [{ titre: 'Un pas', specs: 's' }],
+    }
+    expect(manquesFiche(f), ou).toEqual([])
+  }
+})
+
+test('le démarrage traverse jusqu’à la base', async () => {
+  const globe = await slugDuGlobe()
+  const projet = await createProject(db, {
+    globeSlug: globe,
+    name: 'Site repris',
+    repoFullName: 'desura/repris',
+    demarrage: 'existant',
+    domaine: 'bastide.fr',
+  })
+
+  const row = await db
+    .selectFrom('projects')
+    .select(['demarrage', 'domaine'])
+    .where('id', '=', projet.id)
+    .executeTakeFirstOrThrow()
+  expect(row.demarrage).toBe('existant')
+  expect(row.domaine).toBe('bastide.fr')
+})
+
+test('un projet créé sans démarrage reste un staging, comme avant', async () => {
+  // Le défaut en base sert à ne pas casser l'existant. Il ne dispense pas la
+  // conversation de poser la question — c'est `manquesFiche` qui l'exige.
+  const globe = await slugDuGlobe()
+  const projet = await createProject(db, {
+    globeSlug: globe,
+    name: 'Sans démarrage',
+    repoFullName: 'desura/sans',
+  })
+  const row = await db
+    .selectFrom('projects')
+    .select('demarrage')
+    .where('id', '=', projet.id)
+    .executeTakeFirstOrThrow()
+  expect(row.demarrage).toBe('staging')
 })

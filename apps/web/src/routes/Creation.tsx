@@ -80,6 +80,8 @@ function ficheVersBrouillon(fiche: FicheCreationView, base: ProjectDraft): Proje
     repoFullName: p.depot ?? base.repoFullName,
     stagingUrl: p.staging ?? base.stagingUrl,
     jugeVisuel: p.jugeVisuel ?? base.jugeVisuel,
+    demarrage: p.demarrage?.ou ?? base.demarrage,
+    domaine: p.demarrage?.domaine ?? base.domaine,
     // Les steps de la fiche gagnent quand elle en porte : Hive a réécrit la
     // liste entière, pas un élément. Sinon on garde ceux de l'écran, qui
     // peuvent être des lignes vierges que personne n'a encore remplies.
@@ -108,6 +110,14 @@ function brouillonVersFiche(d: ProjectDraft, fiche: FicheCreationView): FicheCre
       depot: d.repoFullName,
       staging: d.stagingUrl,
       jugeVisuel: d.jugeVisuel,
+      ...(d.demarrage !== ''
+        ? {
+            demarrage: {
+              ou: d.demarrage,
+              ...(d.domaine.trim() !== '' ? { domaine: d.domaine.trim() } : {}),
+            },
+          }
+        : {}),
     },
     steps: d.steps
       .filter((st) => st.title.trim() !== '' || st.specs.trim() !== '')

@@ -238,6 +238,8 @@ export function createSurfaceCreation(deps: SurfaceCreationDeps): SurfaceCreatio
           ...(p.stack ? { stack: p.stack } : {}),
           ...(p.staging ? { stagingUrl: p.staging } : {}),
           ...(p.jugeVisuel !== undefined ? { jugeVisuel: p.jugeVisuel } : {}),
+          ...(p.demarrage ? { demarrage: p.demarrage.ou } : {}),
+          ...(p.demarrage?.domaine ? { domaine: p.demarrage.domaine } : {}),
           steps: (fiche.steps ?? []).map((st) => ({
             title: st.titre,
             specs: st.specs,

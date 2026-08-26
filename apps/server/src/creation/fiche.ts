@@ -55,6 +55,22 @@ const orbeSchema = z.object({
   couleur: z.string().optional(),
 })
 
+/**
+ * Où le projet démarre. Trois cas, aucun imposé.
+ *
+ * Le staging est le bon défaut et n'est pas une loi : un site interne ou un
+ * jetable n'a pas besoin d'être protégé de lui-même, et un site qu'on reprend
+ * est DÉJÀ en ligne. Le troisième cas est le plus dangereux et c'est celui qui
+ * n'était pas représentable : reprendre un site vivant n'est pas partir d'une
+ * page blanche, et casser une URL indexée y devient possible dès le premier
+ * step.
+ */
+const demarrageSchema = z.object({
+  ou: z.enum(['staging', 'prod', 'existant']),
+  /** Le domaine visé, ou celui déjà en service quand on reprend un site. */
+  domaine: z.string().optional(),
+})
+
 const projetSchema = z.object({
   nom: z.string().optional(),
   /** Slug de l'orbe d'accueil, quand elle existe déjà. */
@@ -64,6 +80,7 @@ const projetSchema = z.object({
   stack: z.string().optional(),
   staging: z.string().optional(),
   jugeVisuel: z.boolean().optional(),
+  demarrage: demarrageSchema.optional(),
 })
 
 export const retoucheFicheSchema = z.object({
@@ -120,6 +137,19 @@ export function manquesFiche(fiche: Fiche): string[] {
   if (!p.nom?.trim()) manques.push('le nom du projet')
   if (!p.depot?.trim()) manques.push('le dépôt')
   if (!fiche.orbeACreer && !p.orbe?.trim()) manques.push("l'orbe d'accueil")
+
+  // Exigé, et pas défauté à `staging`.
+  //
+  // Un défaut en base sert à ne pas casser l'existant ; il ne dispense pas de
+  // choisir. Laisser Hive supposer le staging referait exactement ce qu'on
+  // corrige : un chemin unique déguisé en évidence, alors qu'un site repris
+  // est déjà en ligne et qu'un jetable n'a rien à protéger.
+  if (!p.demarrage) manques.push('où démarre le projet · staging, prod, ou déjà en ligne')
+  // Un site repris SANS son domaine, c'est un site qu'on ne sait pas où
+  // trouver. Les deux autres cas s'en passent : le domaine viendra.
+  else if (p.demarrage.ou === 'existant' && !p.demarrage.domaine?.trim()) {
+    manques.push('le domaine du site repris')
+  }
 
   const steps = fiche.steps ?? []
   if (steps.length === 0) manques.push('au moins un step')

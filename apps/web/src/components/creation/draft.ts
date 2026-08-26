@@ -35,6 +35,14 @@ export interface ProjectDraft {
    * page qui n'existe pas.
    */
   jugeVisuel: boolean
+  /**
+   * Où le projet démarre. Vide tant que personne ne l'a dit · le staging n'est
+   * pas un passage obligé, et le supposer referait le chemin unique qu'on
+   * corrige. Un site repris est DÉJÀ en ligne.
+   */
+  demarrage: '' | 'staging' | 'prod' | 'existant'
+  /** Le domaine du projet. Requis quand on reprend un site : sinon on ne sait pas où il est. */
+  domaine: string
   steps: StepDraft[]
 }
 
@@ -63,6 +71,8 @@ export function initialProjectDraft(globe: string): ProjectDraft {
     // Vrai par défaut : le juge est le seul contrôle qui regarde le RÉSULTAT
     // et non le code. Il ne doit pas disparaître par distraction.
     jugeVisuel: true,
+    demarrage: '',
+    domaine: '',
     stagingUrl: '',
     steps: [emptyStep(), emptyStep(), emptyStep()],
   }
@@ -84,6 +94,11 @@ export function projectProblems(draft: ProjectDraft): string[] {
   if (draft.globe === '') problems.push("le globe d'accueil")
   if (!/^[\w.-]+\/[\w.-]+$/.test(draft.repoFullName.trim()))
     problems.push('un dépôt au format owner/nom')
+  // Même exigence que côté serveur (`creation/fiche.ts::manquesFiche`) : on ne
+  // défaute pas sur le staging, on demande.
+  if (draft.demarrage === '') problems.push('où démarre le projet')
+  else if (draft.demarrage === 'existant' && draft.domaine.trim() === '')
+    problems.push('le domaine du site repris')
   draft.steps.forEach((step, i) => {
     if (isBlankStep(step)) return
     const num = String(i + 1).padStart(2, '0')
@@ -118,6 +133,8 @@ export function toCreateProjectInput(draft: ProjectDraft): CreateProjectInput {
     // répète le défaut le fige, et le défaut est le seul endroit où on veut
     // pouvoir changer d'avis pour tous les projets à venir.
     ...(draft.jugeVisuel ? {} : { jugeVisuel: false }),
+    ...(draft.demarrage !== '' ? { demarrage: draft.demarrage } : {}),
+    ...(draft.domaine.trim() !== '' ? { domaine: draft.domaine.trim() } : {}),
     ...(staging !== '' ? { stagingUrl: staging } : {}),
     ...(steps.length > 0 ? { steps } : {}),
   }

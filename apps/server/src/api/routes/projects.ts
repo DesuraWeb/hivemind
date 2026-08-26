@@ -40,6 +40,9 @@ const createBody = z.object({
   jugeVisuel: z.boolean().optional(),
   tint: z.string().max(32).optional(),
   stagingUrl: z.string().max(255).optional(),
+  /** Où le projet démarre. Absent, `staging` — voir migration 0018. */
+  demarrage: z.enum(['staging', 'prod', 'existant']).optional(),
+  domaine: z.string().max(255).optional(),
   steps: z
     .array(
       z.object({
@@ -98,8 +101,19 @@ export async function projectsRoutes(
       return reply.code(400).send({ error: 'requete_invalide', details: parsed.error.issues })
     }
 
-    const { globe, name, repoFullName, clientId, stack, tint, stagingUrl, steps, jugeVisuel } =
-      parsed.data
+    const {
+      globe,
+      name,
+      repoFullName,
+      clientId,
+      stack,
+      tint,
+      stagingUrl,
+      steps,
+      jugeVisuel,
+      demarrage,
+      domaine,
+    } = parsed.data
     try {
       // `exactOptionalPropertyTypes` : une clé optionnelle absente doit être
       // absente, jamais présente et valant undefined. Même parade que la route
@@ -113,6 +127,8 @@ export async function projectsRoutes(
         ...(jugeVisuel !== undefined ? { jugeVisuel } : {}),
         ...(tint !== undefined ? { tint } : {}),
         ...(stagingUrl !== undefined ? { stagingUrl } : {}),
+        ...(demarrage !== undefined ? { demarrage } : {}),
+        ...(domaine !== undefined ? { domaine } : {}),
         // Normalisé ici plutôt que d'assouplir `CreateStepInput` :
         // `exactOptionalPropertyTypes` refuse une clé présente valant
         // `undefined`, et le type du domaine a raison de l'exiger. C'est la

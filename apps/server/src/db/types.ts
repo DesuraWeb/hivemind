@@ -50,6 +50,14 @@ export interface ProjectsTable {
   repo_full_name: string
   default_branch: Generated<string>
   staging_url: string | null
+  /**
+   * `staging` | `prod` | `existant` (migration 0018). Où le projet démarre.
+   * `existant` est le cas dangereux : on reprend un site vivant, et casser une
+   * URL indexée devient possible dès le premier step.
+   */
+  demarrage: Generated<string>
+  /** Le domaine du projet · l'adresse que le client tape. Distinct de `staging_url`. */
+  domaine: string | null
   context: string | null
   /** Technologie du projet : Laravel, PrestaShop, WordPress… */
   stack: string | null

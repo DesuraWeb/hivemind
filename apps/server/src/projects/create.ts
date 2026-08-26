@@ -93,6 +93,14 @@ export interface CreateProjectInput {
   jugeVisuel?: boolean
   tint?: string | null
   stagingUrl?: string | null
+  /**
+   * Où le projet démarre (migration 0018). Absent, `staging` — le seul modèle
+   * que le produit savait faire, donc un constat pour l'existant et pas une
+   * supposition. La CONVERSATION de création l'exige explicitement, elle.
+   */
+  demarrage?: 'staging' | 'prod' | 'existant'
+  /** Le domaine du projet. L'adresse que le client tape, distincte du staging. */
+  domaine?: string | null
   steps?: CreateStepInput[]
   /** Écarts au roster par défaut. Voir `CreateProjectRoleInput`. */
   roster?: CreateProjectRoleInput[]
@@ -197,6 +205,8 @@ export async function createProject(
         ...(input.jugeVisuel !== undefined ? { juge_visuel: input.jugeVisuel } : {}),
         tint: input.tint ?? null,
         staging_url: input.stagingUrl ?? null,
+        ...(input.demarrage ? { demarrage: input.demarrage } : {}),
+        domaine: input.domaine ?? null,
       })
       .returning('id')
       .executeTakeFirstOrThrow()
