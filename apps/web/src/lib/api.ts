@@ -579,6 +579,9 @@ export const api = {
      * ne doit rien promettre de plus.
      */
     create: (input: CreateProjectInput) => request<CreatedProject>('POST', '/api/projects', input),
+    /** Onglet Config · volontairement restreint (ni nom, ni slug, ni dépôt). */
+    patch: (id: string, patch: { enchainement?: boolean }) =>
+      request<ProjectView>('PATCH', `/api/projects/${id}`, patch),
   },
   clients: {
     /**

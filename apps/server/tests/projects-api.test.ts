@@ -236,6 +236,9 @@ test('GET /api/projects/:id : forme complète, comparée champ à champ à koin 
       'line',
       // Ajouté pour l'écran « intérieur de globe » : il filtre là-dessus.
       'globe',
+      // Ajouté pour l'onglet Steps : la case « enchaîner les steps » doit
+      // pouvoir montrer son état, pas seulement l'écrire.
+      'enchainement',
     ].sort(),
   )
 })

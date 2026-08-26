@@ -4,6 +4,7 @@ import type { PgBoss } from 'pg-boss'
 import type { Database } from '../db/types'
 import type { LoopEvent } from '../domain/run-state'
 import { createInboxItem } from '../inbox/repo'
+import { enchainerApres } from '../loop/enchainer'
 import { applyEvent } from '../loop/orchestrator'
 
 export const RUN_STEP_QUEUE = 'run.step'
@@ -127,6 +128,18 @@ export async function registerRunStepWorker(
           const result = await stepOnce(db, registry, job.data.runId)
           if (result.requeue) {
             await boss.send(RUN_STEP_QUEUE, { runId: job.data.runId } satisfies RunStepJobData)
+          } else if (result.state === 'done') {
+            // Le step suivant, quand le projet enchaîne. Ici et pas dans
+            // l'orchestrateur : celui-ci applique les effets d'une transition
+            // dans une transaction, et y créer un run mêlerait deux boucles de
+            // vie. L'enchaînement regarde un run TERMINÉ — c'est de
+            // l'orchestration, la même nature que la remise en file.
+            const suite = await enchainerApres(db, job.data.runId)
+            if (suite) {
+              await boss.send(RUN_STEP_QUEUE, {
+                runId: suite.suivant.runId,
+              } satisfies RunStepJobData)
+            }
           }
         } catch (err) {
           // Un handler qui lève laissait pg-boss réessayer, épuiser ses

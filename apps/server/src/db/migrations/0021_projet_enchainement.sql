@@ -1,0 +1,24 @@
+-- Enchaîner les steps sans intervention entre chacun.
+--
+-- ## Ce qui manquait
+--
+-- Un run s'arrête quand son step est validé, et rien ne lance le suivant.
+-- Florian devait cliquer « Démarrer la boucle » sur chaque step — exactement
+-- ce qu'il cherche à ne plus faire.
+--
+-- ## Pourquoi un drapeau, et pas le comportement par défaut
+--
+-- Un enchaînement dépense sans intervention humaine entre les steps. Le rendre
+-- implicite ferait partir cinq steps sur un projet où l'on voulait en voir un.
+-- Il se demande, il ne se suppose pas.
+--
+-- ## Ce qui l'arrête, et qui n'est pas dans cette colonne
+--
+-- Rien ici ne contourne les gates. Un step en régime `gated` lève une
+-- approbation en fin de step : le run n'atteint pas `done`, donc la chaîne
+-- attend. Elle repart quand Florian a tranché.
+--
+-- Un step qui échoue n'atteint pas `done` non plus. L'enchaînement ne relance
+-- donc jamais après une panne — il faut regarder ce qui s'est passé.
+alter table projects
+  add column enchainement boolean not null default false;

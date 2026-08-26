@@ -211,6 +211,14 @@ export async function projectsRoutes(
     autonomyDefault: z.enum(['gated', 'auto']).optional(),
     /** Voir la création · `false` saute le contrôle visuel sur ce projet. */
     jugeVisuel: z.boolean().optional(),
+    /**
+     * Enchaîner les steps sans intervention entre chacun (migration 0021).
+     *
+     * Ne contourne aucun gate : un step `gated` fait attendre la chaîne, et un
+     * step qui échoue l'arrête. Ça retire un clic entre deux étapes, pas une
+     * décision.
+     */
+    enchainement: z.boolean().optional(),
   })
 
   /**
@@ -230,13 +238,14 @@ export async function projectsRoutes(
     const projectId = await getProjectIdBySlug(deps.db, p.data.id)
     if (!projectId) return reply.code(404).send({ error: 'projet_introuvable' })
 
-    const { stack, tint, stagingUrl, autonomyDefault, jugeVisuel } = body.data
+    const { stack, tint, stagingUrl, autonomyDefault, jugeVisuel, enchainement } = body.data
     const patch = {
       ...(stack !== undefined ? { stack } : {}),
       ...(tint !== undefined ? { tint } : {}),
       ...(stagingUrl !== undefined ? { staging_url: stagingUrl } : {}),
       ...(autonomyDefault !== undefined ? { autonomy_default: autonomyDefault } : {}),
       ...(jugeVisuel !== undefined ? { juge_visuel: jugeVisuel } : {}),
+      ...(enchainement !== undefined ? { enchainement } : {}),
     }
     // Un corps vide n'est pas une erreur, mais ce n'est pas une écriture non
     // plus : `updateTable` sans `set` échouerait côté Kysely.

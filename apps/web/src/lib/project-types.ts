@@ -28,6 +28,13 @@ export type LoopStatus = 'run' | 'wait' | 'fail' | 'done' | 'pause' | 'demarrage
  * clusters, et c'est le comportement voulu en attendant.
  */
 export interface ProjectView {
+  /**
+   * Les steps s'enchaînent-ils sans intervention entre chacun ?
+   *
+   * Ne contourne aucun gate : un step `gated` fait attendre la chaîne, et un
+   * step qui échoue l'arrête.
+   */
+  enchainement: boolean
   id: string
   name: string
   client: string | null

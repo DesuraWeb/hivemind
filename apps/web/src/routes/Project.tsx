@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { badgeFor } from '../components/dashboard/loop'
 import { SEM } from '../components/inbox/constants'
 import { ClientEmail } from '../components/project/ClientEmail'
+import { Enchainement } from '../components/project/Enchainement'
 import { RunsList } from '../components/project/RunsList'
 import { StepList } from '../components/project/StepList'
 import { StepTimeline } from '../components/project/StepTimeline'
@@ -468,7 +469,12 @@ export function Project() {
           </div>
         )}
 
-        {tab === 'steps' && <StepList steps={steps} runs={runs} projectId={projectId} />}
+        {tab === 'steps' && (
+          <>
+            <Enchainement projet={project} />
+            <StepList steps={steps} runs={runs} projectId={projectId} />
+          </>
+        )}
         {tab === 'boucles' && <RunsList runs={runs} steps={steps} />}
       </main>
     </>

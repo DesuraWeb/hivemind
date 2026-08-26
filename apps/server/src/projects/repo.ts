@@ -18,6 +18,12 @@ import {
  * que les routes `/:id`, `/:id/steps`, `/:id/runs` attendent en paramètre.
  */
 export interface ProjectView {
+  /**
+   * Les steps s'enchaînent-ils sans intervention entre chacun (migration
+   * 0021) ? Ne contourne aucun gate : un step `gated` fait attendre la
+   * chaîne, et un step qui échoue l'arrête.
+   */
+  enchainement: boolean
   id: string
   name: string
   client: string | null
@@ -63,6 +69,7 @@ interface ProjectRow {
   tint: string | null
   synth: string | null
   staging_url: string | null
+  enchainement: boolean
   globe_slug: string
 }
 
@@ -92,6 +99,7 @@ function projectRowQuery(db: Kysely<Database>) {
         'projects.tint as tint',
         'projects.synth as synth',
         'projects.staging_url as staging_url',
+        'projects.enchainement as enchainement',
         'globes.slug as globe_slug',
       ])
   )
@@ -216,6 +224,8 @@ async function toProjectView(
     conso,
     synth: row.synth,
     staging: row.staging_url,
+    /** Les steps s'enchaînent-ils sans intervention ? Rendu pour que l'écran le montre. */
+    enchainement: row.enchainement,
     line: buildLine({ step, loop, role, iteration, duree, pending }),
   }
 }

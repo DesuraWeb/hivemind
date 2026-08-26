@@ -55,6 +55,11 @@ export interface ProjectsTable {
    * `existant` est le cas dangereux : on reprend un site vivant, et casser une
    * URL indexée devient possible dès le premier step.
    */
+  /**
+   * Enchaîner les steps sans intervention entre chacun (migration 0021).
+   * Ne contourne aucun gate : un step `gated` fait attendre la chaîne.
+   */
+  enchainement: Generated<boolean>
   demarrage: Generated<string>
   /** Le domaine du projet · l'adresse que le client tape. Distinct de `staging_url`. */
   domaine: string | null
