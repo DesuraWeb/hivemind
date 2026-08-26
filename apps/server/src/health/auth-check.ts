@@ -90,6 +90,15 @@ async function closeAlert(deps: AuthHealthcheckDeps): Promise<void> {
         resolvedBy: 'healthcheck',
         raison: "l'authentification agent répond de nouveau",
       }),
+      // `resolved_at` est ce que le JOURNAL lit : `listDecisions` filtre sur
+      // `resolved_at is not null` (journal/repo.ts). L'omettre — ce que ce
+      // code faisait — rendait la fermeture invisible : l'alerte cessait de
+      // mentir, mais disparaissait sans que rien ne consigne qu'elle avait
+      // été résolue. Le même travers, déplacé d'un cran.
+      //
+      // Trouvé en production par la vérification de la correction précédente,
+      // pas par un test.
+      resolved_at: new Date(),
     })
     .where('type', '=', 'alert')
     .where('status', '=', 'open')

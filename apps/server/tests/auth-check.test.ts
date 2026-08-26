@@ -5,6 +5,7 @@ import { runMigrations } from '../src/db/migrate'
 import { databaseUrl, loadEnv } from '../src/env'
 import { runAuthHealthcheck } from '../src/health/auth-check'
 import type { Mail, Mailer } from '../src/integrations/mailer'
+import { listDecisions } from '../src/journal/repo'
 import { createFakeAdapter } from '../src/runtime/fake'
 import type { RuntimeAdapter } from '../src/runtime/types'
 
@@ -181,6 +182,22 @@ test('l’authentification revenue ferme l’alerte, au lieu de la laisser menti
   // `done` et non `dismissed` : le problème a été RÉSOLU, pas écarté. Et la
   // raison reste lisible dans l'historique.
   expect(JSON.stringify(restantes[0]?.human_response)).toContain('healthcheck')
+
+  // `resolved_at` est ce que le journal lit pour savoir qu'une décision a été
+  // prise. Sans lui, l'alerte cesse de mentir mais disparaît en silence : rien
+  // ne consigne qu'elle a été résolue, et le journal de la nuit ne la montre
+  // jamais. C'est le même travers que celui qu'on venait de corriger, déplacé
+  // d'un cran — trouvé en production, pas ici.
+  const resolue = await db
+    .selectFrom('inbox_items')
+    .select('resolved_at')
+    .where('type', '=', 'alert')
+    .executeTakeFirstOrThrow()
+  expect(resolue.resolved_at).not.toBeNull()
+
+  // Le bout de chaîne qui compte vraiment : elle apparaît dans le journal.
+  const decisions = await listDecisions(db, { since: new Date(Date.now() - 3_600_000) })
+  expect(decisions.some((d) => d.title.includes('Authentification'))).toBe(true)
 
   // Le retour à la normale ne s'annonce pas par un email : personne ne veut
   // être réveillé pour une bonne nouvelle.
