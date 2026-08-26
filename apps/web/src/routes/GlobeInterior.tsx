@@ -185,41 +185,67 @@ export function GlobeInterior() {
         </Link>
       </header>
 
+      {/*
+        L'orbe occupe TOUTE la largeur, la liste flotte par-dessus.
+        
+        C'était une rangée flex : une colonne de projets, puis le canvas en
+        `flex: 1`. L'orbe était donc centrée dans ce qui restait à droite, pas
+        dans l'écran — et avec un seul projet, la colonne réservait 480 px de
+        vide et poussait l'orbe d'autant. Constaté par Florian sur une orbe à
+        un projet.
+        
+        Le sujet de cette page est l'orbe. La liste est une lecture par-dessus,
+        même composition que l'écran de Création, où les fragments flottent au-
+        dessus de la scène sans jamais la décaler.
+      */}
       <main
         style={{
           flex: 1,
           minHeight: 0,
-          display: 'flex',
-          gap: 8,
+          position: 'relative',
           padding: '10px 24px 120px',
         }}
       >
         <div
           style={{
-            width: 'clamp(360px, 40vw, 480px)',
-            flexShrink: 0,
+            position: 'absolute',
+            left: 24,
+            top: 10,
+            bottom: 120,
+            zIndex: 5,
+            width: 'clamp(360px, 34vw, 460px)',
             display: 'flex',
             flexDirection: 'column',
             minHeight: 0,
             overflowY: 'auto',
+            // La liste ne doit pas capter le clic sur toute sa hauteur : au-
+            // dessous des cartes, c'est l'orbe qu'on veut pouvoir attraper.
+            pointerEvents: 'none',
             padding: '4px 6px 4px 0',
           }}
         >
+          {/*
+            Le clic revient aux cartes. Le conteneur le laisse passer pour que
+            l'orbe reste attrapable dans le vide sous la liste, mais une carte
+            inerte serait un bouton qui ne répond pas.
+          */}
           {projects.map((p) => (
-            <ProjectRow
-              key={p.id}
-              project={p}
-              globeId={globeId}
-              hovered={hoverId === p.id}
-              focused={focused === p.id}
-              onHover={handleHover}
-              onPick={handlePick}
-            />
+            <div key={p.id} style={{ pointerEvents: 'auto' }}>
+              <ProjectRow
+                project={p}
+                globeId={globeId}
+                hovered={hoverId === p.id}
+                focused={focused === p.id}
+                onHover={handleHover}
+                onPick={handlePick}
+              />
+            </div>
           ))}
           {projects.length === 0 && !projectsQuery.isPending && (
             <div
               style={{
                 padding: '12px 13px',
+                pointerEvents: 'auto',
                 font: '11.5px var(--font-mono)',
                 color: 'var(--text-low)',
                 lineHeight: 1.7,
@@ -243,7 +269,7 @@ export function GlobeInterior() {
           )}
         </div>
 
-        <div style={{ position: 'relative', flex: 1, minWidth: 0, minHeight: 0 }}>
+        <div style={{ position: 'absolute', inset: 0 }}>
           {orbProjects.length > 0 ? (
             <>
               <OrbCanvas
