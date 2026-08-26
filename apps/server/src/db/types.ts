@@ -228,6 +228,12 @@ export interface ServeursTable {
   etat_mesure_at: Timestamp | null
   /** Ce que la sonde a constaté, preuve par preuve. Un verdict sans preuves ne se conteste pas. */
   etat_preuves: JSONColumnType<unknown[], string | undefined, string>
+  /** `vps` ou `mutualise` : décide quelles opérations EXISTENT (migration 0017). */
+  type_hebergement: Generated<string>
+  /** L'hébergeur nommé, minuscules : niveau le plus précis de la cascade de mémoire. */
+  hebergeur: string | null
+  /** À qui appartient cet hébergement. Null pour les serveurs de Florian. */
+  client_id: string | null
   /** Le compte SSH doit-il passer par `sudo` ? Voir migration 0013. */
   sudo: Generated<boolean>
   notes: string | null

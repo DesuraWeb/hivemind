@@ -3,6 +3,7 @@ import {
   type CommandeRendue,
   type Operation,
   type OptionsRendu,
+  type TypeHebergement,
   rendre,
   valider,
 } from './operations'
@@ -88,9 +89,16 @@ export interface AppliquerDeps {
  * qu'elle est hors catalogue laisserait trois modifications appliquées pour
  * rien.
  */
-export function validerPlan(operations: Operation[]): { ok: true } | { ok: false; raison: string } {
+export function validerPlan(
+  operations: Operation[],
+  /**
+   * Le type d'hébergement du serveur visé. Omis, seul le catalogue est
+   * vérifié — le comportement d'avant.
+   */
+  type?: TypeHebergement,
+): { ok: true } | { ok: false; raison: string } {
   for (const [i, op] of operations.entries()) {
-    const v = valider(op)
+    const v = valider(op, type)
     if (!v.ok) return { ok: false, raison: `opération ${i + 1}/${operations.length} · ${v.raison}` }
   }
   return { ok: true }
@@ -109,7 +117,11 @@ export async function appliquer(
   deps: AppliquerDeps,
   operations: Operation[],
 ): Promise<ResultatApplication> {
-  const v = validerPlan(operations)
+  // Le type vient du SERVEUR, jamais de l'appelant — même raison que `sudo`
+  // dix lignes plus bas : c'est une propriété de la machine, et la laisser
+  // choisir ailleurs permettrait d'exécuter un `installer_paquet` sur un
+  // mutualisé parce qu'un appelant a oublié de le dire.
+  const v = validerPlan(operations, deps.serveur.typeHebergement)
   if (!v.ok) throw new Error(v.raison)
 
   const appliquees: OperationAppliquee[] = []

@@ -46,6 +46,24 @@ const creerBody = z.object({
   port: z.number().int().min(1).max(65535).optional(),
   url: z.string().url().optional(),
   notes: z.string().max(2000).optional(),
+  /**
+   * `vps` par défaut : c'est le seul cas que le produit savait traiter, et
+   * supposer du mutualisé retirerait en silence quatre opérations.
+   */
+  typeHebergement: z.enum(['vps', 'mutualise']).optional(),
+  /**
+   * L'hébergeur nommé. Normalisé en minuscules ICI plutôt qu'en base : la
+   * contrainte doit être visible là où on écrit, sinon deux graphies du même
+   * hébergeur deviennent deux niveaux de mémoire distincts qui ne se parlent
+   * jamais.
+   */
+  hebergeur: z
+    .string()
+    .min(1)
+    .max(60)
+    .transform((v) => v.trim().toLowerCase())
+    .optional(),
+  clientId: z.string().uuid().optional(),
 })
 
 const planBody = z.object({
@@ -70,6 +88,8 @@ export async function serveursRoutes(
         'etat',
         'etat_mesure_at',
         'notes',
+        'type_hebergement',
+        'hebergeur',
       ])
       .orderBy('nom')
       .execute()
@@ -80,6 +100,10 @@ export async function serveursRoutes(
     return rows.map((r) => ({
       id: r.id,
       nom: r.nom,
+      // Rendus à l'écran : c'est ce qui explique pourquoi un plan sur ce
+      // serveur ne propose que deux opérations sur six.
+      typeHebergement: r.type_hebergement,
+      hebergeur: r.hebergeur,
       hote: r.hote,
       utilisateur: r.utilisateur,
       port: r.port,
@@ -126,6 +150,9 @@ export async function serveursRoutes(
           ...(b.data.port ? { port: b.data.port } : {}),
           ...(b.data.url ? { url: b.data.url } : {}),
           ...(b.data.notes ? { notes: b.data.notes } : {}),
+          ...(b.data.typeHebergement ? { type_hebergement: b.data.typeHebergement } : {}),
+          ...(b.data.hebergeur ? { hebergeur: b.data.hebergeur } : {}),
+          ...(b.data.clientId ? { client_id: b.data.clientId } : {}),
         })
         .returning(['id', 'nom', 'etat'])
         .executeTakeFirstOrThrow()

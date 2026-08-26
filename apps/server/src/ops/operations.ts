@@ -90,6 +90,51 @@ export type NomOperation = keyof typeof OPERATIONS_SCHEMAS
 
 export const NOMS_OPERATIONS = Object.keys(OPERATIONS_SCHEMAS) as NomOperation[]
 
+/** Ce qu'on administre soi-même, et ce qu'on loue. */
+export type TypeHebergement = 'vps' | 'mutualise'
+
+/**
+ * Ce que chaque type d'hébergement permet RÉELLEMENT.
+ *
+ * Sur un mutualisé il n'y a ni `apt`, ni `systemctl` ; les extensions PHP se
+ * cochent dans un panneau et les crons s'y posent le plus souvent aussi. Ces
+ * quatre opérations n'y sont pas « interdites », elles **n'existent pas**.
+ *
+ * La distinction compte : `sudo` (migration 0013) modélise « on préfixe la
+ * commande ou pas ». Ici on modélise « le geste est possible ou pas », ce qui
+ * n'est pas la même chose et ne se déduit pas de l'autre.
+ *
+ * ## Pourquoi ça filtre le SCHÉMA et pas seulement la validation
+ *
+ * Un agent à qui on demande dans son prompt de ne pas proposer l'impossible
+ * le proposera un jour. Une opération absente de l'énumération qu'on lui
+ * donne, jamais. La validation à l'arrivée reste, en défense en profondeur —
+ * mais elle ne doit pas être le seul rempart, sinon chaque plan sur un
+ * mutualisé coûte un aller-retour pour être refusé.
+ */
+export const OPERATIONS_PAR_HEBERGEMENT: Record<TypeHebergement, readonly NomOperation[]> = {
+  vps: NOMS_OPERATIONS,
+  // Poser des fichiers, et les relire. C'est tout ce qu'un compte mutualisé
+  // permet sans passer par un panneau que personne n'automatise ici.
+  mutualise: ['lire_fichier', 'ecrire_fichier'],
+}
+
+export function operationsAutorisees(type: TypeHebergement): readonly NomOperation[] {
+  return OPERATIONS_PAR_HEBERGEMENT[type]
+}
+
+/**
+ * Cette opération a-t-elle un sens sur ce type d'hébergement ?
+ *
+ * Distincte d'`estAuCatalogue` : une opération peut exister au catalogue et
+ * n'avoir aucun sens ici. Confondre les deux rendrait le message d'erreur
+ * faux — « opération inconnue » là où la vraie raison est « pas sur un
+ * mutualisé ».
+ */
+export function estPossibleSur(nom: string, type: TypeHebergement): boolean {
+  return (operationsAutorisees(type) as readonly string[]).includes(nom)
+}
+
 /**
  * Mots dont la présence dans un nom d'opération signalerait une trappe
  * d'échappement. Testé par énumération sur le catalogue : ce n'est pas une
@@ -306,9 +351,32 @@ export function estAuCatalogue(nom: string): nom is NomOperation {
  * Valide une opération sans la rendre. Sert à refuser un plan complet avant
  * d'en exécuter la première ligne — un plan à moitié valide n'existe pas.
  */
-export function valider(operation: Operation): { ok: true } | { ok: false; raison: string } {
+export function valider(
+  operation: Operation,
+  /**
+   * Le type d'hébergement du serveur visé. Omis, on ne vérifie que le
+   * catalogue — le comportement d'avant, pour les appelants qui n'ont pas de
+   * serveur sous la main.
+   *
+   * Fourni, c'est la défense en profondeur : le schéma donné au modèle ne
+   * contient déjà que les opérations possibles ici (`opsPlanSchemaPour`), mais
+   * un plan peut aussi venir d'une recette, d'un réglage édité à la main, ou
+   * d'un chemin qu'on ajoutera demain.
+   */
+  type?: TypeHebergement,
+): { ok: true } | { ok: false; raison: string } {
   if (!estAuCatalogue(operation.nom)) {
     return { ok: false, raison: new OperationInconnueError(operation.nom).message }
+  }
+  // Distinct de « inconnue » à dessein : l'opération EXISTE, elle n'a
+  // simplement aucun sens ici. Confondre les deux donnerait un message faux,
+  // et enverrait chercher un bug dans le catalogue au lieu de regarder le
+  // serveur.
+  if (type && !estPossibleSur(operation.nom, type)) {
+    return {
+      ok: false,
+      raison: `${operation.nom} n'existe pas sur un hébergement « ${type} » · seules ${operationsAutorisees(type).join(', ')} y sont possibles`,
+    }
   }
   const parsed = OPERATIONS_SCHEMAS[operation.nom].safeParse(operation.params)
   if (!parsed.success) {

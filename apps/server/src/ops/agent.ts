@@ -6,10 +6,10 @@ import { resolveProjectRole } from '../loop/roles'
 import { collectStructured } from '../runtime/structured'
 import type { RuntimeAdapter, SendOptions } from '../runtime/types'
 import { createOpsReadSurface } from './mcp'
-import { type OpsPlan, opsPlanSchema } from './plan'
+import { type OpsPlan, opsPlanSchemaPour } from './plan'
 import { lireServeur } from './probe'
 import { recetteComplete } from './recipes'
-import type { OpsExecutor, Serveur } from './types'
+import { type OpsExecutor, type Serveur, contexteDuServeur } from './types'
 
 /**
  * Faire travailler l'agent d'exploitation.
@@ -66,7 +66,12 @@ export async function demanderPlan(deps: DemanderPlanDeps): Promise<PlanDemande>
   // La recette COMPLÈTE : le socle écrit à la main, plus ce que les
   // déploiements précédents ont appris. C'est ici que « le 15ᵉ déploiement
   // n'est pas le premier » devient vrai.
-  const recette = await recetteComplete(deps.db, projet.stack)
+  //
+  // Le contexte d'hébergement branche la cascade de mémoire (migration 0016) :
+  // sans lui, seuls les savoirs universels remontent, et « monter PHP chez
+  // PlanetHoster » resterait invisible sur le serveur qui en a précisément
+  // besoin.
+  const recette = await recetteComplete(deps.db, projet.stack, contexteDuServeur(serveur))
 
   const kb = createClientKbSurface({ db: deps.db, tools: role.tools, projetId: projet.id })
   const lecture = createOpsReadSurface({ executor: deps.executor, serveur, tools: role.tools })
@@ -95,7 +100,12 @@ export async function demanderPlan(deps: DemanderPlanDeps): Promise<PlanDemande>
     deps.adapter,
     session,
     construirePreambule({ serveur, projet, besoin: deps.besoin, recette }),
-    opsPlanSchema,
+    // Le schéma est restreint à ce que CE type d'hébergement permet : sur un
+    // mutualisé, le modèle ne voit même pas `installer_paquet`. Le filtrer
+    // par consigne de prompt marcherait presque toujours, et « presque »
+    // signifie un plan irréalisable et un aller-retour de validation pour
+    // rien.
+    opsPlanSchemaPour(serveur.typeHebergement),
     {
       toolName: 'submit_plan_ops',
       toolDescription:

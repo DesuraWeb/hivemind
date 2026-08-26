@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import { NOMS_OPERATIONS, type NomOperation } from './operations'
+import {
+  NOMS_OPERATIONS,
+  type NomOperation,
+  type TypeHebergement,
+  operationsAutorisees,
+} from './operations'
 
 /**
  * Le contrat de sortie du rôle `ops`.
@@ -27,6 +32,19 @@ import { NOMS_OPERATIONS, type NomOperation } from './operations'
 // en `string` : un plan validé est directement utilisable comme `Operation[]`,
 // sans re-narrowing qui pourrait être oublié quelque part.
 const nomOperationSchema = z.enum(NOMS_OPERATIONS as [NomOperation, ...NomOperation[]])
+
+/**
+ * L'énumération donnée au modèle, restreinte à ce que cet hébergement permet.
+ *
+ * C'est le filtrage « à la construction de la surface » : un agent à qui on
+ * demande dans son prompt de ne pas proposer `installer_paquet` sur un
+ * mutualisé le proposera un jour. Une opération absente de l'énumération,
+ * jamais.
+ */
+function enumOperations(type: TypeHebergement) {
+  const noms = operationsAutorisees(type)
+  return z.enum(noms as unknown as [NomOperation, ...NomOperation[]])
+}
 
 export const operationPlanifieeSchema = z.object({
   nom: nomOperationSchema,
@@ -100,3 +118,34 @@ export const opsPlanSchema = z.object({
     .default([]),
 })
 export type OpsPlan = z.infer<typeof opsPlanSchema>
+
+/**
+ * Le schéma du plan, restreint à ce que CET hébergement permet.
+ *
+ * Seuls deux champs dépendent du type : les opérations, et celles qu'on
+ * propose pour la recette. On les redéfinit plutôt que de recopier le schéma
+ * entier — une seconde copie divergerait de la première au premier champ
+ * ajouté, et c'est le genre de divergence qu'on ne remarque pas avant qu'un
+ * agent ne s'en serve.
+ *
+ * `opsPlanSchema` reste le cas `vps` : c'est ce que le produit faisait avant
+ * qu'un second type d'hébergement n'existe.
+ */
+export function opsPlanSchemaPour(type: TypeHebergement) {
+  const nom = enumOperations(type)
+  return opsPlanSchema.extend({
+    operations: z.array(operationPlanifieeSchema.extend({ nom })),
+    pour_la_recette: z
+      .array(
+        z.object({
+          nom,
+          pourquoi: z
+            .string()
+            .min(20)
+            .describe('Pourquoi TOUTE la stack en a besoin, pas seulement ce serveur.'),
+        }),
+      )
+      .max(2)
+      .default([]),
+  })
+}

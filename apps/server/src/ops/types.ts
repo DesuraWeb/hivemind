@@ -1,4 +1,5 @@
 import type { EtatServeur } from '@silithid/shared'
+import type { TypeHebergement } from './operations'
 
 /**
  * Les types de l'exploitation (Phase 6).
@@ -21,6 +22,16 @@ export interface Serveur {
   etat: EtatServeur
   /** Le compte SSH passe-t-il par `sudo` ? Défaut vrai (migration 0013). */
   sudo: boolean
+  /**
+   * `vps` ou `mutualise` (migration 0017). Décide quelles opérations
+   * EXISTENT, ce que `sudo` ne dit pas : `sudo` modélise « on préfixe la
+   * commande ou pas », pas « le geste est possible ».
+   */
+  typeHebergement: TypeHebergement
+  /** L'hébergeur nommé, minuscules. Niveau le plus précis de la cascade de mémoire. */
+  hebergeur: string | null
+  /** À qui appartient cet hébergement. Null pour les serveurs de Florian. */
+  clientId: string | null
   etatMesureAt: Date | null
   preuves: PreuveSonde[]
 }
@@ -61,3 +72,17 @@ export interface OpsExecutor {
 
 /** Ce qui sait interroger une URL publique. Séparé de l'exécuteur : ce n'est pas le même canal. */
 export type SondeHttp = (url: string) => Promise<{ statut: number } | { erreur: string }>
+
+/**
+ * Où ce serveur se situe, pour la cascade de mémoire (migration 0016).
+ *
+ * Le type est toujours connu (défaut `vps`), l'hébergeur pas toujours. Rendre
+ * `hebergeur: null` plutôt que de l'omettre laisse la cascade décider : elle
+ * saute simplement son niveau le plus précis.
+ */
+export function contexteDuServeur(serveur: Serveur): {
+  hebergeur: string | null
+  type: string
+} {
+  return { hebergeur: serveur.hebergeur, type: serveur.typeHebergement }
+}
