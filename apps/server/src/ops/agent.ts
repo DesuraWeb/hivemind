@@ -2,6 +2,7 @@ import { tmpdir } from 'node:os'
 import type { Kysely } from 'kysely'
 import type { Database } from '../db/types'
 import { createClientKbSurface, readPolicyMcp } from '../knowledge/client-kb'
+import { formaterRappel, rappeler } from '../knowledge/recall'
 import { resolveProjectRole } from '../loop/roles'
 import { collectStructured } from '../runtime/structured'
 import type { RuntimeAdapter, SendOptions } from '../runtime/types'
@@ -73,6 +74,26 @@ export async function demanderPlan(deps: DemanderPlanDeps): Promise<PlanDemande>
   // besoin.
   const recette = await recetteComplete(deps.db, projet.stack, contexteDuServeur(serveur))
 
+  // La cascade projet → client → globe → hive, côté exploitation. La recette
+  // couvre la stack ; ceci couvre CE projet-ci, ce que la recette ne peut pas
+  // savoir.
+  const contexteProjet = await deps.db
+    .selectFrom('projects')
+    .select(['client_id as clientId', 'globe_id as globeId'])
+    .where('id', '=', projet.id)
+    .executeTakeFirstOrThrow()
+  const memoire = formaterRappel(
+    await rappeler(
+      deps.db,
+      {
+        projetId: projet.id,
+        clientId: contexteProjet.clientId,
+        globeId: contexteProjet.globeId,
+      },
+      'exploitation',
+    ),
+  )
+
   const kb = createClientKbSurface({ db: deps.db, tools: role.tools, projetId: projet.id })
   const lecture = createOpsReadSurface({ executor: deps.executor, serveur, tools: role.tools })
 
@@ -99,7 +120,7 @@ export async function demanderPlan(deps: DemanderPlanDeps): Promise<PlanDemande>
   const plan = await collectStructured(
     deps.adapter,
     session,
-    construirePreambule({ serveur, projet, besoin: deps.besoin, recette }),
+    construirePreambule({ serveur, projet, besoin: deps.besoin, recette, memoire }),
     // Le schéma est restreint à ce que CE type d'hébergement permet : sur un
     // mutualisé, le modèle ne voit même pas `installer_paquet`. Le filtrer
     // par consigne de prompt marcherait presque toujours, et « presque »
@@ -123,8 +144,17 @@ function construirePreambule(opts: {
   projet: { name: string; stack: string | null }
   besoin: string
   recette: string | null
+  /**
+   * La mémoire des cercles pour ce projet, côté exploitation.
+   *
+   * La recette ne lit que le cercle `hive` : un savoir semé dans le cercle
+   * d'un PROJET — « ce domaine n'a pas de sitemap, les URL sont en .php » —
+   * était rangé correctement et lu par personne. C'est pourtant exactement ce
+   * qu'un plan de déploiement doit connaître.
+   */
+  memoire: string
 }): string {
-  const { serveur, projet, besoin, recette } = opts
+  const { serveur, projet, besoin, recette, memoire } = opts
 
   const regime =
     serveur.etat === 'vierge'
@@ -156,6 +186,10 @@ function construirePreambule(opts: {
             : 'Le projet ne déclare aucune stack. Ne suppose pas laquelle.',
           '',
         ]),
+    // Après la recette, avant les consignes : la recette dit ce qu'on sait de
+    // la STACK, ceci dit ce qu'on sait de CE projet — plus spécifique, donc
+    // plus près de la décision.
+    ...(memoire ? [memoire, ''] : []),
     '## Avant de proposer',
     'Lis ce que tu peux lire (`lire_config`) plutôt que de le supposer. Ce que tu n’as pas lu ' +
       'va dans `suppose`, jamais dans `constate`.',

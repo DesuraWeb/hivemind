@@ -3,6 +3,7 @@ import { ensureProjectRepo } from '../../git/repo'
 import { ensureRunWorktree } from '../../git/worktree'
 import type { StepHandler } from '../../jobs/run-step'
 import { createClientKbSurface, roleUsesClientKb } from '../../knowledge/client-kb'
+import { formaterRappel, rappeler } from '../../knowledge/recall'
 import { collectStructured, frameSchema } from '../../runtime/structured'
 import type { RuntimeAdapter, ToolPolicy } from '../../runtime/types'
 import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
@@ -77,6 +78,18 @@ function buildPreamble(opts: {
   iteration: number
   maxIterations: number
   correction?: string
+  /**
+   * La mémoire des cercles pour ce projet, déjà formatée.
+   *
+   * Elle n'était rappelée NULLE PART dans la boucle : un savoir semé dans le
+   * cercle d'un projet était rangé correctement et lu par personne. Le seul
+   * consommateur était l'outil `lookup` de la fiche client, donc uniquement
+   * quand le projet a un client et qu'un agent va le consulter.
+   *
+   * Filtrée sur `code` : le garant n'a rien à faire d'un inventaire d'URL ou
+   * d'une version de PHP, et ça diluerait ce qui compte.
+   */
+  memoire?: string
   instructions: string[]
 }): string {
   return [
@@ -102,6 +115,7 @@ function buildPreamble(opts: {
           '',
         ]
       : []),
+    ...(opts.memoire ? [opts.memoire, ''] : []),
     ...instructionsBlock(opts.instructions, '# Consigne de pilotage'),
     '# Itération',
     `iteration = ${opts.iteration}`,
@@ -147,6 +161,7 @@ export function createFramingHandler(deps: FramingDeps): StepHandler {
         'projects.context as projectContext',
         'projects.repo_full_name as repoFullName',
         'projects.client_id as clientId',
+        'projects.globe_id as globeId',
       ])
       .where('runs.id', '=', runId)
       .executeTakeFirstOrThrow()
@@ -194,6 +209,21 @@ export function createFramingHandler(deps: FramingDeps): StepHandler {
       onEvent: () => {},
     })
 
+    // La cascade projet → client → globe → hive, côté code. C'est ce qui rend
+    // vrai « chaque agent reçoit la mémoire dont il a besoin » : le semis
+    // existait, la récolte n'existait pas.
+    const memoire = formaterRappel(
+      await rappeler(
+        db,
+        {
+          projetId: runRow.projectId,
+          clientId: runRow.clientId,
+          globeId: runRow.globeId,
+        },
+        'code',
+      ),
+    )
+
     const preamble = buildPreamble({
       projectName: runRow.projectName,
       projectContext: runRow.projectContext,
@@ -203,6 +233,7 @@ export function createFramingHandler(deps: FramingDeps): StepHandler {
       iteration: runRow.iteration,
       maxIterations: runRow.maxIterations,
       instructions,
+      ...(memoire ? { memoire } : {}),
       ...(correction ? { correction } : {}),
     })
 

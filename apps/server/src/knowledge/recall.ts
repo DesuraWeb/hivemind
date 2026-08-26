@@ -1,3 +1,4 @@
+import type { DomaineSavoir } from '@silithid/shared'
 import { type Kysely, sql } from 'kysely'
 import type { Database } from '../db/types'
 import { savoirsEmpruntes } from './borrow'
@@ -48,6 +49,16 @@ const ORDRE = ['projet', 'client', 'globe', 'hive'] as const
 export async function rappeler(
   db: Kysely<Database>,
   ctx: ContexteRappel,
+  /**
+   * À qui ce rappel s'adresse. Omis, tous les savoirs — ce que la fiche
+   * client garde, parce qu'elle montre ce qu'on sait d'un client et non ce
+   * qu'un rôle doit lire.
+   *
+   * Les deux consommateurs de la boucle le passent, eux : un cadrage de dev
+   * n'a rien à faire d'un inventaire d'URL, et un plan de déploiement n'a rien
+   * à faire d'une règle de style.
+   */
+  domaine?: DomaineSavoir,
 ): Promise<SavoirRappele[]> {
   const instances: Record<(typeof ORDRE)[number], string | null | undefined> = {
     projet: ctx.projetId,
@@ -64,10 +75,11 @@ export async function rappeler(
     // cascade incomplète qu'un rappel qui pioche dans le globe d'un autre.
     if (cercle !== 'hive' && !instances[cercle]) continue
 
-    const savoirs = await actifsDuCercle(db, {
-      cercle,
-      cercleId: cercle === 'hive' ? null : (instances[cercle] ?? null),
-    })
+    const savoirs = await actifsDuCercle(
+      db,
+      { cercle, cercleId: cercle === 'hive' ? null : (instances[cercle] ?? null) },
+      domaine,
+    )
 
     for (const s of savoirs) {
       const cle = s.sujet.toLowerCase()

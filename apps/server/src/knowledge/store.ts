@@ -231,7 +231,20 @@ export async function historique(db: Kysely<Database>, racineId: string): Promis
  * Savoirs actifs d'un cercle donné. Le rappel en cascade
  * (`recall.ts`) appelle ceci une fois par cercle.
  */
-export async function actifsDuCercle(db: Kysely<Database>, ref: CercleRef): Promise<Savoir[]> {
+export async function actifsDuCercle(
+  db: Kysely<Database>,
+  ref: CercleRef,
+  /**
+   * À qui ces savoirs s'adressent. Omis, tous — le comportement d'avant, que
+   * la fiche client garde : elle montre ce qu'on sait d'un client, pas ce
+   * qu'un rôle a besoin de lire.
+   *
+   * Un cadrage de dev, lui, ne doit PAS recevoir « le sitemap est en 404 sur
+   * ce domaine » : ça ne l'aide pas à écrire du code et ça dilue ce qui
+   * compte. Même raison que la migration 0012.
+   */
+  domaine?: DomaineSavoir,
+): Promise<Savoir[]> {
   let q = db
     .selectFrom('savoirs')
     .select(COLONNES)
@@ -241,5 +254,6 @@ export async function actifsDuCercle(db: Kysely<Database>, ref: CercleRef): Prom
     ref.cercle === 'hive'
       ? q.where('cercle_id', 'is', null)
       : q.where('cercle_id', '=', ref.cercleId ?? '')
+  if (domaine) q = q.where('domaine', '=', domaine)
   return (await q.orderBy('created_at', 'asc').execute()).map(ligneVersSavoir)
 }
