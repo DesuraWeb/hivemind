@@ -37,16 +37,20 @@ const ROLE_TEMPLATES_QUERY_KEY = ['role-templates'] as const
 
 /** L'orbe de Hive au centre de la scène : config exacte du prototype. */
 /**
- * Largeur maximale de la scène de création.
+ * Largeur maximale de la scène.
  *
  * Les fragments sont ancrés aux bords du cadre (`left: 32`, `right: 32`) :
- * sans plafond, ils suivent la fenêtre et la fiche se disloque sur un grand
- * écran. 1280 est la largeur pour laquelle le pack est composé : les deux
- * colonnes (316 à gauche, 372 à droite) encadrent l'orbe au lieu de dériver
- * loin d'elle. Essayé à 1440 d'abord, et le centre restait trop vide sur un
- * 1920 · la composition ne se lisait plus comme un seul objet.
+ * sans plafond, ils suivent la fenêtre indéfiniment. Avec un plafond trop bas,
+ * ils se collent à l'orbe et lui volent sa place — c'est ce que 1280 faisait
+ * sur un écran de 2000, et c'est la correction demandée par Florian : « les
+ * cards doivent se coller à l'extérieur, pour laisser le centre juste avec
+ * l'orbe et Hive ».
+ *
+ * 2200 laisse les colonnes atteindre les bords d'un grand écran tout en
+ * gardant une borne pour les très larges, où elles finiraient hors du champ
+ * de vision.
  */
-const LARGEUR_SCENE = 1280
+const LARGEUR_SCENE = 2200
 
 /**
  * L'étape qui découvre le CTA. Dérivée de la fiche côté serveur
@@ -656,12 +660,18 @@ export function Creation() {
 
           <div
             style={{
-              // 1280 de scène, moins la colonne de gauche (316), celle de
-              // droite (372) et leurs marges (64) : il reste 528 px libres au
-              // centre. Le pack donnait 640 à cette zone, ce qui passait tant
-              // qu'elle affichait une réplique scriptée de deux lignes et
-              // chevauche les fragments dès qu'un agent répond vraiment.
-              maxWidth: 520,
+              // Dérivée de la fenêtre, plus d'un chiffre fixe. Les colonnes
+              // occupent 316 à gauche et 372 à droite, plus leurs marges : ce
+              // qui reste au centre dépend de la largeur réelle. Un chiffre
+              // fixe chevauchait les fragments sur un écran étroit, ou laissait
+              // la réplique riquiqui sur un grand.
+              // 890, mesuré et pas calculé : le texte est centré sur la SCÈNE, pas sur
+              // l'espace libre entre les colonnes, et la barre latérale décale
+              // le tout d'une trentaine de pixels vers la droite. Mesuré à
+              // 1280 : avec 800 elle mordait de 34 px, avec 860 encore de 4 px.
+              // Le calcul théorique disait deux fois qu'elle passait.
+              maxWidth: 'min(620px, calc(100vw - 890px))',
+              minWidth: 320,
               padding: '0 20px',
               textAlign: 'center',
               fontSize: 19,
@@ -676,7 +686,7 @@ export function Creation() {
               // saisie hors de l'écran. Hive a pour consigne de rester court,
               // mais une consigne de prompt ne tient pas une mise en page :
               // le jour où il déborde, la scène doit rester utilisable.
-              maxHeight: 200,
+              maxHeight: 260,
               overflowY: 'auto',
               pointerEvents: 'auto',
             }}
@@ -1070,7 +1080,10 @@ export function Creation() {
             className="creation-ghost"
             style={{
               position: 'absolute',
-              left: 28,
+              // À DROITE, avec les deux autres commandes. Le coin bas-gauche
+              // est occupé par le panneau d'infra : les trois se recouvraient,
+              // et le bouton du dessus gagnait au clic.
+              right: 340,
               bottom: 24,
               zIndex: 7,
               background: 'transparent',
@@ -1132,20 +1145,6 @@ export function Creation() {
             ? 'replier le fil ⌄'
             : `déployer le fil (${creation?.conversation.length ?? 0}) ⌃`}
         </button>
-
-        {globesQuery.isSuccess && globes.length === 0 && isProjet && (
-          <span
-            style={{
-              ...FRAGMENT_LABEL,
-              position: 'absolute',
-              left: 32,
-              bottom: 8,
-              color: 'var(--sem-question)',
-            }}
-          >
-            aucun globe · créez-en un d'abord
-          </span>
-        )}
       </div>
     </div>
   )
