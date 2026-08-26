@@ -1,4 +1,5 @@
 import type { RunView, StepView } from '../../lib/project-types'
+import { Markdown } from '../Markdown'
 import { StartLoop } from '../run/StartLoop'
 import { isRunActive } from './runs'
 import { stepNumber, stepTone } from './steps'
@@ -77,9 +78,12 @@ export function StepList({
               </span>
             </div>
 
-            <div style={{ fontSize: 12.5, color: 'var(--text-mid)', lineHeight: 1.55 }}>
-              {s.specs}
-            </div>
+            {/*
+              `steps.specs` est déclaré `md` depuis la première migration.
+              L'écran affichait la chaîne BRUTE : un pavé de prose où les
+              critères d'acceptation se noyaient dans la description.
+            */}
+            <Markdown texte={s.specs} style={{ fontSize: 12.5, color: 'var(--text-mid)' }} />
 
             <div
               style={{

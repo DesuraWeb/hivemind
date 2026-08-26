@@ -1,4 +1,5 @@
 import type { SavoirRevueView } from '../../lib/api'
+import { Markdown } from '../Markdown'
 import { PanelActions, PanelButton } from '../inbox/PanelKit'
 
 /**
@@ -95,7 +96,7 @@ export function SavoirCard({
         </div>
 
         <div style={{ fontSize: 13, color: 'var(--text-mid)', lineHeight: 1.6 }}>
-          {savoir.contenu}
+          <Markdown texte={savoir.contenu} />
         </div>
 
         <div style={{ font: '10.5px var(--font-mono)', color: 'var(--text-low)' }}>
