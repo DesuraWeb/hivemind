@@ -160,7 +160,22 @@ export function createClaudeAdapter(): RuntimeAdapter {
         const { sdkOptions } = resolveToolPolicy({ bash: false, fs: 'none', mcp: [] })
         const stream = query({
           prompt: 'Réponds exactement : OK',
-          options: { ...sdkOptions, maxTurns: 1 },
+          options: {
+            ...sdkOptions,
+            maxTurns: 1,
+            // Un prompt système MINIMAL, et c'est tout l'intérêt.
+            //
+            // Sans cette ligne, le SDK envoie son prompt système complet — des
+            // milliers de jetons — pour obtenir un mot. Ce cron tourne toutes
+            // les 15 minutes, soit 96 fois par jour, que quelqu'un utilise le
+            // produit ou non : 167 passages avaient déjà eu lieu quand le VPS
+            // l'a relevé.
+            //
+            // Le healthcheck vérifie qu'une session s'ouvre et qu'un échange
+            // aboutit. Aucune de ces deux propriétés ne dépend du contenu du
+            // prompt système.
+            systemPrompt: 'Tu réponds exactement ce qu’on te demande, rien de plus.',
+          },
         })
         for await (const msg of stream) {
           captureRateLimit(msg)

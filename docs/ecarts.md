@@ -173,6 +173,52 @@ n'est vérifié que par le typecheck et le build.
 Y remédier suppose jsdom et un second projet vitest : une dépendance et de la
 maintenance, donc un arbitrage de Florian, pas une décision d'implémentation.
 
+### Aucune protection de budget ne se déclenche
+
+Le runtime rend `rate_limits_available: false`, donc `usage()` rend
+`available: false`, donc le scheduler ne met **jamais** rien en pause. L'état
+`paused_budget` existe et fonctionne ; rien ne l'atteint.
+
+**On ne sait pas pourquoi.** Mesuré en production sous deux modes
+d'authentification — clé d'API et jeton d'abonnement `setup-token` — avec un
+résultat identique. Ce n'est donc pas la facturation. Restent trois pistes
+non départagées : un jeton de ce type ne porterait pas ces fenêtres, le compte
+n'a pas d'abonnement actif, ou la méthode ne les rend plus dans cette version
+du SDK — qui se nomme elle-même `DO_NOT_RELY_ON_THIS_API_YET`.
+
+**Le correctif n'est pas de réparer la lecture du quota, c'est de compter la
+dépense.** Chaque tour rend déjà ses jetons (`claude.ts` les capte pour
+`cost_tokens`) et `pricing.eur_per_mtok` existe. Une fenêtre glissante
+calculée en base ne dépendrait d'aucune API expérimentale, marcherait sous
+n'importe quelle authentification, et survivrait à un changement
+d'adaptateur.
+
+Ce lot demande un **registre de dépense** : aujourd'hui les coûts sont
+éparpillés entre `runs`, `creations`, `agent_sessions` et `messages.meta`, et
+certains ne sont écrits nulle part — le healthcheck d'authentification a
+tourné 167 fois sans qu'un seul de ses jetons soit compté. Une jauge bâtie
+sans ce registre naîtrait avec le même angle mort.
+
+### Rien ne vérifie qu'un dépôt est clonable avant de lancer un run
+
+Le premier vrai run est parti sur un dépôt qui n'existait pas. Hive l'avait
+pourtant dit pendant la création, et Florian confirmé. Le run a été lancé
+quand même, et a échoué au `git clone`.
+
+Hive sonde déjà le domaine ; il pourrait sonder le dépôt de la même façon, et
+`manquesFiche` porter « le dépôt n'existe pas encore ». Un run condamné
+d'avance ne devrait pas pouvoir partir.
+
+### Aucun accès GitHub n'est configuré
+
+Le clone passe par `git` en HTTPS sans identifiants. Un dépôt privé échouera
+toujours, et le message de `git` sans TTY (« could not read Username »)
+n'oriente pas vers la vraie cause.
+
+Câbler l'authentification du clone est un lot : un secret de plus à protéger,
+et un chemin d'accès de plus à borner. En attendant, seuls les dépôts publics
+sont clonables.
+
 ---
 
 ## Ce qui bloque, et sur qui

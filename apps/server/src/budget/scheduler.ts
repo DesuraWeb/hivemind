@@ -452,23 +452,28 @@ async function raiseUnknownGaugeAlert(db: Kysely<Database>, now: Date): Promise<
     fromRole: 'system',
     payload: {
       cause: BUDGET_UNKNOWN_ALERT_KEY,
+      // ATTENTION à la formulation de ce texte.
+      //
+      // Il a d'abord dit « le runtime ne rend plus de consommation », ce qui
+      // laissait croire à un incident passager. Il a ensuite dit que la cause
+      // était l'authentification par clé d'API — une hypothèse cohérente, et
+      // FAUSSE : la même installation sous jeton d'abonnement rend exactement
+      // la même chose.
+      //
+      // Remplacer un flou vrai par une précision fausse est pire que ne rien
+      // dire. Ce texte énonce donc le FAIT mesuré et s'arrête là.
       detail: [
-        "La jauge lit les fenêtres de quota d'un ABONNEMENT. Une installation",
-        "authentifiée par clé d'API n'en a pas : le runtime rend",
-        '`subscription_type: null` et `rate_limits_available: false`, et il le',
-        'fera toujours.',
+        'La jauge de consommation ne rend rien : le runtime répond',
+        '`rate_limits_available: false`.',
         '',
-        "Conséquence, dite sans l'arrondir : **aucune boucle ne sera jamais mise",
-        'en pause automatiquement**. Aucun seuil, aucune réserve. Ce n’est pas une',
-        'panne passagère, c’est une capacité absente sur ce mode',
-        "d'authentification.",
+        'On ne sait pas pourquoi. Mesuré sur cette installation sous DEUX modes',
+        "d'authentification — clé d'API et jeton d'abonnement — avec un résultat",
+        'identique. La cause n’est donc pas la facturation, et la méthode du SDK',
+        'se nomme elle-même « DO_NOT_RELY_ON_THIS_API_YET ».',
         '',
-        "Et c'est le cas où ça compte le plus : avec un abonnement, dépasser",
-        'signifie être ralenti · avec une clé d’API, dépasser signifie être',
-        'facturé.',
-        '',
-        'Surveillez la dépense à la main, ou passez le produit à un compteur de',
-        "dépense réelle plutôt qu'à une lecture de quota.",
+        "Conséquence, dite sans l'arrondir : aucune boucle ne sera mise en pause",
+        'automatiquement. Aucun seuil, aucune réserve. Surveillez la dépense à la',
+        'main.',
       ].join(' '),
     },
     archiveToClient: false,
