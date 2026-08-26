@@ -12,6 +12,8 @@ export interface InboxItemView {
   title: string
   project: string | null
   agent: string | null
+  /** Le run concerné, ou `null` sur une alerte système. Décide des actions proposées. */
+  runId: string | null
   status: InboxStatus
   blockedSince: string
   createdAt: string

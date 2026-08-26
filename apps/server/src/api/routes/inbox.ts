@@ -107,6 +107,16 @@ function toApiItem(item: InboxItemRow, projectSlug: string | null) {
     title: item.title,
     project: projectSlug,
     agent: item.fromRole,
+    /**
+     * Le run concerné, ou `null`.
+     *
+     * Rendu parce que l'écran en a besoin pour DISTINGUER : une alerte système
+     * (jauge muette, authentification indisponible) n'a pas de run, et le
+     * panneau lui proposait quand même « relancer la boucle » et « stopper le
+     * step ». Des boutons qui agissent sur quelque chose qui n'est pas en
+     * cause.
+     */
+    runId: item.runId,
     status: item.status,
     blockedSince: item.blockedSince.toISOString(),
     createdAt: item.createdAt.toISOString(),

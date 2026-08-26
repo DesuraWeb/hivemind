@@ -138,6 +138,7 @@ Ce dépôt évite une chose avec obstination : afficher ou promettre un état qu
 > - **Aucun déploiement réel n'a jamais eu lieu.** Ni staging, ni production. Le chemin est écrit et testé unitairement, il n'a jamais poussé un octet vers une vraie machine.
 > - Gmail fonctionne en **brouillon seulement** · il n'a jamais parlé au vrai Gmail.
 > - L'agent d'exploitation **n'a jamais touché une vraie machine**.
+> - **La pause automatique sur budget ne fonctionne pas sous clé d'API.** La jauge lit les fenêtres de quota d'un abonnement ; une clé d'API n'en a pas, et le runtime rend `rate_limits_available: false` pour toujours. L'état `paused_budget` existe et marche, rien ne le déclenche dans ce mode. Mesuré en production.
 > - La mémoire est **vide**. Elle se remplit de ce que les runs et les déploiements apprennent · rien n'a encore tourné pour de vrai.
 > - L'écran de création est **inutilisable sous 768 px** · c'est une composition en positionnement absolu calée sur 1280.
 

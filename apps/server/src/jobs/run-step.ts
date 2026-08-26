@@ -3,6 +3,7 @@ import type { Kysely } from 'kysely'
 import type { PgBoss } from 'pg-boss'
 import type { Database } from '../db/types'
 import type { LoopEvent } from '../domain/run-state'
+import { createInboxItem } from '../inbox/repo'
 import { applyEvent } from '../loop/orchestrator'
 
 export const RUN_STEP_QUEUE = 'run.step'
@@ -119,14 +120,79 @@ export async function registerRunStepWorker(
 ): Promise<void> {
   await boss.work<RunStepJobData>(
     RUN_STEP_QUEUE,
-    { localConcurrency: concurrency },
+    { localConcurrency: concurrency, includeMetadata: true },
     async (jobs) => {
       for (const job of jobs) {
-        const result = await stepOnce(db, registry, job.data.runId)
-        if (result.requeue) {
-          await boss.send(RUN_STEP_QUEUE, { runId: job.data.runId } satisfies RunStepJobData)
+        try {
+          const result = await stepOnce(db, registry, job.data.runId)
+          if (result.requeue) {
+            await boss.send(RUN_STEP_QUEUE, { runId: job.data.runId } satisfies RunStepJobData)
+          }
+        } catch (err) {
+          // Un handler qui lève laissait pg-boss réessayer, épuiser ses
+          // tentatives, et **personne n'écoutait**. Le run restait en
+          // `framing`, `cost_tokens` à 0, et l'écran affichait « garant au
+          // travail » indéfiniment.
+          //
+          // Constaté en production sur le premier vrai run : `git clone` d'un
+          // dépôt inexistant, deux échecs enregistrés proprement dans
+          // `pgboss.job_common`, et un run mort indiscernable d'un run lent.
+          //
+          // On alerte à la DERNIÈRE tentative seulement. Alerter au premier
+          // échec transformerait chaque hoquet réseau en item d'inbox, et une
+          // inbox qui crie pour rien est une inbox qu'on cesse de lire.
+          const meta = job as unknown as { retryCount?: number; retryLimit?: number }
+          const derniere = (meta.retryCount ?? 0) >= (meta.retryLimit ?? 0)
+          if (derniere) await signalerEchec(db, job.data.runId, err)
+          throw err
         }
       }
     },
   )
+}
+
+/**
+ * Rend visible un run que plus rien ne fera avancer.
+ *
+ * Deux écritures, et les deux comptent. Le run bascule en `failed` : sans ça
+ * l'écran continue d'afficher un agent au travail, ce qui est le mensonge le
+ * plus coûteux du produit — on attend devant quelque chose de mort.
+ *
+ * Et une alerte porte la CAUSE, pas « le run a échoué ». La sortie de `git`
+ * sans TTY (« could not read Username ») ne dit pas « dépôt introuvable » :
+ * elle est déroutante, et la recopier telle quelle vaut mieux que la
+ * reformuler en une phrase générique qui perdrait l'indice.
+ */
+async function signalerEchec(db: Kysely<Database>, runId: string, err: unknown): Promise<void> {
+  const cause = err instanceof Error ? err.message : String(err)
+
+  const run = await db
+    .selectFrom('runs')
+    .innerJoin('steps', 'steps.id', 'runs.step_id')
+    .innerJoin('projects', 'projects.id', 'steps.project_id')
+    .select([
+      'runs.state as state',
+      'steps.title as stepTitle',
+      'steps.position as position',
+      'steps.project_id as projectId',
+      'projects.name as projectName',
+    ])
+    .where('runs.id', '=', runId)
+    .executeTakeFirst()
+  if (!run) return
+
+  await db.updateTable('runs').set({ state: 'failed' }).where('id', '=', runId).execute()
+
+  await createInboxItem(db, {
+    type: 'alert',
+    projectId: run.projectId,
+    runId,
+    fromRole: 'system',
+    title: `Boucle arrêtée · ${run.projectName}, step ${run.position}`,
+    payload: {
+      cause: 'run.handler_en_echec',
+      ctx: `L'état « ${run.state} » du step « ${run.stepTitle} » a échoué et ne sera plus retenté.`,
+      erreur: cause,
+    },
+  })
 }

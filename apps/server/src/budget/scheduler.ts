@@ -448,12 +448,28 @@ async function raiseUnknownGaugeAlert(db: Kysely<Database>, now: Date): Promise<
 
   await createInboxItem(db, {
     type: 'alert',
-    title: 'Jauge de budget indisponible',
+    title: 'Aucune protection de budget sur cette installation',
     fromRole: 'system',
     payload: {
       cause: BUDGET_UNKNOWN_ALERT_KEY,
-      detail:
-        "Le runtime ne rend plus de consommation : aucune boucle ne sera mise en pause tant que la jauge reste muette. La réserve n'est plus protégée.",
+      detail: [
+        "La jauge lit les fenêtres de quota d'un ABONNEMENT. Une installation",
+        "authentifiée par clé d'API n'en a pas : le runtime rend",
+        '`subscription_type: null` et `rate_limits_available: false`, et il le',
+        'fera toujours.',
+        '',
+        "Conséquence, dite sans l'arrondir : **aucune boucle ne sera jamais mise",
+        'en pause automatiquement**. Aucun seuil, aucune réserve. Ce n’est pas une',
+        'panne passagère, c’est une capacité absente sur ce mode',
+        "d'authentification.",
+        '',
+        "Et c'est le cas où ça compte le plus : avec un abonnement, dépasser",
+        'signifie être ralenti · avec une clé d’API, dépasser signifie être',
+        'facturé.',
+        '',
+        'Surveillez la dépense à la main, ou passez le produit à un compteur de',
+        "dépense réelle plutôt qu'à une lecture de quota.",
+      ].join(' '),
     },
     archiveToClient: false,
   })

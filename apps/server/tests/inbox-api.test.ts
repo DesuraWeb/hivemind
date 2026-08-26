@@ -441,3 +441,28 @@ test('POST /api/inbox/:id/resolve sur un savoir refusé n archive rien', async (
   expect(res.json().savoirArchived).toBe(false)
   expect(await rappeler(db, { projetId: projectId })).toHaveLength(0)
 })
+
+test('une alerte système ne porte pas de run · l’écran doit pouvoir le savoir', async () => {
+  // Le panneau d'alerte proposait « relancer la boucle », « max_iterations →
+  // 6 » et « stopper le step » sur TOUTES les alertes, y compris celles qui
+  // n'ont pas de run — jauge de budget muette, authentification
+  // indisponible. Des boutons qui agissent sur quelque chose qui n'est pas
+  // en cause.
+  await createInboxItem(db, {
+    type: 'alert',
+    fromRole: 'system',
+    title: 'Aucune protection de budget sur cette installation',
+    payload: { cause: 'budget.jauge_indisponible' },
+  })
+
+  const r = await app.inject({
+    method: 'GET',
+    url: '/api/inbox?status=open',
+    headers: { cookie: `hm_session=${cookie}` },
+  })
+  const systeme = r
+    .json()
+    .find((i: { payload: { cause?: string } }) => i.payload.cause === 'budget.jauge_indisponible')
+  expect(systeme).toBeDefined()
+  expect(systeme.runId).toBeNull()
+})

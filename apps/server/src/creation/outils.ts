@@ -209,7 +209,18 @@ export function createSurfaceCreation(deps: SurfaceCreationDeps): SurfaceCreatio
         deps.db,
         orbe.couleur ? { name: orbe.nom, color: orbe.couleur } : { name: orbe.nom },
       )
-      globeId = cree.id
+      // `GlobeView.id` porte le SLUG, pas l'identifiant de la ligne
+      // (`globes/repo.ts` rend `slug` sous la clé `id`). `creations.globe_id`
+      // est une vraie colonne uuid : y écrire « desura » LÈVE, et la levée
+      // arrive APRÈS que le projet a été créé — donc Florian voyait une panne
+      // à l'écran pour un projet qui existait, et la conversation ne se
+      // clôturait jamais. Constaté en production.
+      const ligne = await deps.db
+        .selectFrom('globes')
+        .select('id')
+        .where('slug', '=', cree.id)
+        .executeTakeFirstOrThrow()
+      globeId = ligne.id
       // La fiche bascule sur l'orbe créée : le projet devra s'y poser, et sans
       // ça `manquesFiche` réclamerait encore « l'orbe d'accueil ».
       fiche = appliquerRetouche(fiche, { orbeACreer: null, projet: { orbe: cree.id } })

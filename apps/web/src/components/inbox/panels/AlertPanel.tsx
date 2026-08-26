@@ -5,6 +5,17 @@ export function AlertPanel({ item, resolving, onResolve }: PanelProps) {
   const cause = typeof item.payload.cause === 'string' ? item.payload.cause : item.title
   const ctx = typeof item.payload.ctx === 'string' ? item.payload.ctx : null
 
+  /**
+   * Les trois actions agissent sur un RUN · relancer la boucle, relever la
+   * borne d'itérations, stopper le step. Sur une alerte système — jauge de
+   * budget muette, authentification indisponible — il n'y a pas de run, et
+   * elles proposaient d'agir sur quelque chose qui n'est pas en cause.
+   *
+   * Un bouton sans destinataire est absent, pas grisé : c'est la règle du
+   * dépôt, appliquée ici où elle ne l'était pas.
+   */
+  const surUnRun = Boolean(item.runId)
+
   return (
     <>
       <div
@@ -41,32 +52,34 @@ export function AlertPanel({ item, resolving, onResolve }: PanelProps) {
         )}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <SectionLabel>Actions contextuelles</SectionLabel>
-        <PanelActions>
-          <PanelButton
-            variant="primary"
-            disabled={resolving}
-            onClick={() => onResolve({ action: 'relaunch' })}
-          >
-            Relancer la boucle
-          </PanelButton>
-          <PanelButton
-            variant="secondary"
-            disabled={resolving}
-            onClick={() => onResolve({ action: 'raise_max_iterations', maxIterations: 6 })}
-          >
-            max_iterations → 6
-          </PanelButton>
-          <PanelButton
-            variant="danger"
-            disabled={resolving}
-            onClick={() => onResolve({ action: 'stop' })}
-          >
-            Stopper le step
-          </PanelButton>
-        </PanelActions>
-      </div>
+      {surUnRun && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <SectionLabel>Actions contextuelles</SectionLabel>
+          <PanelActions>
+            <PanelButton
+              variant="primary"
+              disabled={resolving}
+              onClick={() => onResolve({ action: 'relaunch' })}
+            >
+              Relancer la boucle
+            </PanelButton>
+            <PanelButton
+              variant="secondary"
+              disabled={resolving}
+              onClick={() => onResolve({ action: 'raise_max_iterations', maxIterations: 6 })}
+            >
+              max_iterations → 6
+            </PanelButton>
+            <PanelButton
+              variant="danger"
+              disabled={resolving}
+              onClick={() => onResolve({ action: 'stop' })}
+            >
+              Stopper le step
+            </PanelButton>
+          </PanelActions>
+        </div>
+      )}
     </>
   )
 }
