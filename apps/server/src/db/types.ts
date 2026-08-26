@@ -305,6 +305,19 @@ export interface CreationsTable {
   updated_at: Generated<Timestamp>
 }
 
+export interface CiblesDeploiementTable {
+  id: Generated<string>
+  project_id: string
+  /** `staging` ou `prod`. Une seule ligne par couple (projet, cible). */
+  cible: string
+  serveur_id: string
+  chemin: string
+  branche: Generated<string>
+  domaine: string | null
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
 export interface Database {
   users: UsersTable
   globes: GlobesTable
@@ -324,4 +337,5 @@ export interface Database {
   artifacts: ArtifactsTable
   settings: SettingsTable
   creations: CreationsTable
+  cibles_deploiement: CiblesDeploiementTable
 }

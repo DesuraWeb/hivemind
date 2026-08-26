@@ -117,6 +117,26 @@ export interface SshGitTargetDeps {
   config: StagingConfig
   /** Dépôt GitHub du projet (`owner/name`) et branche du run à déployer. */
   resolveSource: (ctx: DeployContext) => Promise<{ repoFullName: string; branch: string } | null>
+  /**
+   * Le répertoire de destination. Par défaut `<root>/<slug>` — la convention du
+   * staging global, un sous-répertoire par projet sous une racine commune.
+   *
+   * Une cible configurée par projet (`deploy/cibles.ts`) porte un chemin
+   * ABSOLU qui n'a aucune raison de suivre cette convention : chez un client,
+   * c'est `/home/<compte>/public_html`, pas `/srv/staging/<slug>`.
+   */
+  resolveDir?: (ctx: DeployContext) => string
+  /**
+   * L'URL publique. Par défaut `<slug>.<domaine>` — le sous-domaine joker du
+   * staging global. Une cible par projet a son propre domaine, qui n'est pas
+   * dérivable du slug.
+   *
+   * Paramétré plutôt que dupliqué : toute la mécanique ssh/git/robots reste
+   * une seule implémentation, et seules les deux dérivations qui diffèrent
+   * réellement sont injectées. Une seconde copie divergerait au premier
+   * correctif appliqué d'un seul côté.
+   */
+  resolveUrl?: (ctx: DeployContext) => string
 }
 
 /** Nom d'hôte du staging d'un projet. Exporté : le gate prod et l'UI l'affichent. */
@@ -139,7 +159,7 @@ export function createSshGitTarget(deps: SshGitTargetDeps): DeployTarget {
         }
       }
 
-      const dir = `${config.root}/${ctx.projectSlug}`
+      const dir = deps.resolveDir?.(ctx) ?? `${config.root}/${ctx.projectSlug}`
       const repoUrl = `https://github.com/${source.repoFullName}.git`
 
       // Un seul aller-retour SSH plutôt qu'un par commande : chaque connexion
@@ -186,7 +206,7 @@ export function createSshGitTarget(deps: SshGitTargetDeps): DeployTarget {
         return { ok: false, reason: `déploiement sur ${config.host} impossible : ${message}` }
       }
 
-      const url = stagingUrl(config.domain, ctx.projectSlug)
+      const url = deps.resolveUrl?.(ctx) ?? stagingUrl(config.domain, ctx.projectSlug)
       return {
         ok: true,
         url,

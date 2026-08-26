@@ -17,10 +17,15 @@
  * consulter le registre).
  */
 
+import type { Kysely } from 'kysely'
+import type { Database } from '../db/types'
+import { resoudreAcces } from '../deploy/cibles'
 import { createLocalPreviewTarget } from '../deploy/local-preview'
+import { createSshGitTarget } from '../deploy/ssh-git'
 import type { DeployTarget } from '../deploy/types'
 import type { StepRegistry } from '../jobs/run-step'
 import type { RuntimeAdapter } from '../runtime/types'
+import type { SettingsStore } from '../settings/store'
 import { createCodingHandler } from './steps/coding'
 import { createDeployingHandler } from './steps/deploying'
 import { createFramingHandler } from './steps/framing'
@@ -40,6 +45,64 @@ export interface StepRegistryDeps {
    * le staging réel n'est pas configuré (Phase 5, Task 3).
    */
   deployTarget?: DeployTarget
+  /**
+   * De quoi résoudre la cible CONFIGURÉE d'un projet. Les deux ensemble ou
+   * aucun : sans la base on ne sait pas où va le projet, sans le coffre on ne
+   * peut pas s'y connecter. En fournir un seul donnerait un repli silencieux
+   * sur l'aperçu local, exactement ce qu'on cherche à supprimer.
+   */
+  db?: Kysely<Database>
+  settings?: SettingsStore
+}
+
+/**
+ * Résout la cible de staging d'un projet, ou `null`.
+ *
+ * `null` n'est pas une panne : c'est un projet dont personne n'a encore dit où
+ * il allait. Une clé manquante, en revanche, LÈVE — `resoudreAcces` refuse de
+ * traiter une configuration à moitié faite comme une absence de configuration.
+ */
+function cibleDuProjet(
+  db: Kysely<Database>,
+  settings: SettingsStore,
+): (projectId: string) => Promise<DeployTarget | null> {
+  return async (projectId) => {
+    const acces = await resoudreAcces(db, settings, projectId, 'staging')
+    if (!acces) return null
+
+    return createSshGitTarget({
+      config: {
+        host: acces.hote,
+        user: acces.utilisateur,
+        privateKey: acces.clePrivee,
+        // `root` et `domain` ne sont PAS lus : `resolveDir` et `resolveUrl`
+        // les court-circuitent tous les deux. Renseignés avec les valeurs de
+        // la cible plutôt qu'avec des chaînes vides, pour qu'un message
+        // d'erreur qui les citerait un jour reste vrai.
+        root: acces.chemin,
+        domain: acces.domaine ?? acces.hote,
+      },
+      // Le dépôt du projet et la branche du run. Sans ça, `createSshGitTarget`
+      // refuse de déployer et rend « aucune source » — ce qui aurait fait de
+      // tout ce câblage une décoration qui échoue au premier vrai passage.
+      resolveSource: async (ctx) => {
+        const row = await db
+          .selectFrom('runs')
+          .innerJoin('steps', 'steps.id', 'runs.step_id')
+          .innerJoin('projects', 'projects.id', 'steps.project_id')
+          .select(['runs.branch as branch', 'projects.repo_full_name as repoFullName'])
+          .where('runs.id', '=', ctx.runId)
+          .executeTakeFirst()
+        if (!row?.branch) return null
+        return { repoFullName: row.repoFullName, branch: row.branch }
+      },
+      resolveDir: () => acces.chemin,
+      // Le domaine de la cible fait foi. Sans domaine déclaré, on rend l'hôte
+      // — imparfait, mais honnête : c'est là que le code a réellement été
+      // posé, et le juge saura le dire s'il ne s'y trouve rien.
+      resolveUrl: () => (acces.domaine ? `https://${acces.domaine}` : `https://${acces.hote}`),
+    })
+  }
 }
 
 /** Construit le `StepRegistry` réel — les six handlers d'état, un `RuntimeAdapter` partagé. */
@@ -51,12 +114,14 @@ export function createStepRegistry(deps: StepRegistryDeps): StepRegistry {
       adapter: deps.adapter,
       worktreesRoot: deps.worktreesRoot,
     }),
-    // Cible de déploiement par défaut : l'aperçu local. Elle sera choisie par
-    // projet quand le staging réel existera (Phase 5, Task 3, en attente des
-    // accès de Florian) — le contrat `DeployTarget` est déjà là pour ça.
+    // L'aperçu local n'est plus qu'un REPLI. La cible d'un projet configuré
+    // gagne — `createSshGitTarget` existait depuis la Phase 5 et n'était
+    // construit nulle part, ce qui expliquait que le gate de prod annonce
+    // toujours « aperçu local éphémère ».
     deploying: createDeployingHandler({
       artifactsRoot: deps.artifactsRoot,
       target: deps.deployTarget ?? createLocalPreviewTarget(),
+      ...(deps.db && deps.settings ? { resolveTarget: cibleDuProjet(deps.db, deps.settings) } : {}),
     }),
     judging: createJudgingHandler({ adapter: deps.adapter, artifactsRoot: deps.artifactsRoot }),
     verdict: createVerdictHandler({ adapter: deps.adapter }),

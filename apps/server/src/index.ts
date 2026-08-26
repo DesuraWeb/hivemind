@@ -55,6 +55,11 @@ await startBoss(boss, {
     adapter,
     worktreesRoot: env.WORKTREES_ROOT,
     artifactsRoot: env.ARTIFACTS_ROOT,
+    // De quoi résoudre la cible configurée d'un projet. Sans ces deux-là, tout
+    // déploiement retombe sur l'aperçu local, quelle que soit la configuration
+    // en base.
+    db,
+    settings,
   }),
 })
 

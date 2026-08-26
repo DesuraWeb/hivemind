@@ -1,7 +1,15 @@
 import type { FastifyInstance } from 'fastify'
 import type { Kysely } from 'kysely'
 import { z } from 'zod'
+
+const cibleBody = z.object({
+  serveurId: z.string().uuid(),
+  chemin: z.string().min(1).max(512),
+  branche: z.string().min(1).max(120).optional(),
+  domaine: z.string().max(255).nullable().optional(),
+})
 import type { Database } from '../../db/types'
+import { CheminInvalideError, listerCibles, poserCible, retirerCible } from '../../deploy/cibles'
 import { UnknownGlobeError, createProject } from '../../projects/create'
 import {
   getProjectBySlug,
@@ -289,4 +297,62 @@ export async function projectsRoutes(
     await deps.db.updateTable('steps').set(patch).where('id', '=', p.data.id).execute()
     return { updated: true }
   })
+
+  /**
+   * Les cibles de déploiement d'un projet.
+   *
+   * Rend ce qui est CONFIGURÉ, jamais ce qui est supposé : un projet sans
+   * cible rend un tableau vide, et l'écran doit le dire plutôt que d'afficher
+   * une URL de staging devinée depuis le slug.
+   */
+  app.get('/api/projects/:id/cibles', { preHandler: app.requireAuth }, async (req) => {
+    const { id } = req.params as { id: string }
+    return listerCibles(deps.db, id)
+  })
+
+  app.put(
+    '/api/projects/:id/cibles/:cible',
+    { preHandler: app.requireAuth },
+    async (req, reply) => {
+      const { id, cible } = req.params as { id: string; cible: string }
+      if (cible !== 'staging' && cible !== 'prod') {
+        return reply.code(400).send({ error: 'cible_inconnue' })
+      }
+      const parsed = cibleBody.safeParse(req.body)
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: 'requete_invalide',
+          details: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+        })
+      }
+      try {
+        return await poserCible(deps.db, {
+          projectId: id,
+          cible,
+          serveurId: parsed.data.serveurId,
+          chemin: parsed.data.chemin,
+          ...(parsed.data.branche ? { branche: parsed.data.branche } : {}),
+          ...(parsed.data.domaine !== undefined ? { domaine: parsed.data.domaine } : {}),
+        })
+      } catch (err) {
+        if (err instanceof CheminInvalideError) {
+          return reply.code(400).send({ error: 'chemin_invalide', detail: err.message })
+        }
+        throw err
+      }
+    },
+  )
+
+  app.delete(
+    '/api/projects/:id/cibles/:cible',
+    { preHandler: app.requireAuth },
+    async (req, reply) => {
+      const { id, cible } = req.params as { id: string; cible: string }
+      if (cible !== 'staging' && cible !== 'prod') {
+        return reply.code(400).send({ error: 'cible_inconnue' })
+      }
+      await retirerCible(deps.db, id, cible)
+      return reply.code(204).send()
+    },
+  )
 }

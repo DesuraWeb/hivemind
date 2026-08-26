@@ -38,8 +38,17 @@ import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
 export interface DeployingDeps {
   /** Racine de stockage des captures (`ARTIFACTS_ROOT`). */
   artifactsRoot: string
-  /** Où déployer. `registry.ts` passe la cible du projet ; par défaut, l'aperçu local. */
+  /** Le repli quand le projet n'a pas de cible configurée. Par défaut, l'aperçu local. */
   target: DeployTarget
+  /**
+   * La cible CONFIGURÉE de ce projet, quand il en a une.
+   *
+   * Rend `null` pour un projet dont personne n'a dit où il va — ce n'est pas
+   * une panne, et on retombe alors sur `target`. Mais la distinction remonte
+   * jusqu'au gate de prod, qui refuse de compter un aperçu local comme un
+   * staging vérifié (`deploy/prod-gate.ts::resolveStaging`).
+   */
+  resolveTarget?: (projectId: string) => Promise<DeployTarget | null>
 }
 
 /** Les `pages_to_judge` rendues par le garant en `framing` (même passation que `coding.ts`/`reviewing.ts` lisent pour `acceptance_criteria`). */
@@ -65,6 +74,7 @@ export function createDeployingHandler(deps: DeployingDeps): StepHandler {
         'runs.worktree_path as worktreePath',
         'projects.slug as projectSlug',
         'projects.juge_visuel as jugeVisuel',
+        'projects.id as projectId',
       ])
       .where('runs.id', '=', runId)
       .executeTakeFirstOrThrow()
@@ -96,7 +106,12 @@ export function createDeployingHandler(deps: DeployingDeps): StepHandler {
       } satisfies LoopEvent
     }
 
-    const deployed = await deps.target.deploy({
+    // La cible du projet gagne sur le repli. Un projet configuré ne doit
+    // jamais retomber en silence sur un aperçu local : le juge statuerait sur
+    // une adresse éphémère, et le gate de prod le dirait trop tard.
+    const target = (await deps.resolveTarget?.(runRow.projectId)) ?? deps.target
+
+    const deployed = await target.deploy({
       runId,
       worktreePath: runRow.worktreePath,
       projectSlug: runRow.projectSlug,
@@ -142,7 +157,7 @@ export function createDeployingHandler(deps: DeployingDeps): StepHandler {
           `pour ${pages.length} page(s).`,
         meta: {
           url: deployed.url,
-          target: deps.target.kind,
+          target: target.kind,
           pages,
           artifactIds: records.map((r) => r.id),
         },
