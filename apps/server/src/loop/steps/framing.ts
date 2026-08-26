@@ -7,6 +7,7 @@ import { formaterRappel, rappeler } from '../../knowledge/recall'
 import { collectStructured, frameSchema } from '../../runtime/structured'
 import type { RuntimeAdapter, ToolPolicy } from '../../runtime/types'
 import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
+import { compterPour } from '../couts'
 import { findPendingInstructions, instructionsBlock } from '../instructions'
 import { resolveProjectRole } from '../roles'
 
@@ -245,6 +246,10 @@ export function createFramingHandler(deps: FramingDeps): StepHandler {
       : null
 
     const frame = await collectStructured(deps.adapter, session, preamble, frameSchema, {
+      // Ce que cet échange coûte. Sans cette ligne l'écran Analytics
+      // affiche zéro pour toujours, et aucune jauge de budget n'a rien à
+      // compter.
+      onCout: compterPour(db, runId),
       toolName: 'submit_frame',
       toolDescription: 'Rend le cadrage du step (dev_prompt, acceptance_criteria, pages_to_judge).',
       ...(kb ? { extra: kb.sendOptions } : {}),

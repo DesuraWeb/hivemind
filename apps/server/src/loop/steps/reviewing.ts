@@ -6,6 +6,7 @@ import type { StepHandler } from '../../jobs/run-step'
 import { collectStructured } from '../../runtime/structured'
 import type { RuntimeAdapter } from '../../runtime/types'
 import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
+import { compterPour } from '../couts'
 import { resolveProjectRole } from '../roles'
 
 export interface ReviewingDeps {
@@ -237,6 +238,10 @@ export function createReviewingHandler(deps: ReviewingDeps): StepHandler {
       })
 
       const review = await collectStructured(deps.adapter, session, preamble, reviewSchema, {
+        // Ce que cet échange coûte. Sans cette ligne l'écran Analytics
+        // affiche zéro pour toujours, et aucune jauge de budget n'a rien à
+        // compter.
+        onCout: compterPour(db, runId),
         toolName: 'submit_review',
         toolDescription: 'Rend le verdict de revue (verdict OK/KO, points actionnables).',
       })

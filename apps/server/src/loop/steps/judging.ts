@@ -34,6 +34,7 @@ import type { StepHandler } from '../../jobs/run-step'
 import { type JudgeReport, collectStructured, judgeReportSchema } from '../../runtime/structured'
 import type { AgentSession, RuntimeAdapter } from '../../runtime/types'
 import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
+import { compterPour } from '../couts'
 import { resolveProjectRole } from '../roles'
 
 export interface JudgingDeps {
@@ -165,12 +166,18 @@ async function collectValidatedJudgeReport(
   session: AgentSession,
   prompt: string,
   validRefs: ReadonlySet<string>,
+  /** Où porter le coût. Passé plutôt que déduit : cette fonction n'a pas la base. */
+  onCout: (tokens: number) => Promise<void>,
 ): Promise<JudgeReport> {
   let currentPrompt = prompt
   let lastInvalid: string[] = []
 
   for (let attempt = 1; attempt <= MAX_REF_ATTEMPTS; attempt++) {
     const report = await collectStructured(adapter, session, currentPrompt, judgeReportSchema, {
+      // Ce que cet échange coûte. Sans cette ligne l'écran Analytics
+      // affiche zéro pour toujours, et aucune jauge de budget n'a rien à
+      // compter.
+      onCout,
       toolName: 'submit_judge_report',
       toolDescription:
         'Soumet le rapport du juge visuel : conformités et écarts constatés, sans décision.',
@@ -290,7 +297,13 @@ export function createJudgingHandler(deps: JudgingDeps): StepHandler {
       captures,
     })
 
-    const report = await collectValidatedJudgeReport(deps.adapter, session, preamble, validRefs)
+    const report = await collectValidatedJudgeReport(
+      deps.adapter,
+      session,
+      preamble,
+      validRefs,
+      compterPour(db, runId),
+    )
 
     // Passation juge→garant : c'est lui qui tranche depuis ce constat (Task 4).
     await appendMessage(db, {

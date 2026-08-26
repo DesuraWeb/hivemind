@@ -193,6 +193,15 @@ export interface CollectStructuredOptions {
    * l'agent n'aurait plus de moyen de rendre sa réponse.
    */
   extra?: SendOptions
+  /**
+   * Où porter le coût de chaque échange.
+   *
+   * `collectStructured` reçoit `result.costTokens` de façon SYNCHRONE et le
+   * jetait. Le canal `onEvent` existe, mais il est synchrone : y écrire en
+   * base voudrait dire lancer une promesse sans l'attendre, ce qu'on refuse
+   * pour de la comptabilité.
+   */
+  onCout?: (tokens: number) => Promise<void>
 }
 
 /**
@@ -243,6 +252,9 @@ export async function collectStructured<Shape extends z.ZodRawShape>(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const result = await adapter.send(session, currentPrompt, sendOpts)
+    // Attendu, pas lancé : un chiffre faux en comptabilité est pire qu'un
+    // chiffre absent, parce qu'on le croit.
+    await opts.onCout?.(result.costTokens)
 
     const call = result.toolCalls?.find(
       (c) => c.name === opts.toolName || c.name.endsWith(`__${opts.toolName}`),

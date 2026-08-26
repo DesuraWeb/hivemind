@@ -36,6 +36,7 @@ import { proposerSavoirs } from '../../knowledge/propose'
 import { type Verdict, collectStructured, verdictSchema } from '../../runtime/structured'
 import type { RuntimeAdapter, ToolPolicy } from '../../runtime/types'
 import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
+import { compterPour } from '../couts'
 import { contredit, raiseJudgeContradiction, readJudgeSummary } from '../judge-contradiction'
 import { resolveProjectRole } from '../roles'
 
@@ -316,6 +317,10 @@ export function createVerdictHandler(deps: VerdictDeps): StepHandler {
     })
 
     const verdict = await collectStructured(deps.adapter, session, preamble, verdictSchema, {
+      // Ce que cet échange coûte. Sans cette ligne l'écran Analytics
+      // affiche zéro pour toujours, et aucune jauge de budget n'a rien à
+      // compter.
+      onCout: compterPour(db, runId),
       toolName: 'submit_verdict',
       toolDescription:
         'Rend le verdict du garant : conforme, ou écarts avec leurs correctifs et le prompt correctif pour le dev. ' +

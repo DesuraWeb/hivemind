@@ -9,6 +9,7 @@ import { createClientKbSurface, roleUsesClientKb } from '../../knowledge/client-
 import type { RuntimeAdapter } from '../../runtime/types'
 import { runSelfmodGate } from '../../security/selfmod-gate'
 import { type StoredMessage, appendMessage, readRunMessages } from '../bus'
+import { compterPour } from '../couts'
 import { findPendingInstructions, instructionsBlock } from '../instructions'
 import { resolveProjectRole } from '../roles'
 
@@ -215,6 +216,10 @@ export function createCodingHandler(deps: CodingDeps): StepHandler {
       ? createClientKbSurface({ db, tools: role.tools, projetId: runRow.projectId })
       : null
     const result = await deps.adapter.send(session, prompt, kb ? kb.sendOptions : undefined)
+    // Le dev appelle l'adaptateur en direct, sans passer par
+    // `collectStructured` : le coût se compte ici, sinon ce handler serait le
+    // seul à ne rien déclarer.
+    await compterPour(db, runId)(result.costTokens)
     const report = result.text.trim() || '(le développeur n’a renvoyé aucun texte de rapport)'
 
     await commitIfDirty(worktreePath, `feat: ${commitSummary(frame.body)}`)

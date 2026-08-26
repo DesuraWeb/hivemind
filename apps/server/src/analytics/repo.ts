@@ -7,10 +7,15 @@ import type { Database } from '../db/types'
  *
  * ## Ce qui rend cet écran possible
  *
- * Tout se dérive de `runs.cost_tokens`, alimenté à chaque échange par
- * l'adapter (`runtime/claude.ts`, message `result`). Aucune table nouvelle,
- * aucune écriture supplémentaire : la donnée était déjà là, personne ne la
- * lisait.
+ * Tout se dérive de `runs.cost_tokens`, additionné à chaque échange par
+ * `loop/couts.ts::compterPour`.
+ *
+ * Ce commentaire a longtemps affirmé que « la donnée était déjà là, personne
+ * ne la lisait ». C'était FAUX : l'adaptateur émettait bien le coût, les cinq
+ * handlers passaient tous `onEvent: () => {}`, et rien n'écrivait la colonne.
+ * Cet écran affichait donc zéro pour toujours, quel que soit le travail
+ * fourni — constaté en production sur un run dont le garant avait produit un
+ * cadrage complet.
  *
  * ## L'attribution au jour
  *
