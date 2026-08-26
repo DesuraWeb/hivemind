@@ -10,7 +10,9 @@ import {
   creationEnCours,
   enregistrerTour,
   lireCreation,
+  listerCreations,
   ouvrirCreation,
+  reprendreCreation,
 } from '../../creation/repo'
 import type { Database } from '../../db/types'
 import type { SondeHttp } from '../../ops/types'
@@ -74,6 +76,34 @@ export async function creationsRoutes(
       conversation: [{ de: 'hive', texte: OUVERTURE, a: new Date().toISOString() }],
     })
     return reply.code(201).send(vue(avecOuverture))
+  })
+
+  /**
+   * Les conversations passées.
+   *
+   * Rien ne permettait de relire un cadrage terminé ou abandonné : le fil se
+   * déploie tant que la conversation est en cours, puis elle devient
+   * inaccessible depuis l'interface. En base, correctement rangée, et lisible
+   * par personne d'autre que `psql`.
+   *
+   * Déclarée AVANT `/:id` : Fastify choisit la route la plus spécifique, mais
+   * l'ordre reste la garantie lisible — `en-cours` s'est déjà fait manger par
+   * un paramètre ailleurs dans ce fichier.
+   */
+  app.get('/api/creations/toutes', { preHandler: app.requireAuth }, async () => {
+    return listerCreations(deps.db)
+  })
+
+  /**
+   * Rouvrir une conversation mise de côté. Celle en cours est mise de côté à
+   * son tour, jamais détruite : reprendre un ancien cadrage ne doit pas coûter
+   * le cadrage en cours.
+   */
+  app.post('/api/creations/:id/reprendre', { preHandler: app.requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const reprise = await reprendreCreation(deps.db, id)
+    if (!reprise) return reply.code(404).send({ error: 'creation_introuvable' })
+    return vue(reprise)
   })
 
   app.get('/api/creations/:id', { preHandler: app.requireAuth }, async (req, reply) => {

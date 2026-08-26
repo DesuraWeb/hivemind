@@ -246,6 +246,8 @@ export function Creation() {
   const [hiveText, setHiveText] = useState('')
   /** Le fil complet, déployé par-dessus la scène. Replié par défaut. */
   const [filOuvert, setFilOuvert] = useState(false)
+  /** Les conversations passées. Elles n'étaient relisibles que par `psql`. */
+  const [archivesOuvertes, setArchivesOuvertes] = useState(false)
   const [project, setProject] = useState<ProjectDraft>(() =>
     initialProjectDraft(search.globe ?? ''),
   )
@@ -300,6 +302,24 @@ export function Creation() {
       queryClient.setQueryData(CREATION_QUERY_KEY, neuve)
       setProject(initialProjectDraft(search.globe ?? ''))
       empreinteFiche.current = JSON.stringify(neuve.fiche)
+      setFilOuvert(false)
+    },
+  })
+
+  const archives = useQuery({
+    queryKey: ['creations-toutes'],
+    queryFn: api.creations.toutes,
+    enabled: archivesOuvertes,
+  })
+
+  const reprendre = useMutation({
+    mutationFn: (id: string) => api.creations.reprendre(id),
+    onSuccess: (reprise) => {
+      queryClient.setQueryData(CREATION_QUERY_KEY, reprise)
+      void queryClient.invalidateQueries({ queryKey: ['creations-toutes'] })
+      setProject((prev) => ficheVersBrouillon(reprise.fiche, prev))
+      empreinteFiche.current = JSON.stringify(reprise.fiche)
+      setArchivesOuvertes(false)
       setFilOuvert(false)
     },
   })
@@ -909,6 +929,79 @@ export function Creation() {
           </div>
         }
 
+        {archivesOuvertes && (
+          <div
+            style={{
+              position: 'absolute',
+              left: '50%',
+              bottom: 64,
+              transform: 'translateX(-50%)',
+              zIndex: 8,
+              width: 'min(560px, calc(100% - 64px))',
+              maxHeight: '52%',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              padding: 18,
+              borderRadius: 'var(--r-lg)',
+              border: '1px solid var(--line-strong)',
+              background: 'var(--bg-0)',
+              backdropFilter: 'blur(12px)',
+              boxShadow: '0 18px 48px rgba(0, 0, 0, 0.55)',
+              pointerEvents: 'auto',
+            }}
+          >
+            <span style={{ font: '10.5px var(--font-mono)', color: 'var(--text-low)' }}>
+              conversations passées
+            </span>
+            {(archives.data ?? []).length === 0 && (
+              <span style={{ font: '12px var(--font-sans)', color: 'var(--text-low)' }}>
+                {archives.isLoading ? 'chargement…' : 'aucune autre conversation'}
+              </span>
+            )}
+            {(archives.data ?? []).map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => reprendre.mutate(a.id)}
+                disabled={reprendre.isPending || a.statut === 'en_cours'}
+                className="creation-ghost"
+                style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  textAlign: 'left',
+                  padding: '9px 11px',
+                  borderRadius: 'var(--r-md)',
+                  border: '1px solid var(--line)',
+                  background: 'transparent',
+                  cursor: a.statut === 'en_cours' ? 'default' : 'pointer',
+                  color: 'var(--text-hi)',
+                  font: '13px var(--font-sans)',
+                }}
+              >
+                <span style={{ textWrap: 'pretty' }}>{a.nom ?? 'sans nom'}</span>
+                <span
+                  style={{
+                    font: '10.5px var(--font-mono)',
+                    color: 'var(--text-low)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {a.statut === 'en_cours' ? 'en cours' : a.statut} · {a.tours} tours
+                  {/*
+                    Le compte de savoirs dit ce qu'on perd de vue : ils ne sont
+                    PAS en mémoire tant que le projet n'est pas créé.
+                  */}
+                  {a.savoirs > 0 ? ` · ${a.savoirs} savoir(s) en brouillon` : ''}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {filOuvert && (
           <div
             style={{
@@ -994,7 +1087,33 @@ export function Creation() {
 
         <button
           type="button"
-          onClick={() => setFilOuvert((v) => !v)}
+          onClick={() => {
+            setArchivesOuvertes((v) => !v)
+            setFilOuvert(false)
+          }}
+          className="creation-ghost"
+          style={{
+            position: 'absolute',
+            right: 168,
+            bottom: 24,
+            zIndex: 7,
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            font: '500 11px var(--font-mono)',
+            color: 'var(--text-low)',
+            padding: 4,
+          }}
+        >
+          {archivesOuvertes ? 'fermer ⌄' : 'conversations passées ⌃'}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setFilOuvert((v) => !v)
+            setArchivesOuvertes(false)
+          }}
           className="creation-ghost"
           style={{
             position: 'absolute',

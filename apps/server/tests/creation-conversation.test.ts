@@ -534,3 +534,65 @@ test('un projet créé sans démarrage reste un staging, comme avant', async () 
     .executeTakeFirstOrThrow()
   expect(row.demarrage).toBe('staging')
 })
+
+test('les conversations passées sont relisibles, et disent ce qu’elles portent', async () => {
+  // Rien ne le permettait : le fil se déploie tant que la conversation est en
+  // cours, puis elle devient inaccessible depuis l'interface. Constaté en
+  // production : une conversation ABANDONNÉE portait deux savoirs en
+  // brouillon, soit plus que celle en cours. Un cadrage payé à un modèle,
+  // perdu de vue.
+  await db
+    .updateTable('creations')
+    .set({ statut: 'abandonnee' })
+    .where('statut', '=', 'en_cours')
+    .execute()
+
+  const id = (await app.inject({ method: 'POST', url: '/api/creations', headers: auth() })).json()
+    .id
+  await app.inject({
+    method: 'PATCH',
+    url: `/api/creations/${id}/fiche`,
+    headers: auth(),
+    payload: {
+      projet: { nom: 'Bastide' },
+      savoirs: [{ cercle: 'projet', sujet: 'urls', contenu: 'Les URL actuelles sont en .php.' }],
+    },
+  })
+
+  const r = await app.inject({ method: 'GET', url: '/api/creations/toutes', headers: auth() })
+  expect(r.statusCode).toBe(200)
+  const liste = r.json()
+  const mienne = liste.find((c: { id: string }) => c.id === id)
+  expect(mienne.nom).toBe('Bastide')
+  // Le compte de savoirs dit ce qu'on perd de vue : ils ne sont PAS en mémoire
+  // tant que le projet n'est pas créé.
+  expect(mienne.savoirs).toBe(1)
+})
+
+test('reprendre une conversation met l’autre de côté, jamais à la poubelle', async () => {
+  const anciennes = (
+    await app.inject({ method: 'GET', url: '/api/creations/toutes', headers: auth() })
+  ).json()
+  const abandonnee = anciennes.find((c: { statut: string }) => c.statut === 'abandonnee')
+  const enCours = anciennes.find((c: { statut: string }) => c.statut === 'en_cours')
+
+  const r = await app.inject({
+    method: 'POST',
+    url: `/api/creations/${abandonnee.id}/reprendre`,
+    headers: auth(),
+  })
+  expect(r.statusCode).toBe(200)
+  expect(r.json().statut).toBe('en_cours')
+
+  // L'ancienne est mise de côté, pas détruite : basculer d'une conversation à
+  // l'autre ne doit pas coûter le cadrage en cours.
+  const apres = (
+    await app.inject({ method: 'GET', url: '/api/creations/toutes', headers: auth() })
+  ).json()
+  const precedente = apres.find((c: { id: string }) => c.id === enCours.id)
+  expect(precedente.statut).toBe('abandonnee')
+  expect(precedente.tours).toBe(enCours.tours)
+  // Une seule conversation en cours à la fois, sinon l'écran ne sait pas
+  // laquelle rouvrir.
+  expect(apres.filter((c: { statut: string }) => c.statut === 'en_cours')).toHaveLength(1)
+})

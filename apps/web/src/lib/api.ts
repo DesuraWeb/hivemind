@@ -490,6 +490,19 @@ export interface CreationView {
   panne?: boolean
 }
 
+/** Une conversation passée, résumée pour une liste. */
+export interface ApercuCreationView {
+  id: string
+  statut: 'en_cours' | 'aboutie' | 'abandonnee'
+  nom: string | null
+  tours: number
+  /** Savoirs restés en BROUILLON · ils ne sont pas en mémoire tant que le projet n'est pas créé. */
+  savoirs: number
+  costTokens: number
+  projectId: string | null
+  majAt: string
+}
+
 export const api = {
   me: () => request<Me>('GET', '/api/me'),
   login: (login: string, password: string) =>
@@ -600,6 +613,10 @@ export const api = {
     corriger: (id: string, fiche: FicheCreationView) =>
       request<CreationView>('PATCH', `/api/creations/${id}/fiche`, fiche),
     abandonner: (id: string) => request<void>('POST', `/api/creations/${id}/abandon`),
+    /** Les conversations passées · rien ne permettait de les relire. */
+    toutes: () => request<ApercuCreationView[]>('GET', '/api/creations/toutes'),
+    /** Rouvre une conversation mise de côté. Celle en cours est mise de côté, jamais détruite. */
+    reprendre: (id: string) => request<CreationView>('POST', `/api/creations/${id}/reprendre`),
   },
   globes: {
     list: () => request<GlobeView[]>('GET', '/api/globes'),

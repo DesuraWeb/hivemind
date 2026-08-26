@@ -105,6 +105,7 @@ flowchart LR
 - Un savoir est **versionné** · le corriger crée une version, l'ancienne reste lisible.
 - **Votre formulation fait foi**, jamais celle de l'agent.
 - Les globes sont **étanches** · un savoir s'emprunte en lecture (il suit son prêteur) ou en copie (il vit sa vie), et ça passe par vous. Une fiche client ne s'emprunte jamais.
+- Un savoir de déploiement déclare **à quel niveau il est vrai** · un hébergeur nommé, un type d'hébergement, ou partout. « Ce site demande une version de PHP plus récente » n'est un fait ni sur la stack, ni sur tout le mutualisé : il vaut chez cet hébergeur-là. Le rappel descend cette cascade aussi, et **écarte** ce qui vise un autre hébergement plutôt que de le rétrograder — un rappel faux coûte plus cher qu'un rappel absent.
 - Chaque rappel **incrémente un compteur** (`savoirs.rappels`) · il repère les savoirs qu'aucun agent n'a jamais servis, et une revue vous les remet sous les yeux quand la file grandit ou qu'un mois a passé.
 
 ## L'exploitation
@@ -126,15 +127,19 @@ Ce dépôt évite une chose avec obstination : afficher ou promettre un état qu
 
 - La boucle tourne de bout en bout, avec de vrais modèles, sur un vrai dépôt.
 - Trois boucles avancent en parallèle (`LOOP_CONCURRENCY`) · chiffre calé sur la RAM disponible et l'absence de swap, pas choisi au hasard.
-- La mémoire apprend, rappelle, compte ses rappels, et déclenche la revue.
-- L'agent d'exploitation est complet · sonde, catalogue, plans, sauvegardes, retours arrière · testé contre un faux serveur.
+- La mémoire apprend, rappelle, compte ses rappels, et déclenche la revue. Un savoir de déploiement déclare **où** il est vrai — un hébergeur nommé, un type d'hébergement, ou partout — et le rappel descend cette cascade. « Monter PHP chez tel hébergeur » n'est jamais rappelé sur un VPS.
+- L'écran de création est une **vraie conversation**. Hive lit le parc, cherche sur le web, sonde un dépôt et un domaine, conteste un découpage, et remplit la fiche pendant qu'on parle. Il crée l'orbe et le projet, avec le roster d'agents qu'il juge nécessaire et la mémoire qu'il sème pour eux.
+- L'agent d'exploitation est complet · sonde, catalogue, plans, sauvegardes, retours arrière · testé contre un faux serveur. Il sait sur quel **type d'hébergement** il intervient, et ne propose pas `installer_paquet` sur un mutualisé — l'opération est absente de ce qu'on lui donne, pas seulement interdite par son prompt.
+- La mise en production est écrite et bornée · sauvegarde, **vérification de la sauvegarde**, déploiement, migration, restauration automatique si elle échoue, puis sonde de l'URL réelle. Elle ne part que sur approbation humaine.
 
 > [!WARNING]
 > Pas encore :
 >
-> - Le déploiement se fait sur un **aperçu local** · le staging réel est écrit (`DeployTarget` + une cible SSH/git) mais n'a jamais tourné contre un vrai serveur.
+> - **Aucun déploiement réel n'a jamais eu lieu.** Ni staging, ni production. Le chemin est écrit et testé unitairement, il n'a jamais poussé un octet vers une vraie machine.
 > - Gmail fonctionne en **brouillon seulement** · il n'a jamais parlé au vrai Gmail.
 > - L'agent d'exploitation **n'a jamais touché une vraie machine**.
+> - La mémoire est **vide**. Elle se remplit de ce que les runs et les déploiements apprennent · rien n'a encore tourné pour de vrai.
+> - L'écran de création est **inutilisable sous 768 px** · c'est une composition en positionnement absolu calée sur 1280.
 
 ## Démarrer
 
@@ -215,4 +220,11 @@ Le front a été construit contre un pack de prototypes qui reste privé : il po
 
 ## Licence
 
-Pas encore choisie. On préfère l'écrire que d'inventer un badge.
+[GNU AGPL v3](LICENSE).
+
+Lisible, forkable, modifiable. La clause qui compte est celle du réseau : si
+vous faites tourner une version modifiée comme service accessible à d'autres,
+vous devez en publier la source. Héberger pour soi n'oblige à rien.
+
+Le choix est délibéré. Ce dépôt est publié pour être lu et pour qu'on puisse
+s'en servir · pas pour qu'il devienne le produit fermé de quelqu'un d'autre.

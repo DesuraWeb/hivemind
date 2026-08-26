@@ -164,3 +164,113 @@ export async function abandonnerCreation(db: Kysely<Database>, id: string): Prom
     .where('id', '=', id)
     .execute()
 }
+
+/** Une conversation passée, résumée pour une liste. */
+export interface ApercuCreation {
+  id: string
+  statut: Creation['statut']
+  /** Ce qu'elle cadrait, quand elle a eu le temps de le dire. */
+  nom: string | null
+  tours: number
+  /** Savoirs restés en brouillon · ils ne sont PAS en mémoire tant que le projet n'est pas créé. */
+  savoirs: number
+  costTokens: number
+  projectId: string | null
+  majAt: string
+}
+
+/**
+ * Les conversations passées, la plus récente d'abord.
+ *
+ * ## Pourquoi cette liste existe
+ *
+ * Rien ne permettait de relire une conversation de création terminée ou
+ * abandonnée. Le fil se déploie tant qu'elle est en cours, puis elle devient
+ * inaccessible depuis l'interface — en base, correctement rangée, et lisible
+ * par personne d'autre que `psql`.
+ *
+ * Constaté en vrai : une conversation abandonnée portait DEUX savoirs en
+ * brouillon, soit plus que celle en cours. Un cadrage payé à un modèle,
+ * perdu de vue.
+ *
+ * Le compte de savoirs est rendu parce qu'il dit ce qu'on perd en laissant une
+ * conversation de côté : ces savoirs ne sont pas en mémoire, ils le
+ * deviendront à la création du projet et pas avant.
+ */
+export async function listerCreations(
+  db: Kysely<Database>,
+  limite = 30,
+): Promise<ApercuCreation[]> {
+  const lignes = await db
+    .selectFrom('creations')
+    .select([
+      'id',
+      'statut',
+      'fiche',
+      'conversation',
+      'project_id as projectId',
+      'cost_tokens as costTokens',
+      'updated_at as majAt',
+    ])
+    .orderBy('updated_at', 'desc')
+    .limit(limite)
+    .execute()
+
+  return lignes.map((r) => {
+    const fiche = (r.fiche ?? {}) as Fiche
+    const conversation = (r.conversation ?? []) as TourCreation[]
+    return {
+      id: r.id,
+      statut: r.statut as Creation['statut'],
+      // Le nom du projet s'il est connu, sinon la première phrase de Florian :
+      // une conversation qui n'a pas eu le temps de nommer son projet reste
+      // reconnaissable par ce qu'on lui a demandé.
+      nom:
+        fiche.projet?.nom?.trim() ||
+        conversation.find((t) => t.de === 'florian')?.texte.slice(0, 60) ||
+        null,
+      tours: conversation.length,
+      savoirs: (fiche.savoirs ?? []).length,
+      costTokens: Number(r.costTokens ?? 0),
+      projectId: (r.projectId ?? null) as string | null,
+      majAt: String(r.majAt),
+    }
+  })
+}
+
+/**
+ * Rouvre une conversation mise de côté.
+ *
+ * Elle redevient celle « en cours », donc celle que l'écran retrouve. La
+ * précédente est mise de côté à son tour plutôt que perdue : basculer d'une
+ * conversation à l'autre ne doit rien détruire, sinon reprendre un ancien
+ * cadrage coûterait le cadrage en cours.
+ */
+export async function reprendreCreation(
+  db: Kysely<Database>,
+  id: string,
+): Promise<Creation | null> {
+  return db.transaction().execute(async (trx) => {
+    const cible = await trx
+      .selectFrom('creations')
+      .select('id')
+      .where('id', '=', id)
+      .executeTakeFirst()
+    if (!cible) return null
+
+    await trx
+      .updateTable('creations')
+      .set({ statut: 'abandonnee', updated_at: sql`now()` })
+      .where('statut', '=', 'en_cours')
+      .where('id', '!=', id)
+      .execute()
+
+    const ligne = await trx
+      .updateTable('creations')
+      .set({ statut: 'en_cours', updated_at: sql`now()` })
+      .where('id', '=', id)
+      .returning(COLONNES)
+      .executeTakeFirstOrThrow()
+    return versCreation(ligne as Record<string, unknown>)
+  })
+}
